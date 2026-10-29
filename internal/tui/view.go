@@ -110,7 +110,7 @@ func (m *Model) mainRows(h int) []string {
 		}
 		rows = append(rows, strings.Join(tabs, "  "))
 	} else {
-		rows = append(rows, muted.Render("Enter open/play   p play collection   a enqueue"))
+		rows = append(rows, muted.Render("Enter open/play   p play collection   a add   y queue"))
 	}
 	if l.Page == "search" {
 		scope := m.State.Source.Name + " catalog"
@@ -138,10 +138,10 @@ func (m *Model) mainRows(h int) []string {
 	} else if len(items) == 0 {
 		label := "No items"
 		if l.Page == "home" || l.Page == "home-section" {
-			label = "No recommendations available; press R to refresh"
+			label = "No recommendations available; refresh to try again"
 		}
 		if l.Page == "search" && l.Query == "" {
-			label = "Press i or Ctrl-f to search"
+			label = "Press i to search"
 		}
 		if m.UI.Filter != "" {
 			label = "No matches in the loaded items"
@@ -192,7 +192,7 @@ func (m *Model) queueRows(h int) []string {
 	available := max(1, h-2)
 	offset := max(0, cursor-available+1)
 	if len(q) == 0 {
-		rows = append(rows, muted.Render("Your queue is empty"), muted.Render("a adds a selected song"))
+		rows = append(rows, muted.Render("Your queue is empty"), muted.Render("Content: y copies a song here"))
 	}
 	for i := offset; i < min(len(q), offset+available); i++ {
 		prefix := "  "
@@ -214,7 +214,7 @@ func (m *Model) queueRows(h int) []string {
 	for len(rows) < h-1 {
 		rows = append(rows, "")
 	}
-	rows = append(rows, muted.Render(fmt.Sprintf("%d tracks  ·  J/K reorder", len(q))))
+	rows = append(rows, muted.Render(fmt.Sprintf("%d tracks  ·  [/] reorder", len(q))))
 	return rows
 }
 
@@ -231,6 +231,12 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	}
 	if m.work != nil {
 		return m.workView()
+	}
+	if m.edit != nil {
+		return m.editView()
+	}
+	if m.help {
+		return terminalView(m.helpView())
 	}
 	if m.qualityDialog {
 		rows := []string{}
@@ -251,17 +257,12 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		v := terminalView(lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box("Preferred quality", rows, min(60, w-4), len(rows)+2, true)))
 		return v
 	}
-	if m.prompt || m.help {
+	if m.prompt {
 		rows := []string{}
 		title := "Leave lazymusic?"
-		if m.help {
-			title = "Keyboard · Vim mode"
-			rows = []string{"j/k / ↑↓    Move through a list", "Ctrl-h/l    Left/right panel · Ctrl-j/k Down/up", "gg / G      Top / bottom    Ctrl-u/d Half page", "h/l         Parent/child   Enter Open/play", "Ctrl-f / i  Search query    S Search scope", "L           Login / switch music source", ", / .       Change category / search type", "/           Filter loaded items", "Space       Play/pause      x Stop", "[ / ]       Previous/next   < / > Seek ±10s", "= / -       System volume   b Quality", "+ / _       Cycle layouts   @ Runtime logs", "Ctrl +/-    Zen · Ctrl-Shift-hjkl resize · Ctrl-= reset", "6 Sound     ,/. Pulse/Wave/EQ · h/l band j/k gain", "Player ,/.  Playback mode   r Repeat  z Shuffle", "a / A       Add to queue / play next", "p           Play album/playlist", "o / c       Album/artist links / credits (2/3/4)", "Queue: d remove · C clear · J/K reorder", ":seek 30    :vol 50  :pause  :play", "", "q / Esc closes help · keys.json customizes keys"}
-		} else {
-			rows = []string{"Your queue, position and view are saved.", "", accent.Bold(true).Render("q   Keep running in background"), "    Close the TUI; music keeps playing.", "", accent.Bold(true).Render("Q   Quit completely"), "    Stop playback and exit the background service.", "", muted.Render("Esc Return to music")}
-			if m.exiting {
-				rows = append(rows, "", good.Render("Saving session…"))
-			}
+		rows = []string{"Your queue, position and view are saved.", "", accent.Bold(true).Render("q   Keep running in background"), "    Close the TUI; music keeps playing.", "", accent.Bold(true).Render("Q   Quit completely"), "    Stop playback and exit the background service.", "", muted.Render("Esc Return to music")}
+		if m.exiting {
+			rows = append(rows, "", good.Render("Saving session…"))
 		}
 		if m.problem != "" {
 			rows = append(rows, "", accent.Render(plain(m.problem)))
@@ -278,7 +279,7 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	if override != nil {
 		title = override.Title
 	}
-	header := fit(accent.Bold(true).Render(" lazymusic ")+muted.Render(" / ")+text.Render(plain(title)), max(0, w-ansi.StringWidth(backend)-2)) + muted.Render(backend) + "  "
+	header := fit(accent.Bold(true).Render(" LazyMusic ☕️ ")+muted.Render(" / ")+text.Render(plain(title)), max(0, w-ansi.StringWidth(backend)-2)) + muted.Render(backend) + "  "
 	bodyH := m.bodyHeight()
 	navW := m.navWidth()
 	queueW := m.queueWidth()
@@ -381,15 +382,15 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	}
 	footer := muted.Render(" " + label + "  h/l navigate · +/_ layout · @ logs · ? help · q leave")
 	if m.UI.Focus == 1 {
-		footer = muted.Render(" " + label + "  h/l open/back · o links · c credits · a queue · ? help · q leave")
+		footer = muted.Render(" " + label + "  h/l open/back · a add · y queue · o links · c credits · ? help")
 	}
 	if m.UI.Focus == 2 {
-		footer = muted.Render(" QUEUE  Enter play · d remove · J/K move · C clear · o links · c credits · @ logs")
+		footer = muted.Render(" QUEUE  Enter play · a add · d remove · [/] move · D clear · o/c info · ? help")
 	}
 	if m.UI.Focus == 5 {
-		footer = muted.Render(" SOUND  ,/. view · Ctrl-Shift-hjkl resize · Ctrl-= reset")
+		footer = muted.Render(" SOUND  ,/. view · HJKL resize · Ctrl-= reset")
 		if m.UI.Visualizer == 2 || m.UI.Zen {
-			footer = muted.Render(" EQUALIZER  h/l band · j/k ±1dB · Space bypass · r flat · p preset")
+			footer = muted.Render(" EQUALIZER  h/l band · j/k ±1dB · e bypass · r flat · p preset · ? help")
 		}
 	}
 	statusLine := m.notice
@@ -419,7 +420,7 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 
 func (m *Model) scopeHint() string {
 	if m.State.Source.Capabilities.CatalogSearch {
-		return "   S scope · i edit"
+		return "   s scope · i edit"
 	}
 	return "   i edit"
 }

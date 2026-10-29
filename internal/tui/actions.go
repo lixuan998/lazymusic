@@ -3,6 +3,7 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 	"fmt"
+	"lazymusic/internal/catalog"
 	"lazymusic/internal/daemon"
 	"strconv"
 	"strings"
@@ -12,13 +13,9 @@ import (
 
 func (m *Model) input(msg tea.KeyPressMsg, key string) tea.Cmd {
 	switch key {
-	case "esc":
+	case "esc", "ctrl+c":
 		m.mode = ""
 		m.draft = ""
-		return nil
-	case "ctrl+c":
-		m.mode = ""
-		m.prompt = true
 		return nil
 	case "enter":
 		mode, text := m.mode, strings.TrimSpace(m.draft)
@@ -45,7 +42,7 @@ func (m *Model) input(msg tea.KeyPressMsg, key string) tea.Cmd {
 	case "ctrl+u":
 		m.draft = ""
 	default:
-		if msg.Text != "" {
+		if msg.Text != "" && !msg.Mod.Contains(tea.ModCtrl) && !msg.Mod.Contains(tea.ModAlt) {
 			m.draft += msg.Text
 		} else if msg.Mod == 0 && unicode.IsPrint(msg.Code) {
 			m.draft += string(msg.Code)
@@ -55,7 +52,7 @@ func (m *Model) input(msg tea.KeyPressMsg, key string) tea.Cmd {
 }
 
 func (m *Model) normal(key string) tea.Cmd {
-	if key == "g" {
+	if key == "g" && m.keys.ActionFor(m.keyScope(), "gg") == "top" {
 		if m.gPrefix {
 			m.gPrefix = false
 			return m.move("top")
@@ -64,14 +61,19 @@ func (m *Model) normal(key string) tea.Cmd {
 		return nil
 	}
 	m.gPrefix = false
-	if key >= "1" && key <= "6" {
-		if key != "6" {
+	action := m.keys.ActionFor(m.keyScope(), key)
+	if !m.actionEnabled(action) {
+		return nil
+	}
+	if strings.HasPrefix(action, "focus_") && len(action) == len("focus_1") {
+		panel := action[len(action)-1]
+		if panel != '6' {
 			m.UI.Zen = false
 		}
-		if key == "6" && !m.UI.Zen {
+		if panel == '6' && !m.UI.Zen {
 			m.UI.Layout = "full"
 		}
-		m.UI.Focus = int(key[0] - '1')
+		m.UI.Focus = int(panel - '1')
 		if m.UI.Focus == 4 {
 			m.UI.ShowLogs = true
 		}
@@ -91,7 +93,6 @@ func (m *Model) normal(key string) tea.Cmd {
 		}
 		return m.dirty()
 	}
-	action := m.keys.Action(key)
 	if m.UI.Focus == 5 && (m.UI.Visualizer == 2 || m.UI.Zen) {
 		if cmd, handled := m.equalizerKey(action, key); handled {
 			return cmd
@@ -131,6 +132,7 @@ func (m *Model) normal(key string) tea.Cmd {
 		return nil
 	case "help":
 		m.help = true
+		m.helpScroll = 0
 		return nil
 	case "command":
 		m.mode = "command"
@@ -236,6 +238,8 @@ func (m *Model) normal(key string) tea.Cmd {
 		return nil
 	case "toggle":
 		return m.command(daemon.Command{Op: "toggle"})
+	case "playback_mode":
+		return m.command(daemon.Command{Op: "playback-mode", ModeStep: 1})
 	case "stop":
 		return m.command(daemon.Command{Op: "stop"})
 	case "next":
@@ -262,6 +266,18 @@ func (m *Model) normal(key string) tea.Cmd {
 		if m.UI.Focus == 2 {
 			return m.command(daemon.Command{Op: "remove", Index: m.UI.QueueCursor})
 		}
+		return m.openEdit("remove")
+	case "add":
+		if m.mutationBusy {
+			m.Report("warn", "catalog", "A library change is still in progress")
+			return nil
+		}
+		if m.UI.Focus == 1 && m.UI.Location.Page == "playlists" && m.State.Source.Capabilities.PlaylistCreate {
+			m.closeEdit()
+			m.edit = &editDialog{phase: "name", operation: catalog.CreatePlaylist, title: "New playlist", origin: m.query().Key()}
+			return nil
+		}
+		return m.openEdit("add")
 	case "clear":
 		if m.UI.Focus == 2 {
 			return m.command(daemon.Command{Op: "clear"})
@@ -282,10 +298,6 @@ func (m *Model) normal(key string) tea.Cmd {
 		m.restore = m.cursorFor(m.query())
 		m.restoring = true
 		return m.fetch(true, true)
-	}
-	if key == "i" && m.UI.Location.Page == "search" {
-		m.mode = "query"
-		m.draft = m.UI.SearchQuery
 	}
 	return nil
 }

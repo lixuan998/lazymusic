@@ -121,7 +121,7 @@ func (m *Model) acceptDetails(msg detailsMsg) {
 
 func (m *Model) workKey(key string) tea.Cmd {
 	d := m.work
-	action := m.keys.Action(key)
+	action := m.keys.ActionFor("Dialog", key)
 	if key == "esc" || key == "q" || key == "ctrl+c" || action == "back" {
 		m.closeWork()
 		return nil

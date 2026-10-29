@@ -24,8 +24,10 @@ func (m *Model) OpenLogin() tea.Cmd {
 	}
 	return m.dirty()
 }
-func (m *Model) Editing() bool    { return m.mode != "" }
-func (m *Model) HasModal() bool   { return m.prompt || m.help || m.qualityDialog || m.work != nil }
+func (m *Model) Editing() bool { return m.mode != "" }
+func (m *Model) HasModal() bool {
+	return m.prompt || m.help || m.qualityDialog || m.work != nil || m.edit != nil
+}
 func (m *Model) Size() (int, int) { return m.width, m.height }
 func (m *Model) SetSize(w, h int) { m.width, m.height = w, h }
 func (m *Model) ContentWidth() int {

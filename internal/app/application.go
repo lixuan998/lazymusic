@@ -12,7 +12,6 @@ import (
 	"lazymusic/internal/session"
 	"lazymusic/internal/tui"
 	"os"
-	"strings"
 	"sync"
 	"time"
 )
@@ -252,7 +251,7 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_, cmd := a.login.Update(msg)
 		return a, cmd
 	}
-	if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "esc" && a.music.HasToast() {
+	if k, ok := msg.(tea.KeyPressMsg); ok && tui.KeyString(k) == "esc" && a.music.HasToast() {
 		return a, a.musicUpdate(msg)
 	}
 	if a.music.HasModal() {
@@ -263,12 +262,10 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 	if key, ok := msg.(tea.KeyPressMsg); ok && a.music.LoginSelected() && a.music.UI.Focus == 1 {
-		k := key.String()
-		global := k == "ctrl+h" || k == "ctrl+l" || k == "ctrl+j" || k == "ctrl+k" || k == "tab" || k == "shift+tab" || k == "@" || k == "ctrl+=" || k == "ctrl++" || k == "ctrl+-" || k == "ctrl+_"
-		action := a.keys.Action(k)
-		global = global || strings.HasPrefix(action, "resize_") || action == "zen" || action == "layout_reset"
-		if a.login.phase != "folder" {
-			global = global || k == "q" || k == "Q" || k == "?" || k == "+" || k == "_" || k == "=" || k == "-"
+		k := tui.KeyString(key)
+		global := a.keys.ActionFor("Global", k) != ""
+		if a.login.phase == "folder" {
+			global = false
 		}
 		if global {
 			return a, a.musicUpdate(msg)
@@ -276,7 +273,18 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.connecting {
 			return a, nil
 		}
-		_, cmd := a.login.Update(msg)
+		loginMsg := msg
+		if a.login.phase != "folder" && k != "esc" && k != "ctrl+c" {
+			canonical := map[string]string{"down": "j", "up": "k", "open": "l", "back": "h", "activate": "enter", "login_retry": "r"}[a.keys.ActionFor("Login", k)]
+			if canonical != "" {
+				if canonical == "enter" {
+					loginMsg = tea.KeyPressMsg{Code: tea.KeyEnter}
+				} else {
+					loginMsg = tea.KeyPressMsg{Code: []rune(canonical)[0], Text: canonical}
+				}
+			}
+		}
+		_, cmd := a.login.Update(loginMsg)
 		if a.login.back {
 			a.login.back = false
 			a.music.UI.NavIndex = a.music.IndexForPage(a.music.UI.NavPage)

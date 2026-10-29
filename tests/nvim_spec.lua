@@ -32,7 +32,7 @@ vim.api.nvim_chan_send = function(channel, bytes)
   assert(channel == job)
   sent[#sent + 1] = bytes
 end
-for lhs, want in pairs({ ["<Esc>"] = "\27[27u", ["<C-h>"] = "\27[104;5u", ["<C-j>"] = "\27[106;5u", ["<C-l>"] = "\27[108;5u", ["<C-S-l>"] = "\27[108;6u" }) do
+for lhs, want in pairs({ ["<Esc>"] = "\27[27u", ["<C-h>"] = "\27[104;5u", ["<C-j>"] = "\27[106;5u", ["<C-l>"] = "\27[108;5u", ["H"] = "H", ["J"] = "J", ["K"] = "K", ["L"] = "L", ["<lt>"] = "<", [">"] = ">", ["<C-u>"] = "\27[117;5u", ["<C-d>"] = "\27[100;5u", ["<C-S-,>"] = "\27[60;5u", ["<C-S-.>"] = "\27[62;5u" }) do
   local map = vim.fn.maparg(lhs, "t", false, true)
   assert(map.buffer == 1 and type(map.callback) == "function", "missing buffer-local passthrough")
   map.callback()

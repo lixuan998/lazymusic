@@ -54,9 +54,9 @@ func TestShiftedSymbolsKeepTheirActionsAndInputText(t *testing.T) {
 	m, _ = testModel()
 	m.UI.Focus = 0
 	before := m.navWidth()
-	m.Update(decodeKey(t, "\x1b[108;6u"))
+	m.Update(decodeKey(t, "L"))
 	if m.navWidth() <= before {
-		t.Fatal("Ctrl+Shift+l lost resize behavior")
+		t.Fatal("Shift+l lost resize behavior")
 	}
 	m.Update(decodeKey(t, "\x1b[61;5u"))
 	if m.UI.NavWidth != 0 || m.UI.Layout != "full" {
@@ -86,13 +86,13 @@ func TestKeyboardNegotiationPreservesPrintableTextInEveryView(t *testing.T) {
 	}
 }
 
-func TestCtrlShiftVimKeysResizeTheFocusedPanel(t *testing.T) {
-	for _, wire := range []string{"\x1b[104;6u", "\x1b[106;6u", "\x1b[107;6u", "\x1b[108:76;6u"} {
+func TestShiftVimKeysResizeTheFocusedPanel(t *testing.T) {
+	for _, wire := range []string{"H", "J", "K", "L", "\x1b[104:72;2u", "\x1b[106:74;2u", "\x1b[107;2;75u", "\x1b[108:76;2u"} {
 		m, _ := testModel()
 		m.UI.Focus = 0
 		m.Update(decodeKey(t, wire))
 		if m.UI.Focus != 0 || (m.UI.NavWidth == 0 && m.UI.NavHeight == 0) {
-			t.Fatalf("Ctrl+Shift+hjkl moved focus or did not resize: %q", wire)
+			t.Fatalf("Shift+hjkl moved focus or did not resize: %q", wire)
 		}
 	}
 }
@@ -106,6 +106,31 @@ func TestTerminalControlVimKeysRemainDistinctFromBackspaceAndEnter(t *testing.T)
 		m.Update(decodeKey(t, step.wire))
 		if m.UI.Focus != step.focus || m.prompt {
 			t.Fatalf("control key lost focus navigation: %q", step.wire)
+		}
+	}
+}
+
+func TestControlAngleBracketsSeekFromEveryPanel(t *testing.T) {
+	for _, tc := range []struct {
+		wire    string
+		forward bool
+	}{
+		{"\x1b[60;5u", false}, {"\x1b[62;5u", true},
+		{"\x1b[44;6u", false}, {"\x1b[46;6u", true},
+		{"\x1b[44:60;6u", false}, {"\x1b[46:62;6u", true},
+		{"\x1b[27;6;44~", false}, {"\x1b[27;6;46~", true},
+	} {
+		for focus := 0; focus < 6; focus++ {
+			m, api := testModel()
+			m.UI.Focus = focus
+			_, cmd := m.Update(decodeKey(t, tc.wire))
+			if cmd == nil {
+				t.Fatalf("control angle bracket unhandled: %q", tc.wire)
+			}
+			cmd()
+			if api.lastCommand.Op != "seek" || (api.lastCommand.Delta > 0) != tc.forward || m.UI.Focus != focus {
+				t.Fatalf("%q became another action: %+v", tc.wire, api.lastCommand)
+			}
 		}
 	}
 }

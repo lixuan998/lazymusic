@@ -11,6 +11,7 @@ import (
 	"lazymusic/internal/daemon"
 	"lazymusic/internal/music"
 	localfiles "lazymusic/internal/sources/local"
+	"lazymusic/internal/tui"
 	"lazymusic/internal/vibez/player/browserless"
 	"os"
 	"path/filepath"
@@ -230,7 +231,7 @@ func (m *loginPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.root += strings.ReplaceAll(msg.Content, "\n", "")
 		}
 	case tea.KeyPressMsg:
-		key := msg.String()
+		key := tui.KeyString(msg)
 		if key == "esc" || key == "ctrl+c" {
 			if m.cancel != nil {
 				m.cancel()
@@ -282,7 +283,7 @@ func (m *loginPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.root = string(r[:len(r)-1])
 			}
 		default:
-			if msg.Text != "" {
+			if msg.Text != "" && !msg.Mod.Contains(tea.ModCtrl) && !msg.Mod.Contains(tea.ModAlt) {
 				m.root += msg.Text
 			} else if msg.Mod == 0 && unicode.IsPrint(msg.Code) {
 				m.root += string(msg.Code)

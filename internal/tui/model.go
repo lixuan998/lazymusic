@@ -47,6 +47,11 @@ type exitMsg struct {
 }
 
 type Model struct {
+	edit              *editDialog
+	editGeneration    uint64
+	editCancel        context.CancelFunc
+	mutationBusy      bool
+	helpScroll        int
 	work              *workDialog
 	inspectGeneration uint64
 	inspectCancel     context.CancelFunc
@@ -213,6 +218,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case editOptionsMsg:
+		return m, m.acceptEditOptions(msg)
+	case playlistPageMsg:
+		return m, m.acceptPlaylistPage(msg)
+	case mutationMsg:
+		return m, m.acceptMutation(msg)
 	case detailsMsg:
 		m.acceptDetails(msg)
 		return m, nil
@@ -280,7 +291,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.next != "" {
 			if m.nextSeen[m.next] {
 				m.next = ""
-				m.problem = "Source returned a repeated page; press R to refresh"
+				m.problem = "Source returned a repeated page; refresh the content"
 			} else {
 				if m.nextSeen == nil {
 					m.nextSeen = map[string]bool{}
@@ -331,6 +342,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ExitAction = msg.action
 		return m, tea.Quit
 	case tea.PasteMsg:
+		if m.edit != nil && m.edit.phase == "name" {
+			m.edit.draft = boundedName(m.edit.draft + msg.Content)
+			return m, nil
+		}
 		if m.mode != "" {
 			m.draft += strings.ReplaceAll(msg.Content, "\n", " ")
 		}
@@ -339,7 +354,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.exiting {
 			return m, nil
 		}
-		key := msg.String()
+		key := KeyString(msg)
+		if m.edit != nil {
+			return m, m.editKey(msg, key)
+		}
 		if m.work != nil {
 			return m, m.workKey(key)
 		}
@@ -377,9 +395,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.help {
-			if key == "esc" || key == "?" || key == "q" {
-				m.help = false
-			}
+			m.helpKey(key)
 			return m, nil
 		}
 		return m, m.normal(key)

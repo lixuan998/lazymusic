@@ -40,12 +40,21 @@ Run lazymusic to open or restore your session. Login lives in the content panel.
   @              Toggle Log window; Esc dismisses a runtime notification
   h/j/k/l        Navigate within a panel
   Ctrl-h/j/k/l   Focus a neighboring panel
-  Ctrl-Shift-h/j/k/l  Resize the focused panel
+  H/J/K/L        Resize the focused panel (Shift+h/j/k/l)
   o / c          Album/artist links / credits in panels 2, 3 and 4
-  C              Clear the queue (panel 3)
+  a              Add menu; create playlist in Playlists (panel 2)
+  y / P          Queue selection / play next (panel 2)
+  d / D          Remove / clear playback queue (panel 3)
+  [ / ]          Reorder queue (panel 3)
+  < / >          Previous / next song (Global)
+  Ctrl+< / Ctrl+>  Seek backward / forward 10s (Global)
+  Space / x      Play-pause / stop (Global)
+  m              Cycle playback mode (Global)
+  r / s          Repeat / shuffle (Queue / Player)
   , / .         Content category, navigation animation, or player mode
-  b              Choose a supported preferred audio quality
+  b              Choose a supported preferred audio quality (panel 4)
   = / -          System output volume
+  ?              Current panel + Global commands
 
 Commands: tui (default), status, ctl, quit, logout, sources, version
 Options: --source apple|local, --music-dir PATH, --state-dir PATH

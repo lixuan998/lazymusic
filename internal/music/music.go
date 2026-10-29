@@ -37,12 +37,13 @@ type State struct {
 }
 
 type Capabilities struct {
-	Equalizer     bool `json:"equalizer"`
-	Home          bool `json:"home"`
-	CatalogSearch bool `json:"catalog_search"`
-	Library       bool `json:"library"`
-	Playlists     bool `json:"playlists"`
-	Folders       bool `json:"folders"`
+	PlaylistCreate bool `json:"playlist_create"`
+	Equalizer      bool `json:"equalizer"`
+	Home           bool `json:"home"`
+	CatalogSearch  bool `json:"catalog_search"`
+	Library        bool `json:"library"`
+	Playlists      bool `json:"playlists"`
+	Folders        bool `json:"folders"`
 }
 
 type Quality struct {

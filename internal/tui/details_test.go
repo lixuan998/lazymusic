@@ -45,10 +45,10 @@ func TestWorkActionsUseActualFocusedWorkAndNeverClearQueue(t *testing.T) {
 	}
 	m, f := testModel()
 	m.UI.Focus = 2
-	cmd := m.normal("C")
+	cmd := m.normal("D")
 	cmd()
 	if f.lastCommand.Op != "clear" {
-		t.Fatal("uppercase C no longer clears queue")
+		t.Fatal("uppercase D did not clear queue")
 	}
 }
 

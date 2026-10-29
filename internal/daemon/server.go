@@ -51,6 +51,8 @@ type Service struct {
 	opts              Options
 	mu                sync.Mutex
 	commandMu         sync.Mutex
+	catalogMu         sync.Mutex
+	cacheVersion      uint64
 	saved             session.Snapshot
 	engine            engine.Engine
 	browser           catalog.Browser
@@ -284,6 +286,7 @@ func (s *Service) execute(ctx context.Context, c Command) error {
 		s.browser = b
 		s.secrets = secrets
 		s.cache = map[string]cachedPage{}
+		s.cacheVersion++
 		s.mu.Unlock()
 
 		return nil
@@ -495,6 +498,7 @@ func (s *Service) browse(ctx context.Context, q catalog.Query, refresh bool) (ca
 	s.mu.Lock()
 	entry, ok := s.cache[key]
 	browser := s.browser
+	version := s.cacheVersion
 	s.mu.Unlock()
 	if ok && !refresh && time.Since(entry.at) < 5*time.Minute {
 		return entry.page, nil
@@ -509,7 +513,9 @@ func (s *Service) browse(ctx context.Context, q catalog.Query, refresh bool) (ca
 	if len(s.cache) >= 64 {
 		s.cache = map[string]cachedPage{}
 	}
-	s.cache[key] = cachedPage{page, time.Now()}
+	if version == s.cacheVersion {
+		s.cache[key] = cachedPage{page, time.Now()}
+	}
 	s.mu.Unlock()
 	return page, nil
 }
@@ -664,6 +670,90 @@ func (s *Service) Handler() http.Handler {
 			return
 		}
 		write(w, details)
+	})
+	mux.HandleFunc("POST /v1/actions", func(w http.ResponseWriter, r *http.Request) {
+		var subject catalog.Subject
+		if !decode(w, r, &subject) {
+			return
+		}
+		if subject.ID == "" || (subject.Source != "" && subject.Source != s.source.ID) {
+			fail(w, 400, fmt.Errorf("invalid work or music source"))
+			return
+		}
+		subject.Source = s.source.ID
+		s.mu.Lock()
+		editor, ok := s.browser.(catalog.Editor)
+		s.mu.Unlock()
+		if !ok {
+			write(w, catalog.Actions{})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		defer cancel()
+		actions, err := editor.Actions(ctx, subject)
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		write(w, actions)
+	})
+	mux.HandleFunc("POST /v1/mutate", func(w http.ResponseWriter, r *http.Request) {
+		if !authorized(r) {
+			fail(w, 409, fmt.Errorf("frontend session no longer active"))
+			return
+		}
+		var mutation catalog.Mutation
+		if !decode(w, r, &mutation) {
+			return
+		}
+		if mutation.Source != s.source.ID || (mutation.Subject.Source != "" && mutation.Subject.Source != s.source.ID) {
+			fail(w, 400, fmt.Errorf("mutation belongs to another music source"))
+			return
+		}
+		switch mutation.Op {
+		case catalog.AddLibrary, catalog.AddPlaylist, catalog.RemoveLibrary, catalog.DeletePlaylist:
+			if mutation.Subject.ID == "" {
+				fail(w, 400, fmt.Errorf("missing work identity"))
+				return
+			}
+		case catalog.CreatePlaylist:
+		default:
+			fail(w, 400, fmt.Errorf("unsupported catalog operation"))
+			return
+		}
+		// Cloud writes are serialized separately so a slow request cannot block
+		// playback controls. Never replay a write after a timeout or lost reply.
+		s.catalogMu.Lock()
+		defer s.catalogMu.Unlock()
+		s.mu.Lock()
+		active := !s.stopping && s.lease.token != "" && r.Header.Get("X-Lazymusic-Client") == s.lease.token
+		editor, ok := s.browser.(catalog.Editor)
+		s.mu.Unlock()
+		if !active {
+			fail(w, 409, fmt.Errorf("background service is stopping or frontend session changed"))
+			return
+		}
+		if !ok {
+			fail(w, 400, fmt.Errorf("this source does not support library editing"))
+			return
+		}
+		invalidate := func() {
+			s.mu.Lock()
+			s.cacheVersion++
+			s.cache = map[string]cachedPage{}
+			s.mu.Unlock()
+		}
+		invalidate()
+		ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+		defer cancel()
+		result, err := editor.Mutate(ctx, mutation)
+		invalidate()
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		s.logs.Add("info", "catalog", mutation.Op)
+		write(w, result)
 	})
 	mux.HandleFunc("POST /v1/quit", func(w http.ResponseWriter, r *http.Request) {
 		s.commandMu.Lock()

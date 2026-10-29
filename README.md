@@ -10,7 +10,7 @@
 
 以下动图来自真实 lazymusic 终端会话，底部附有按键提示。Apple Music 使用实际目录数据；LOCAL 播放演示使用临时静音 WAV 文件。
 
-**布局与音效**：`+` / `_` 切换布局，`Ctrl+Shift+h/j/k/l` 调节窗口，`Ctrl+-` 进入 Zen，调整均衡器后用 `Ctrl+=` 恢复默认布局；`@` 查看运行日志。
+**布局与音效**：`+` / `_` 切换布局，`H/J/K/L` 调节窗口，`Ctrl+-` 进入 Zen，调整均衡器后用 `Ctrl+=` 恢复默认布局；`@` 查看运行日志。
 
 ![真实操作：布局切换、窗口调节、律动、均衡器与 Zen](docs/media/layouts-equalizer.gif)
 
@@ -21,7 +21,7 @@
 
 ![真实操作：Apple Music 搜索、专辑跳转与 credits](docs/media/apple-music-catalog.gif)
 
-**队列与播放控制**：`a` 加入队列，`3` 聚焦队列后按 `Enter` 播放；在 `4` Player 中用 `.` 切换播放模式，`>` 快进，`Space` 暂停或继续，`]` 切到下一首。
+**队列与播放控制**：`y` 加入队列，`3` 聚焦队列后按 `Enter` 播放；在任意面板用 `m` 轮转播放模式，`Ctrl+>` 快进，`Space` 暂停或继续，`>` 切到下一首。
 
 ![真实操作：加入队列、播放模式、快进、暂停与切歌](docs/media/queue-playback.gif)
 
@@ -152,7 +152,7 @@ make uninstall BINDIR="$HOME/bin"
 1. 运行 `lazymusic`，在 Content 的 Login 页面选择 **APPLE MUSIC** 或 **LOCAL**，按 `Enter` / `l` 确认。
 2. Apple Music 按官方页面提示完成授权；LOCAL 默认使用 `~/Music`，也可在 Login 中修改目录。
 3. 按 `1` 进入 Navigation，使用 `j/k` 选择 Home、Library、Playlists 或 Search，按 `l` / `Enter` 进入内容。
-4. 歌曲按 `Enter` 播放；专辑或歌单按 `p` 播放全部，按 `a` 加入队列。
+4. 歌曲按 `Enter` 播放；专辑或歌单按 `p` 播放全部，按 `y` 加入队列。
 5. 按 `q` 打开离开提示，再按 `q` 后台播放；下次运行 `lazymusic` 恢复。在离开提示中按 `Q` 则完全退出当前来源的服务。
 
 直接指定本地音乐目录：
@@ -171,55 +171,78 @@ Apple 登录仍会尝试自动打开浏览器。若没有弹出窗口，Login �
 
 ## 键位
 
-按 `?` 查看内置帮助。最低终端尺寸为 **60 × 16**；较宽的终端可同时显示 Content 和 Queue。
+按 `?` 只查看 **当前面板 + Global** 的命令，`j/k`、`Ctrl+u/d` 滚动帮助，`?` / `Esc` 关闭。最低终端尺寸为 **60 × 16**。输入搜索词、目录或歌单名称时，字母就是文本，`Esc` / `Ctrl+c` 取消。
 
-### 导航与布局
+### Global
 
 | 按键 | 操作 |
 | --- | --- |
-| `j` / `k`、`↑` / `↓` | 列表上下移动 |
-| `h` / `l`、`Enter` | 返回上级 / 打开下级、确认或播放 |
-| `Ctrl+h/j/k/l` | 切换到左 / 下 / 上 / 右面板 |
-| `1`–`6`、`Tab` / `Shift+Tab` | Navigation / Content / Queue / Player / Log / Sound；轮转焦点 |
-| `gg` / `G`、`Ctrl+u/d` | 顶部 / 底部、半页滚动 |
-| `,` / `.` | Content 切分类；Navigation / Sound 切律动与 EQ；Player 切播放模式 |
-| `+` / `_`（`Shift+=` / `Shift+-`） | 轮换完整、Content + Player、Queue + Player 布局 |
-| `Ctrl++` / `Ctrl+-` | 开关 Zen：律动 + Equalizer + Player |
-| `Ctrl+Shift+h/j/k/l` | 向左 / 下 / 上 / 右调整当前面板尺寸 |
+| `Ctrl+h/j/k/l` | 焦点移向左 / 下 / 上 / 右面板 |
+| `1`–`6` | Navigation / Content / Queue / Player / Log / Sound |
+| `Tab` / `Shift+Tab` | 下一个 / 上一个面板 |
+| `H/J/K/L`（`Shift+h/j/k/l`） | 向左 / 下 / 上 / 右调整当前面板尺寸 |
+| `+` / `_` | 轮换完整、Content + Player、Queue + Player 布局 |
+| `Ctrl++` / `Ctrl+-` | Zen：律动 + Equalizer + Player |
 | `Ctrl+=` | 恢复默认布局 |
-| `@`、`L`、`R`、`Esc` | 日志窗口、Login、刷新、取消或返回 |
-
-### 播放与搜索
-
-| 按键 | 操作 |
-| --- | --- |
-| `Space` / `x` | 播放暂停 / 停止 |
-| `[` / `]`、`<` / `>` | 上一首 / 下一首、后退 / 前进 10 秒 |
+| `Space`、`x` | 播放 / 暂停、停止，在所有面板可用 |
+| `<` / `>` | 上一曲 / 下一曲 |
+| `Ctrl+<` / `Ctrl+>` | 后退 / 前进 10 秒（通常是 `Ctrl+Shift+,` / `Ctrl+Shift+.`） |
+| `m` | 轮转播放模式，在所有面板可用 |
 | `=` / `-` | 系统默认输出音量 ±5% |
-| `b`、`r`、`z` | 音质偏好、循环模式、随机播放 |
-| `a` / `A`、`p` | 加入队列 / 下一首播放、播放整个集合 |
-| `/`、`i` / `Ctrl+f`、`S` | 过滤已加载内容、编辑搜索、切换 catalog / library 搜索 |
-| 窗口 2 / 3 / 4：`o` / `c` | 打开专辑与艺人跳转菜单 / 查看 credits |
-| Queue：`d`、`C`、`J` / `K` | 移除、清空、调整顺序 |
+| `@` | 打开 / 关闭运行日志 |
+| `?` | 当前面板帮助 |
+| `:` | 命令行，如 `:login`、`:seek 30`、`:vol 50` |
 | `q` → `q` / `Q` | 后台运行 / 完全退出当前来源服务 |
 
-### 均衡器
+尺寸调节使用普通大写字符，不再依赖 `Ctrl+Shift+j`。Ghostty 等终端的屏幕快照粘贴快捷键会在应用收到按键前执行；`H/J/K/L` 避开这类修饰键冲突。需要终端上报修饰键的操作仍使用增强键盘协议。
 
-按 `6` 聚焦 Sound，使用 `,.` 切到 Equalizer。支持 **32 Hz–16 kHz 十段、±12 dB** 调节，音效应用于实际输出，并随 session 保存。
+### 面板内命令
 
-| 按键 | 操作 |
-| --- | --- |
-| `h` / `l` | 选择频段 |
-| `j` / `k` | 降低 / 提高 1 dB |
-| `Space`、`r`、`p` | 切换旁路、归零、轮换 Flat / Bass / Vocal / Treble 预设 |
+列表通用：`j/k` 上下，`gg/G` 首尾，`Ctrl+u/d` 半页；`h/l` 返回上级 / 打开下级，`Enter` 确认或播放。这些命令只作用于当前面板。
 
-Pulse / Wave 是随播放状态和进度变化的律动动画，未进行实时音频频谱分析。Ctrl 组合键需要终端正确上报，应用会请求增强键盘协议。
+| 面板 | 按键 | 操作 |
+| --- | --- | --- |
+| 1 Navigation | `j/k`、`l` / `Enter` | 选择页面、进入 Content；选中 Login 后确认进入 |
+| 1 Navigation | `,/.` | 切换下方 Pulse / Wave / Equalizer |
+| 2 Content | `,/.`、`r`、`/` | 分类 / 搜索类型、刷新、过滤已加载内容 |
+| 2 Content · Search | `i`、`s` | 编辑搜索词、切换 catalog / library 范围 |
+| 2 Content | `p`、`y`、`P` | 播放歌曲或整个集合、复制到队列、下一首播放 |
+| 2 Content | `a`、`d` | 当前作品添加菜单、移除收藏入口；Playlists 列表中 `a` 新建歌单 |
+| 2 / 3 / 4 | `o`、`c` | 专辑 / 艺人跳转、credits |
+| 3 Queue | `Enter` / `p` | 播放选中的歌曲 |
+| 3 Queue | `r` / `s` | 调整循环 / 随机，仅 Queue / Player 可用 |
+| 3 Queue | `a`、`d`、`D` | 添加到收藏 / 歌单、移除队列项、清空队列 |
+| 3 Queue | `[` / `]` | 将选中的歌曲向上 / 下移动 |
+| 4 Player | `,/.`、`b` | 轮换组合播放模式、音质偏好；`r/s` 分别调循环和随机 |
+| 4 Player | `a` | 将正在播放的歌曲加入收藏 / 歌单 |
+| 5 Log | `j/k`、`gg/G` | 滚动、首条 / 最新日志 |
+| 6 Sound | `,/.` | 切换 Pulse / Wave / Equalizer |
+| 6 Sound · EQ | `h/l`、`j/k` | 选择频段、降低 / 提高 1 dB |
+| 6 Sound · EQ | `e`、`r`、`p` | 旁路、归零、轮换 Flat / Bass / Vocal / Treble 预设 |
+| 2 Login | `j/k`、`l` / `Enter`、`h` | 选择来源、进入 / 确认、返回；账户选项中 `r` 重新授权 |
+
+同一个字母可以在不同面板复用，如 Content / Queue / Player 的 `a`、Content / Queue 的 `d`，以及 Content / Sound 的 `p`。全局 `m` 轮转播放模式；`r/s` 只在 Queue / Player 调整循环和随机。Content 刷新用 `r`，Search 范围用 `s`，EQ 归零用 `r`。尺寸调节统一用大写 `H/J/K/L`，Queue 调序用 `[/]`，Login 使用 Navigation 或 `:login`。
+
+`h/j/k/l` 单击立即生效，长按在当前窗口连续移动；没有连按切窗或输入等待。切窗仅用 `Ctrl+h/j/k/l`。输入搜索、目录和歌单名称时，普通字母保持文本含义。
+
+均衡器支持 **32 Hz–16 kHz 十段、±12 dB**，应用于实际输出并随 session 保存。Pulse / Wave 是随播放状态和进度变化的律动动画，未进行实时音频频谱分析。
+
+### Apple Music 收藏与歌单
+
+- 在 Search / Home 选中歌曲或专辑，按 `a` 选择 **Music library**，添加歌曲或整张专辑。Library / 资料库搜索返回的项目不会再显示重复收藏入口。
+- 在 Playlists 列表按 `a`，输入名称、`Enter` 新建歌单；空列表也可创建。
+- 在 Content / Queue / Player 的歌曲上按 `a` → **Choose playlist**，从可编辑歌单中选择目标。只读推荐歌单不会混入目标列表，提交前会再次检查编辑权限。
+- `y` 直接加入播放队列，`P` 安排为下一首；收藏和云端歌单写入不会打断正在播放的音乐。
+
+Apple 返回 **202 Accepted** 时会提示已受理；同步可能稍有延迟，可在 Content 按 `r` 刷新。写入请求不会自动重试，遇到连接错误应先检查 Apple Music 中的实际结果，再决定是否重试。
+
+**当前限制：Apple 公开 API 不提供删除收藏歌曲、专辑或歌单的接口。** `d` 会展示后端的限制说明，实际删除请使用 Apple Music 官方客户端；不会在本地假装删除。此限制适用于 macOS 和 Linux。参见 [Apple API 总览](https://developer.apple.com/documentation/applemusicapi/)、[添加收藏](https://developer.apple.com/documentation/applemusicapi/add-a-resource-to-a-library)及 [Apple 对删除接口的说明](https://developer.apple.com/forums/thread/107807)。LOCAL 不提供文件删除操作。
 
 ### 作品信息
 
-在 Content 选中作品、Queue 选中歌曲或聚焦 Player 时，按 `o` 打开跳转菜单。专辑和每位艺人分别列为一项，使用 `j/k` 选择，`Enter` / `l` 在 Content 中打开，`h` 返回原页面。不会改变播放队列。
+在 Content 选中作品、Queue 选中歌曲或聚焦 Player 时，按 `o` 打开跳转菜单。专辑和每位艺人分别列为一项，使用 `j/k` 选择，`Enter` / `l` 在 Content 中打开，`h` 返回原页面，不改变播放队列。
 
-按 `c` 查看 credits，`j/k` 或 `Ctrl+u/d` 滚动，`Esc` 关闭。显示音源实际提供的贡献者、角色、作曲及发行信息；没有完整制作人员名单时会明确注明。LOCAL 当前按文件与目录组织，支持专辑 / 艺人跳转，但尚不读取嵌入式 credits。为避免冲突，Queue 清空改为大写 `C`。
+按 `c` 查看音源实际提供的贡献者、角色、作曲及发行信息；没有完整名单时会明确注明。用 `j/k` 或 `Ctrl+u/d` 滚动，`Esc` 关闭。LOCAL 当前按文件与目录组织，尚不读取嵌入式 credits。
 
 ## Neovim
 
@@ -239,8 +262,8 @@ return {
     opts = {
       cmd = "lazymusic", -- 默认查找 PATH，再查找 ~/.local/bin/lazymusic
       args = {},        -- 例如 { "--source", "local" }
-      width = 0.94,
-      height = 0.92,
+      width = 0.84,
+      height = 0.82,
       border = "rounded",
     },
   },
@@ -249,7 +272,7 @@ return {
 
 本地开发可将仓库地址替换为 `dir = "/absolute/path/to/code/lazy-music"`。插件不代替 binary 安装；可用 `opts.cmd` 指定可执行文件的完整路径，参数通过 `opts.args` 逐项传入，不经过 shell。
 
-重复打开会复用已有终端；`:LazyMusicHide` 只隐藏浮窗。TUI 内 `q q` 会关闭浮窗并保持后台播放，`q Q` 停止当前来源服务；再次 `<leader>mm` 恢复 session。`Esc`、面板焦点和窗口调节键使用当前 buffer 的透传映射，不影响其他终端。
+重复打开会复用已有终端；`:LazyMusicHide` 只隐藏浮窗。TUI 内 `q q` 会关闭浮窗并保持后台播放，`q Q` 停止当前来源服务；再次 `<leader>mm` 恢复 session。`Esc`、`Ctrl+h/j/k/l`、`Ctrl+u/d`、`H/J/K/L` 和布局修饰键使用当前 buffer 的透传映射，不影响其他终端。插件将按键交给 TUI；`?` 与直接运行一致，只显示当前面板及 Global。
 
 需要临时回到 Neovim 普通模式时，先按 `Ctrl+反斜杠`，再按 `Ctrl+n`。自动安装后可使用 `:help lazymusic`，也可阅读 [插件帮助](docs/lazymusic.txt)。
 
@@ -273,7 +296,7 @@ return {
 }
 ```
 
-动作名与默认值见 [keys.go](internal/tui/keys.go)。同一按键不能分配给多个动作。
+动作名与默认值见 [keys.go](internal/tui/keys.go)。同一按键可分配给不同面板的动作；同一面板内、以及面板与 Global 之间不能冲突。启动时会校验。旧版 keys.json 的动作名仍可覆盖，新动作及默认值以注册表为准。
 
 也可通过 CLI 查看或控制当前来源：
 
@@ -309,7 +332,7 @@ Apple 多设备播放冲突如果由服务返回明确错误，会显示脱敏�
 
 ### 为什么没有 Apple Music Hi-Res 选项？
 
-当前音源链路提供 AAC，曲目的无损标签不等于实际播放格式。macOS 原生 MusicKit 的实测也尚未得到 ALAC 解码证据。现阶段不显示未验证的音质选项；入口仍为 `b`，未来由后端能力扩展。
+当前音源链路提供 AAC，曲目的无损标签不等于实际播放格式。macOS 原生 MusicKit 的实测也尚未得到 ALAC 解码证据。现阶段不显示未验证的音质选项；入口仍为 Player 中的 `b`，未来由后端能力扩展。
 
 ### 更新后无法连接服务？
 

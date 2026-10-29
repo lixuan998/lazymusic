@@ -103,7 +103,7 @@ func (m *Model) equalizerRows(w, h int) []string {
 		}
 		labels.WriteString(label)
 	}
-	rows = append(rows, labels.String(), muted.Render("h/l band · j/k gain · Space bypass · r flat"))
+	rows = append(rows, labels.String(), muted.Render("h/l band · j/k gain · e bypass · r flat"))
 	return rows
 }
 func (m *Model) equalizerKey(action, key string) (tea.Cmd, bool) {
@@ -124,11 +124,11 @@ func (m *Model) equalizerKey(action, key string) (tea.Cmd, bool) {
 			delta = -1
 		}
 		return m.command(daemon.Command{Op: "equalizer", EQBand: m.UI.EQBand, EQDelta: delta}), true
-	case "toggle":
+	case "eq_toggle":
 		return m.command(daemon.Command{Op: "equalizer", EQAction: "toggle"}), true
-	case "repeat":
+	case "eq_reset":
 		return m.command(daemon.Command{Op: "equalizer", EQPreset: "flat"}), true
-	case "play_selection":
+	case "eq_preset":
 		presets := []string{"flat", "bass", "vocal", "treble"}
 		next := 0
 		for i, name := range presets {

@@ -122,6 +122,7 @@ func TestRuntimeErrorToastDismissesButRemainsInLog(t *testing.T) {
 }
 func TestQualitySelectionUsesAdvertisedIDs(t *testing.T) {
 	m, api := testModel()
+	m.UI.Focus = 3
 	m.State.Source.Qualities = []music.Quality{{ID: "standard", Name: "64"}, {ID: "high", Name: "256"}}
 	m.State.PreferredQuality = "high"
 	m.normal("b")
@@ -205,7 +206,7 @@ func TestSplitSoundZenResizeAndReset(t *testing.T) {
 		t.Fatal("equalizer controls did not dispatch")
 	}
 	before := m.navWidth()
-	m.normal("ctrl+shift+l")
+	m.normal("L")
 	if m.navWidth() <= before {
 		t.Fatal("resize did not change width")
 	}
@@ -235,8 +236,8 @@ func TestResizedAndZenLayoutsAlwaysFit(t *testing.T) {
 				for _, focus := range []int{0, 1, 2, 3, 4, 5} {
 					m.UI.Focus = focus
 					for range 20 {
-						m.normal("ctrl+shift+l")
-						m.normal("ctrl+shift+j")
+						m.normal("L")
+						m.normal("J")
 					}
 				}
 				lines := strings.Split(m.View().Content, "\n")

@@ -12,8 +12,8 @@ SETUP                                                       *lazymusic-setup*
   require("lazymusic").setup({
     cmd = "lazymusic",          -- executable, not a shell command
     args = {},                 -- e.g. { "--source", "local" }
-    width = 0.94,               -- fraction of available columns, or cell count
-    height = 0.92,              -- fraction of available rows, or cell count
+    width = 0.84,               -- fraction of available columns, or cell count
+    height = 0.82,              -- fraction of available rows, or cell count
     border = "rounded",
     keymap = "<leader>mm",      -- false disables the normal-mode mapping
   })
@@ -27,8 +27,10 @@ COMMANDS                                                 *lazymusic-commands*
 :LazyMusicHide  Hide its floating window and keep the same TUI process.
 
 <leader>mm opens the terminal in normal mode after setup. In terminal mode,
-Esc, Ctrl+h/j/k/l, Ctrl+Shift+h/j/k/l, Ctrl+= and Ctrl++/- are forwarded to
-lazymusic. The terminal must distinguish modified keys for them to work.
+Esc, Ctrl+h/j/k/l, Ctrl+u/d, H/J/K/L, Ctrl+= and Ctrl++/- are forwarded
+to lazymusic using buffer-local mappings. Resize uses ordinary uppercase
+H/J/K/L; Ctrl+Shift+j is no longer a default binding. The terminal must
+distinguish control keys for focus/layout shortcuts to work.
 
 Use the TUI's q then q to detach and close the float while music keeps playing;
 q then Q stops the selected source's background service. Reopen with <leader>mm
@@ -36,5 +38,27 @@ to restore the session. To access Neovim commands from the terminal, press
 Ctrl-\ Ctrl-n. Closing the float alone hides the TUI and reuses it next time.
 
 On a nonzero exit, the terminal output remains available for diagnosis.
+
+TUI KEYS                                                   *lazymusic-keys*
+
+? shows only the focused panel plus Global commands; j/k and Ctrl+u/d scroll
+help, ? or Esc closes it. Global: H/J/K/L resize, Ctrl+h/j/k/l focus, Space
+play/pause, =/- system volume, @ log, +/_ layouts, Ctrl+= reset.
+
+Content: a add menu (a creates in Playlists), y queue, P play next, p play,
+r refresh, / filter. Search: i query, s scope. Queue: d remove, D clear,
+[/] reorder. Global: </> previous/next, Ctrl+< / Ctrl+> seek 10s, x stop,
+m playback mode. Queue/Player: r repeat, s shuffle. Player: b quality.
+Sound EQ: h/l band, j/k gain, e bypass, r flat, p preset.
+o/c opens album/artist links or credits in Content, Queue and Player.
+Login is available through Navigation or :login. Text fields keep letters
+as text; Esc/Ctrl+c cancels. The plugin has no separate music keymap.
+Navigation is immediate. Holding h/j/k/l repeats within the focused panel.
+There are no double-tap bindings. Ctrl+< / Ctrl+> (Ctrl+Shift+comma/period)
+seeks backward/forward 10 seconds from any panel.
+
+Apple Music: add songs/albums to the library, create playlists, and add songs
+to editable playlists. Cloud deletion is unavailable in Apple's public API;
+d on a library item explains this limit. No local files are deleted.
 
  vim:tw=78:ts=8:noet:ft=help:norl:

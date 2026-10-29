@@ -110,4 +110,14 @@ func (c *Client) Inspect(ctx context.Context, subject catalog.Subject) (catalog.
 	err := c.call(ctx, http.MethodPost, "/v1/inspect", subject, &details)
 	return details, err
 }
+func (c *Client) Actions(ctx context.Context, subject catalog.Subject) (catalog.Actions, error) {
+	var actions catalog.Actions
+	err := c.call(ctx, http.MethodPost, "/v1/actions", subject, &actions)
+	return actions, err
+}
+func (c *Client) Mutate(ctx context.Context, mutation catalog.Mutation) (catalog.MutationResult, error) {
+	var result catalog.MutationResult
+	err := c.call(ctx, http.MethodPost, "/v1/mutate", mutation, &result)
+	return result, err
+}
 func (c *Client) Close() { c.http.CloseIdleConnections() }

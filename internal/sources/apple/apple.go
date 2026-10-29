@@ -2,6 +2,7 @@
 package apple
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -41,6 +42,7 @@ type resource struct {
 	ID         string `json:"id"`
 	Type       string `json:"type"`
 	Attributes struct {
+		CanEdit    bool     `json:"canEdit"`
 		Name       string   `json:"name"`
 		Artist     string   `json:"artistName"`
 		Album      string   `json:"albumName"`
@@ -65,8 +67,13 @@ type collection struct {
 }
 
 func (c *Client) get(ctx context.Context, endpoint string, dst any) error {
+	_, err := c.request(ctx, http.MethodGet, endpoint, nil, dst)
+	return err
+}
+
+func (c *Client) request(ctx context.Context, method, endpoint string, body any, dst any) (int, error) {
 	if c.cfg.AppleDeveloperToken == "" || c.cfg.AppleUserToken == "" {
-		return fmt.Errorf("not signed in; run lazymusic login")
+		return 0, fmt.Errorf("not signed in; open Login to authorize Apple Music")
 	}
 	base, _ := url.Parse(c.base)
 	var u *url.URL
@@ -74,39 +81,50 @@ func (c *Client) get(ctx context.Context, endpoint string, dst any) error {
 	if strings.HasPrefix(endpoint, "https://") || strings.HasPrefix(endpoint, "http://") {
 		u, err = url.Parse(endpoint)
 		if err != nil || u.Scheme != base.Scheme || !strings.EqualFold(u.Host, base.Host) {
-			return fmt.Errorf("refusing cross-origin pagination link")
+			return 0, fmt.Errorf("refusing cross-origin pagination link")
 		}
 	} else {
 		if !strings.HasPrefix(endpoint, "/") {
-			return fmt.Errorf("invalid API path")
+			return 0, fmt.Errorf("invalid API path")
 		}
 		endpoint = strings.TrimPrefix(endpoint, "/v1")
 		u, err = url.Parse(c.base + endpoint)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return err
+	var data []byte
+	if body != nil {
+		data, err = json.Marshal(body)
+		if err != nil {
+			return 0, err
+		}
 	}
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), bytes.NewReader(data))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.cfg.AppleDeveloperToken)
 	req.Header.Set("Music-User-Token", c.cfg.AppleUserToken)
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("Apple Music request: %w", err)
+		return 0, fmt.Errorf("Apple Music request: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return fmt.Errorf("Apple Music authorization expired (HTTP %d); run lazymusic login", resp.StatusCode)
+		return resp.StatusCode, fmt.Errorf("Apple Music authorization failed or operation is forbidden (HTTP %d); check Login and permissions", resp.StatusCode)
 	}
 	if resp.StatusCode == 429 {
-		return fmt.Errorf("Apple Music rate limit; retry shortly")
+		return resp.StatusCode, fmt.Errorf("Apple Music rate limit; retry shortly")
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Apple Music HTTP %d", resp.StatusCode)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return resp.StatusCode, fmt.Errorf("Apple Music HTTP %d", resp.StatusCode)
 	}
-	return json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(dst)
+	if dst == nil {
+		return resp.StatusCode, nil
+	}
+	return resp.StatusCode, json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(dst)
 }
 
 func (c *Client) sf(ctx context.Context) (string, error) {
@@ -232,6 +250,7 @@ func convert(r collection) Page {
 	for _, v := range r.Data {
 		a := v.Attributes
 		i := Item{Source: music.Apple, ID: v.ID, Kind: v.Type, Title: provider.Clean(a.Name), Subtitle: provider.Clean(a.Artist)}
+		i.Writable = v.Type == "library-playlists" && a.CanEdit
 		if strings.HasSuffix(v.Type, "songs") {
 			t := session.CleanTrack(music.Track{Source: music.Apple, ID: v.ID, PlaybackID: a.PlayParams.CatalogID, Title: i.Title, Artist: i.Subtitle, Album: provider.Clean(a.Album), Duration: time.Duration(a.Duration) * time.Millisecond})
 			if !strings.HasPrefix(v.Type, "library-") {

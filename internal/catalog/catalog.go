@@ -10,6 +10,7 @@ import (
 )
 
 type Item struct {
+	Writable bool         `json:"writable,omitempty"`
 	Source   string       `json:"source,omitempty"`
 	Group    string       `json:"group,omitempty"`
 	Open     *Query       `json:"open,omitempty"`

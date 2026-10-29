@@ -238,7 +238,7 @@ func TestHomeCategoryTabsShowOnlySelectedCategoryAndRememberCursors(t *testing.T
 }
 func TestLoginActionKeepsPlayerAttachedInSameFrame(t *testing.T) {
 	m, api := testModel()
-	cmd := m.normal("L")
+	cmd := m.runCommand("login")
 	if cmd == nil {
 		t.Fatal("missing in-app Login transition")
 	}
