@@ -1,0 +1,361 @@
+//go:build linux || darwin || windows
+
+package browserless
+
+import (
+	"archive/zip"
+	"bytes"
+	"context"
+	"encoding/binary"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"lazymusic/internal/vibez/provider"
+)
+
+// streamResult is what onFail saw and what the handler panicked with.
+type streamResult struct {
+	failID   string
+	failErr  error
+	panicked any
+}
+
+// serveStream runs handleStream for one prepared stream against an upstream
+// that answers every segment with status.
+func serveStream(t *testing.T, ctx context.Context, status int) (res streamResult) {
+	t.Helper()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(upstream.Close)
+
+	s := &StreamServer{
+		authToken: "tok",
+		streams: map[string]*trackStream{
+			"s1": {trackID: "123", baseURI: upstream.URL + "/", segments: []segmentRef{{uri: "seg0.mp4"}}},
+		},
+	}
+	s.onFail = func(id string, err error) { res.failID, res.failErr = id, err }
+
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1/stream/s1/tok.aac", nil)
+	req.RemoteAddr = "127.0.0.1:40000"
+	func() {
+		defer func() { res.panicked = recover() }()
+		s.handleStream(httptest.NewRecorder(), req)
+	}()
+	return res
+}
+
+func TestHandleStreamReportsUpstreamFailure(t *testing.T) {
+	res := serveStream(t, context.Background(), http.StatusForbidden)
+	id, err, panicked := res.failID, res.failErr, res.panicked
+
+	if id != "s1" {
+		t.Errorf("onFail stream ID = %q, want s1", id)
+	}
+	if err == nil || !strings.Contains(err.Error(), "segment 1/1: fetch: status 403") {
+		t.Errorf("onFail error = %v, want the segment, stage and upstream status", err)
+	}
+	if e, ok := panicked.(error); !ok || !errors.Is(e, http.ErrAbortHandler) {
+		t.Errorf("handler panicked with %v, want http.ErrAbortHandler so the client sees a truncated body", panicked)
+	}
+}
+
+func TestHandleStreamCancelledIsNotAFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	res := serveStream(t, ctx, http.StatusForbidden)
+	err, panicked := res.failErr, res.panicked
+
+	if err != nil {
+		t.Errorf("onFail called with %v for a cancelled request, want no report", err)
+	}
+	if panicked != nil {
+		t.Errorf("handler panicked with %v for a cancelled request, want a plain return", panicked)
+	}
+}
+
+func TestHandleStreamServesCachedSegment0WithoutUpstreamFetch(t *testing.T) {
+	var upstreamHits atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamHits.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(upstream.Close)
+
+	wantAAC := []byte{0xff, 0xf1, 0x50, 0x80, 0x01, 0xbf, 0xfc, 0x21, 0x10, 0x04, 0x60, 0x8c, 0x1c}
+	s := &StreamServer{
+		authToken: "tok",
+		streams: map[string]*trackStream{
+			"s1": {
+				trackID:  "123",
+				baseURI:  upstream.URL + "/",
+				segments: []segmentRef{{uri: "seg0.mp4", duration: 10.0}},
+				seg0AAC:  wantAAC,
+			},
+		},
+	}
+
+	for range 2 {
+		req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/stream/s1/tok.aac", nil)
+		req.RemoteAddr = "127.0.0.1:40000"
+		rr := httptest.NewRecorder()
+		s.handleStream(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rr.Code)
+		}
+		if !bytes.Equal(rr.Body.Bytes(), wantAAC) {
+			t.Errorf("body = %x, want %x", rr.Body.Bytes(), wantAAC)
+		}
+	}
+	if got := upstreamHits.Load(); got != 0 {
+		t.Errorf("upstream hits = %d, want 0 when segment 0 is already cached", got)
+	}
+}
+
+func TestFetchSegmentWithRetry_RecoversFromTransient502AndEOF(t *testing.T) {
+	origBackoffs := segmentRetryBackoffs
+	segmentRetryBackoffs = []time.Duration{5 * time.Millisecond, 10 * time.Millisecond}
+	t.Cleanup(func() { segmentRetryBackoffs = origBackoffs })
+
+	var attempts atomic.Int32
+	var gotRange string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := attempts.Add(1)
+		gotRange = r.Header.Get("Range")
+		switch n {
+		case 1:
+			w.WriteHeader(http.StatusBadGateway)
+		case 2:
+			// Simulate mid-body connection drop via Content-Length mismatch.
+			w.Header().Set("Content-Length", "100")
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write([]byte("short"))
+		default:
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write([]byte("recovered-segment-payload"))
+		}
+	}))
+	t.Cleanup(upstream.Close)
+
+	data, stage, err := fetchSegmentWithRetry(context.Background(), upstream.Client(), upstream.URL+"/seg.mp4", 100, 25)
+	if err != nil {
+		t.Fatalf("fetchSegmentWithRetry failed: stage=%q err=%v", stage, err)
+	}
+	if string(data) != "recovered-segment-payload" {
+		t.Errorf("data = %q, want %q", string(data), "recovered-segment-payload")
+	}
+	if got := attempts.Load(); got != 3 {
+		t.Errorf("attempts = %d, want 3", got)
+	}
+	if gotRange != "bytes=100-124" {
+		t.Errorf("Range header = %q, want %q", gotRange, "bytes=100-124")
+	}
+}
+
+func TestFetchSegmentWithRetry_DoesNotRetryPermanent403(t *testing.T) {
+	origBackoffs := segmentRetryBackoffs
+	segmentRetryBackoffs = []time.Duration{5 * time.Millisecond, 10 * time.Millisecond}
+	t.Cleanup(func() { segmentRetryBackoffs = origBackoffs })
+
+	var attempts atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	t.Cleanup(upstream.Close)
+
+	_, stage, err := fetchSegmentWithRetry(context.Background(), upstream.Client(), upstream.URL+"/seg.mp4", 0, 0)
+	if err == nil || stage != "fetch" {
+		t.Fatalf("expected fetch error on 403, got stage=%q err=%v", stage, err)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Errorf("attempts = %d, want 1 (403 must not be retried)", got)
+	}
+}
+
+func TestStreamIDFromURL(t *testing.T) {
+	got := streamIDFromURL("http://127.0.0.1:4321/stream/123-1700000000/abcdef.aac")
+	if got != "123-1700000000" {
+		t.Errorf("streamIDFromURL = %q, want 123-1700000000", got)
+	}
+}
+
+func TestSeekTargetAndPlayerSeek(t *testing.T) {
+	s := &StreamServer{
+		streams: map[string]*trackStream{
+			"s1": {
+				trackID: "123",
+				segments: []segmentRef{
+					{uri: "seg0.mp4", duration: 6.0},
+					{uri: "seg1.mp4", duration: 6.0},
+					{uri: "seg2.mp4", duration: 6.0},
+					{uri: "seg3.mp4", duration: 6.0},
+				},
+			},
+		},
+	}
+
+	idx, offset, ok := s.SeekTarget("s1", 13*time.Second)
+	if !ok || idx != 2 || offset != 12*time.Second {
+		t.Fatalf("SeekTarget(13s) = (%d, %v, %v), want (2, 12s, true)", idx, offset, ok)
+	}
+
+	p := &Player{
+		streamer:     s,
+		curStream:    "s1",
+		curStreamURL: "http://127.0.0.1:4321/stream/s1/tok.aac",
+	}
+	p.state.Track = &provider.Track{ID: "123", Duration: 24 * time.Second}
+
+	if err := p.Seek(14 * time.Second); err != nil {
+		t.Fatalf("Seek(14s) returned error: %v", err)
+	}
+	st, _ := p.GetState()
+	if st.Position > 14*time.Second || 14*time.Second-st.Position > 24*time.Millisecond {
+		t.Errorf("Position after Seek(14s) = %v, want within one AAC frame before 14s", st.Position)
+	}
+}
+
+func TestExtractCDMFromCRX3(t *testing.T) {
+	// Undersized payload should be rejected.
+	smallCRX := buildFakeCRX3(t, "_platform_specific/linux_x64/libwidevinecdm.so", []byte("small"))
+	if _, err := extractCDMFromCRX3(smallCRX); err == nil {
+		t.Fatalf("expected undersized libwidevinecdm.so to be rejected")
+	}
+
+	// Valid >1 MiB payload should be extracted cleanly.
+	soPayload := make([]byte, 1024*1024+64)
+	copy(soPayload, []byte{0x7f, 'E', 'L', 'F', 'w', 'i', 'd', 'e', 'v', 'i', 'n', 'e'})
+	crx := buildFakeCRX3(t, "_platform_specific/linux_x64/libwidevinecdm.so", soPayload)
+
+	got, err := extractCDMFromCRX3(crx)
+	if err != nil {
+		t.Fatalf("extractCDMFromCRX3 failed: %v", err)
+	}
+	if !bytes.Equal(got, soPayload) {
+		t.Errorf("extracted payload length = %d, want %d", len(got), len(soPayload))
+	}
+
+	if !isAllowedCDMHost("https://edgedl.me.gvt1.com/edgedl/release2/chrome_component/test.crx3") {
+		t.Errorf("expected edgedl.me.gvt1.com to be allowed")
+	}
+	if isAllowedCDMHost("http://edgedl.me.gvt1.com/test.crx3") {
+		t.Errorf("expected non-https URL to be rejected")
+	}
+	if isAllowedCDMHost("https://evil.example.com/test.crx3") {
+		t.Errorf("expected unknown host to be rejected")
+	}
+}
+
+func buildFakeCRX3(t *testing.T, name string, payload []byte) []byte {
+	t.Helper()
+	var zipBuf bytes.Buffer
+	zw := zip.NewWriter(&zipBuf)
+	fw, err := zw.Create(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	fakeProtoHeader := []byte("crx3-proto-header")
+	var crx bytes.Buffer
+	crx.WriteString("Cr24")
+	_ = binary.Write(&crx, binary.LittleEndian, uint32(3))
+	_ = binary.Write(&crx, binary.LittleEndian, uint32(17))
+	crx.Write(fakeProtoHeader)
+	crx.Write(zipBuf.Bytes())
+	return crx.Bytes()
+}
+
+func TestFetchRawHeadReadsSizeFromContentRange(t *testing.T) {
+	body := bytes.Repeat([]byte{0xab}, 100000)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "upload.mp3", time.Time{}, bytes.NewReader(body))
+	}))
+	t.Cleanup(upstream.Close)
+
+	head, size, err := fetchRawHead(context.Background(), upstream.URL+"/upload.mp3")
+	if err != nil {
+		t.Fatalf("fetchRawHead: %v", err)
+	}
+	if size != int64(len(body)) {
+		t.Errorf("size = %d, want %d", size, len(body))
+	}
+	if len(head) != 65536 {
+		t.Errorf("head length = %d, want 65536", len(head))
+	}
+}
+
+func TestHandleStreamPassesRawUploadThrough(t *testing.T) {
+	body := []byte("0123456789abcdefghij")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "upload.mp3", time.Time{}, bytes.NewReader(body))
+	}))
+	t.Cleanup(upstream.Close)
+
+	s := &StreamServer{
+		authToken: "tok",
+		streams: map[string]*trackStream{
+			"s1": {
+				trackID: "i.abc",
+				segments: []segmentRef{
+					{uri: upstream.URL, offset: 0, length: 8, duration: 4},
+					{uri: upstream.URL, offset: 8, length: 8, duration: 4},
+					{uri: upstream.URL, offset: 16, length: 4, duration: 2},
+				},
+				raw:       true,
+				rawFormat: rawFormat{ext: ".mp3", contentType: "audio/mpeg", seekable: true},
+			},
+		},
+	}
+
+	for _, tc := range []struct{ query, want string }{
+		{"", string(body)},
+		{"?start_seg=1", string(body[8:])},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/stream/s1/tok.mp3"+tc.query, nil)
+		req.RemoteAddr = "127.0.0.1:40000"
+		rr := httptest.NewRecorder()
+		s.handleStream(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%q: status = %d, want 200", tc.query, rr.Code)
+		}
+		if got := rr.Body.String(); got != tc.want {
+			t.Errorf("%q: body = %q, want %q", tc.query, got, tc.want)
+		}
+		if ct := rr.Header().Get("Content-Type"); ct != "audio/mpeg" {
+			t.Errorf("%q: Content-Type = %q, want audio/mpeg", tc.query, ct)
+		}
+	}
+}
+
+func TestSeekTargetRefusesMidFileSeekInMP4Upload(t *testing.T) {
+	s := &StreamServer{
+		streams: map[string]*trackStream{
+			"s1": {
+				trackID:   "i.abc",
+				segments:  []segmentRef{{uri: "https://example.invalid/upload.m4a", length: 1 << 20}},
+				raw:       true,
+				rawFormat: rawFormat{ext: ".m4a", contentType: "audio/mp4"},
+			},
+		},
+	}
+	if _, _, ok := s.SeekTarget("s1", 30*time.Second); ok {
+		t.Error("SeekTarget(30s) on an MP4 upload = ok, want refused")
+	}
+	if idx, off, ok := s.SeekTarget("s1", 0); !ok || idx != 0 || off != 0 {
+		t.Errorf("SeekTarget(0) = (%d, %v, %v), want (0, 0, true)", idx, off, ok)
+	}
+}

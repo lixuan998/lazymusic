@@ -1,0 +1,94 @@
+package player
+
+import (
+	"errors"
+	"time"
+
+	"lazymusic/internal/vibez/provider"
+)
+
+// Repeat mode constants matching MusicKit.PlayerRepeatMode values.
+const (
+	RepeatModeOff = 0 // no repeat
+	RepeatModeOne = 1 // repeat current track
+	RepeatModeAll = 2 // repeat entire queue
+)
+
+var ErrAudioBitrateSavedPreferenceOnly = errors.New("audio bitrate saved as preference; backend cannot change bitrate at runtime")
+
+// EQBand describes a single parametric equalizer band.
+// Gain is in dB (-12.0 to +12.0). Frequency is in Hz. Q is the quality factor.
+type EQBand struct {
+	Frequency float64 `json:"frequency"`
+	Q         float64 `json:"q"`
+	Gain      float64 `json:"gain"`
+}
+
+// DefaultEQBands returns the 10 standard ISO bands with flat (0 dB) gain.
+func DefaultEQBands() []EQBand {
+	freqs := []float64{32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000}
+	bands := make([]EQBand, len(freqs))
+	for i, f := range freqs {
+		bands[i] = EQBand{Frequency: f, Q: 1.46, Gain: 0}
+	}
+	return bands
+}
+
+type State struct {
+	Track       *provider.Track
+	Playing     bool
+	Loading     bool // true when MusicKit playbackState is loading/buffering
+	Position    time.Duration
+	Volume      float64  // 0.0–1.0
+	Bitrate     int      // streaming bitrate in kbps; 0 = unknown
+	RepeatMode  int      // RepeatModeOff / RepeatModeOne / RepeatModeAll
+	ShuffleMode bool     // true = shuffle on
+	Error       string   // non-empty when JS reports a playback error
+	Logs        []string // debug-only log entries since the last delivered state (not shown in status bar)
+	SkippedID   string   // catalog/library ID of a track JS silently skipped (unavailable/restricted)
+}
+
+type Player interface {
+	Play() error
+	Pause() error
+	Stop() error
+	Next() error
+	Previous() error
+	Seek(position time.Duration) error
+	SetVolume(v float64) error
+	SetAudioBitrate(kbps int) error
+	// SetQueue replaces the playback queue with the given catalog track IDs and
+	// starts playback from the first entry.
+	SetQueue(ids []string) error
+	// SetPlaylist queues a library playlist by its ID (e.g. "p.XXXXX") and starts
+	// playback from startIdx. This avoids per-song catalog ID resolution.
+	SetPlaylist(playlistID string, startIdx int) error
+	// AppendQueue adds the given track IDs to the end of the current queue
+	// without interrupting playback. If nothing is playing it starts playback.
+	AppendQueue(ids []string) error
+	// SetRepeat sets the repeat mode: 0=off, 1=one, 2=all.
+	SetRepeat(mode int) error
+	// SetShuffle enables or disables shuffle playback.
+	SetShuffle(on bool) error
+	// SetEqualizer applies the given 10-band parametric EQ. Pass nil to bypass.
+	SetEqualizer(bands []EQBand) error
+	// RemoveFromQueue removes the track at idx from the queue without
+	// interrupting playback of any other track.
+	RemoveFromQueue(idx int) error
+	// MoveInQueue moves the track at from to position to.
+	MoveInQueue(from, to int) error
+	// ClearQueue empties the queue and stops playback.
+	ClearQueue() error
+	GetState() (*State, error)
+	Subscribe() <-chan State
+	Close() error
+}
+
+// NextQueuer is implemented by players that need a dedicated "play next"
+// call. MusicKit's live queue cannot be reordered, so AppendQueue followed by
+// MoveInQueue would only reorder the view there (#161). Players that own their
+// queue do not need it.
+type NextQueuer interface {
+	// PlayNext inserts the given track IDs straight after the current track.
+	PlayNext(ids []string) error
+}

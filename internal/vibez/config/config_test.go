@@ -1,0 +1,489 @@
+package config_test
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"testing"
+
+	"lazymusic/internal/vibez/config"
+)
+
+// writeCfg writes a JSON config to a temp file and returns the path.
+func writeCfg(t *testing.T, v any) string {
+	t.Helper()
+	f, err := os.CreateTemp(t.TempDir(), "config-*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.NewEncoder(f).Encode(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return f.Name()
+}
+
+func TestConfigPath_Override(t *testing.T) {
+	want := "/custom/path/config.json"
+	got, err := config.ConfigPath(want)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestConfigPath_Default(t *testing.T) {
+	got, err := config.ConfigPath("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	home, _ := os.UserHomeDir()
+	want := filepath.Join(home, ".config", "vibez", "config.json")
+	if runtime.GOOS == "windows" {
+		dir, err := os.UserConfigDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want = filepath.Join(dir, "vibez", "config.json")
+	}
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestLoad_CreatesDefaultWhenMissing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "new-dir", "config.json")
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.StoreFront != "" {
+		t.Errorf("StoreFront = %q, want %q (auto-detected from Apple)", cfg.StoreFront, "")
+	}
+	if cfg.AuthPort != 7777 {
+		t.Errorf("AuthPort = %d, want %d", cfg.AuthPort, 7777)
+	}
+	if cfg.Provider != "apple" {
+		t.Errorf("Provider = %q, want %q", cfg.Provider, "apple")
+	}
+	if cfg.Theme != "default" {
+		t.Errorf("Theme = %q, want %q", cfg.Theme, "default")
+	}
+
+	// File must have been written.
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("config file not created: %v", err)
+	}
+}
+
+func TestLoad_ReadsExistingConfig(t *testing.T) {
+	path := writeCfg(t, map[string]any{
+		"apple_developer_token": "dev-tok",
+		"apple_user_token":      "usr-tok",
+		"storefront":            "it",
+		"auth_port":             9999,
+		"provider":              "spotify",
+		"theme":                 "dark",
+	})
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.AppleDeveloperToken != "dev-tok" {
+		t.Errorf("AppleDeveloperToken = %q", cfg.AppleDeveloperToken)
+	}
+	if cfg.AppleUserToken != "usr-tok" {
+		t.Errorf("AppleUserToken = %q", cfg.AppleUserToken)
+	}
+	if cfg.StoreFront != "it" {
+		t.Errorf("StoreFront = %q", cfg.StoreFront)
+	}
+	if cfg.AuthPort != 9999 {
+		t.Errorf("AuthPort = %d", cfg.AuthPort)
+	}
+}
+
+func TestLoad_DefaultsPreservedForMissingKeys(t *testing.T) {
+	// Only override one field; defaults should fill the rest.
+	path := writeCfg(t, map[string]any{
+		"storefront": "gb",
+	})
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.StoreFront != "gb" {
+		t.Errorf("StoreFront = %q, want %q", cfg.StoreFront, "gb")
+	}
+	if cfg.AuthPort != 7777 {
+		t.Errorf("AuthPort = %d, want default 7777", cfg.AuthPort)
+	}
+	if cfg.Provider != "apple" {
+		t.Errorf("Provider = %q, want default apple", cfg.Provider)
+	}
+}
+
+func TestLoad_InvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.json")
+	if err := os.WriteFile(path, []byte("{not valid json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestSave_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+
+	original := &config.Config{
+		AppleDeveloperToken: "devtoken",
+		AppleUserToken:      "usertoken",
+		AppleKeyID:          "KEYID123",
+		AppleTeamID:         "TEAMID456",
+		StoreFront:          "de",
+		AuthPort:            8888,
+		Provider:            "apple",
+		Theme:               "dark",
+	}
+
+	if err := original.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load after Save: %v", err)
+	}
+
+	if loaded.AppleDeveloperToken != original.AppleDeveloperToken {
+		t.Errorf("AppleDeveloperToken mismatch")
+	}
+	if loaded.AppleUserToken != original.AppleUserToken {
+		t.Errorf("AppleUserToken mismatch")
+	}
+	if loaded.StoreFront != original.StoreFront {
+		t.Errorf("StoreFront mismatch")
+	}
+	if loaded.AuthPort != original.AuthPort {
+		t.Errorf("AuthPort mismatch")
+	}
+}
+
+func TestSave_CreatesDirectories(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "deep", "nested", "dir", "config.json")
+	cfg := &config.Config{StoreFront: "fr", AuthPort: 7777, Provider: "apple", Theme: "default"}
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("file not created: %v", err)
+	}
+}
+
+func TestSave_FilePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows uses inherited profile ACLs, not Unix permission bits")
+	}
+	path := filepath.Join(t.TempDir(), "config.json")
+	cfg := &config.Config{StoreFront: "us", AuthPort: 7777, Provider: "apple", Theme: "default"}
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("file permissions = %o, want 600", info.Mode().Perm())
+	}
+}
+
+func TestLoad_FileIsDirectory(t *testing.T) {
+	// Using a directory path as the config file should cause a read error.
+	dirPath := t.TempDir()
+	_, err := config.Load(dirPath)
+	if err == nil {
+		t.Fatal("expected error when config path is a directory, got nil")
+	}
+}
+
+func TestConfigPath_UsesPlatformDirectory(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("APPDATA", tmpHome)
+	got, err := config.ConfigPath("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasPrefix(got, tmpHome) {
+		t.Errorf("ConfigPath should use the platform config directory, got %q", got)
+	}
+}
+
+func TestSave_WriteError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	cfg := &config.Config{StoreFront: "us", AuthPort: 7777, Provider: "apple", Theme: "default"}
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("initial Save: %v", err)
+	}
+	// A regular file cannot be used as the containing directory on any OS.
+	if err := cfg.Save(filepath.Join(path, "config.json")); err == nil {
+		t.Fatal("expected an error when the parent is a regular file")
+	}
+}
+
+// --- normalize called via Load ---
+
+func TestLoad_NormalizesOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+
+	// Write a config with 0 AuthPort and empty Provider — normalize should fix both.
+	raw := `{"auth_port": 0, "provider": "", "storefront": "us"}`
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AuthPort != 7777 {
+		t.Errorf("AuthPort = %d, want 7777 (normalize should have set it)", cfg.AuthPort)
+	}
+	if cfg.Provider != "apple" {
+		t.Errorf("Provider = %q, want 'apple' (normalize should have set it)", cfg.Provider)
+	}
+}
+
+// --- Save with override path ---
+
+func TestSave_WithOverridePath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "override-config.json")
+	cfg := &config.Config{AuthPort: 1234, Provider: "apple", StoreFront: "gb"}
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	// Verify file exists and is valid JSON.
+	data, err := os.ReadFile(path) //nolint:gosec // test fixture
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var loaded config.Config
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if loaded.AuthPort != 1234 {
+		t.Errorf("AuthPort = %d, want 1234", loaded.AuthPort)
+	}
+}
+
+func TestSave_UsesLoadedOverrideWhenPathOmitted(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	override := writeCfg(t, map[string]any{
+		"storefront": "us",
+		"auth_port":  7777,
+		"provider":   "apple",
+	})
+
+	cfg, err := config.Load(override)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	cfg.StoreFront = "gb"
+	if err := cfg.Save(""); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	data, err := os.ReadFile(override) //nolint:gosec // test fixture
+	if err != nil {
+		t.Fatalf("reading override: %v", err)
+	}
+	if !strings.Contains(string(data), `"storefront": "gb"`) {
+		t.Fatalf("override was not updated: %s", data)
+	}
+
+	defaultPath, err := config.ConfigPath("")
+	if err != nil {
+		t.Fatalf("ConfigPath: %v", err)
+	}
+	if _, err := os.Stat(defaultPath); !os.IsNotExist(err) {
+		t.Fatalf("Save created default config %q; stat error = %v", defaultPath, err)
+	}
+}
+
+func TestAudioQualityDefaultsHigh(t *testing.T) {
+	path := writeCfg(t, map[string]any{"storefront": "us"})
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got, err := cfg.AudioBitrateKbps()
+	if err != nil || got != 256 {
+		t.Fatalf("AudioBitrateKbps = %d, %v; want 256, nil", got, err)
+	}
+}
+
+func TestAudioQualityStandardRoundTrips(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	cfg := testConfigWithDefaults()
+	if err := cfg.SetAudioBitrate(64); err != nil {
+		t.Fatalf("SetAudioBitrate: %v", err)
+	}
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got, err := loaded.AudioBitrateKbps()
+	if err != nil || got != 64 {
+		t.Fatalf("AudioBitrateKbps = %d, %v; want 64, nil", got, err)
+	}
+}
+
+func TestAudioQualityInvalidConfig(t *testing.T) {
+	path := writeCfg(t, map[string]any{"audio_quality": "lossless"})
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	_, err = cfg.AudioBitrateKbps()
+	if err == nil || !strings.Contains(err.Error(), "MusicKit JS/web playback max is 256 kbps AAC") {
+		t.Fatalf("AudioBitrateKbps error = %v", err)
+	}
+}
+
+func testConfigWithDefaults() *config.Config {
+	return &config.Config{AuthPort: 7777, Provider: "apple", Theme: "default"}
+}
+
+func TestSave_TightensExistingPermissivePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows uses inherited profile ACLs, not Unix permission bits")
+	}
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"storefront":"us"}`), 0o644); err != nil { //nolint:gosec // intentionally permissive to test tightening
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil { //nolint:gosec // intentionally permissive to test tightening
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	cfg.AppleUserToken = "secret-token"
+	if err := cfg.Save(""); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("file permissions after Save = %o, want 600", info.Mode().Perm())
+	}
+}
+
+func TestSave_ConcurrentWrites(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+
+	var wg sync.WaitGroup
+	for i := range 20 {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			c := &config.Config{
+				AppleUserToken: "tok",
+				StoreFront:     "us",
+				AuthPort:       7777 + idx,
+				Provider:       "apple",
+				Theme:          "default",
+			}
+			if err := c.Save(path); err != nil {
+				t.Errorf("Save(%d): %v", idx, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load after concurrent Save: %v", err)
+	}
+	if loaded.AppleUserToken != "tok" {
+		t.Errorf("AppleUserToken = %q, want tok", loaded.AppleUserToken)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "config.json" {
+		t.Errorf("unexpected leftover files in config dir: %v", entries)
+	}
+}
+
+func TestSave_PreservesSymlink(t *testing.T) {
+	targetDir := t.TempDir()
+	targetPath := filepath.Join(targetDir, "dotfiles-config.json")
+	if err := os.WriteFile(targetPath, []byte(`{"storefront":"us"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	linkDir := t.TempDir()
+	linkPath := filepath.Join(linkDir, "config.json")
+	if err := os.Symlink(targetPath, linkPath); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	cfg, err := config.Load(linkPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	cfg.StoreFront = "it"
+	if err := cfg.Save(""); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	info, err := os.Lstat(linkPath)
+	if err != nil {
+		t.Fatalf("Lstat: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Error("Save replaced the symlink with a regular file")
+	}
+	loaded, err := config.Load(targetPath)
+	if err != nil {
+		t.Fatalf("Load target: %v", err)
+	}
+	if loaded.StoreFront != "it" {
+		t.Errorf("target StoreFront = %q, want it", loaded.StoreFront)
+	}
+}

@@ -1,0 +1,2 @@
+# Unified patch context must retain the upstream source's leading space/tab.
+third_party/*.patch -whitespace

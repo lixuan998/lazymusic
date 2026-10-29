@@ -1,0 +1,132 @@
+--- a/internal/vibez/player/browserless/player.go
++++ b/internal/vibez/player/browserless/player.go
+@@ -73,6 +73,8 @@
+ 	seekOffset         time.Duration            // start offset of the current segment after Seek
+ 	streamErr          string                   // specific cause from onFail for curStream
+ 	ended              bool                     // queue played through to the end
++	resumePosition     time.Duration            // lazymusic: deferred seek after a cold restore
++	resumeTrackID      string
+ 	sessionExpiredOnce sync.Once
+ 	doneCh             chan struct{}
+ 	closeOnce          sync.Once
+@@ -368,6 +370,11 @@
+ 
+ func (p *Player) playTrack(t provider.Track) {
+ 	p.mu.Lock()
++	startPosition := time.Duration(0)
++	if p.resumeTrackID == t.ID {
++		startPosition = p.resumePosition
++	}
++	p.resumePosition, p.resumeTrackID = 0, ""
+ 	if p.playCtx != nil {
+ 		p.playCtx()
+ 	}
+@@ -490,11 +497,24 @@
+ 		default:
+ 		}
+ 
++		playURI := streamURL
++		startOffset := time.Duration(0)
++		if startPosition > 0 {
++			if uri, offset, ok := p.streamer.SeekStream(streamIDFromURL(streamURL), streamURL, startPosition); ok {
++				playURI = uri
++				startOffset = offset
++			}
++		}
+ 		p.mu.Lock()
++		if ctx.Err() != nil {
++			p.mu.Unlock()
++			return
++		}
+ 		p.curStream = streamIDFromURL(streamURL)
+ 		p.curStreamURL = streamURL
+ 		p.streamErr = ""
+-		p.seekOffset = 0
++		p.seekOffset = startOffset
++		p.state.Position = startOffset
+ 		p.ended = false
+ 		p.state.Loading = false
+ 		p.state.Playing = true
+@@ -505,7 +525,7 @@
+ 		}
+ 		s = p.state
+ 		p.mu.Unlock()
+-		p.sink.PlayURI(streamURL)
++		p.sink.PlayURI(playURI)
+ 		p.bcast.Send(s)
+ 		p.scheduleNextPrefetch()
+ 	}()
+@@ -688,7 +708,7 @@
+ 		return nil
+ 	}
+ 
+-	startSeg, segOffset, ok := p.streamer.SeekTarget(streamID, position)
++	seekURI, segOffset, ok := p.streamer.SeekStream(streamID, streamURL, position)
+ 	if !ok {
+ 		return nil
+ 	}
+@@ -701,7 +721,6 @@
+ 	p.mu.Unlock()
+ 
+ 	if p.sink != nil {
+-		seekURI := fmt.Sprintf("%s?start_seg=%d", streamURL, startSeg)
+ 		p.sink.PlayURI(seekURI)
+ 		if !wasPlaying {
+ 			p.sink.Pause()
+@@ -920,10 +939,9 @@
+ 	if from >= 0 && from < len(p.queue) && to >= 0 && to < len(p.queue) {
+ 		t := p.queue[from]
+ 		p.queue = append(p.queue[:from], p.queue[from+1:]...)
+-		if from < to {
+-			to--
+-		}
+-		p.queue = append(p.queue[:to], append([]provider.Track{t}, p.queue[to:]...)...)
++		p.queue = append(p.queue, provider.Track{})
++		copy(p.queue[to+1:], p.queue[to:])
++		p.queue[to] = t
+ 
+ 		switch {
+ 		case p.idx == from:
+--- a/internal/vibez/player/browserless/streamer.go
++++ b/internal/vibez/player/browserless/streamer.go
+@@ -520,6 +520,12 @@
+ 		}
+ 	}
+ 
++	skipFrames := 0
++	if !st.raw {
++		if n, err := strconv.Atoi(r.URL.Query().Get("skip_frames")); err == nil && n > 0 && n <= 1000000 {
++			skipFrames = n
++		}
++	}
+ 	contentType := "audio/aac"
+ 	if st.raw {
+ 		contentType = st.rawFormat.contentType
+@@ -571,6 +577,14 @@
+ 			}
+ 		}
+ 
++		if skipFrames > 0 {
++			var trimErr error
++			aacData, skipFrames, trimErr = trimADTSFrames(aacData, skipFrames)
++			if trimErr != nil {
++				fail(i, "seek", trimErr)
++				return
++			}
++		}
+ 		// Write to HTTP client (GStreamer). A failed write means the client
+ 		// has gone, so there is nobody left to abort for; log it only.
+ 		if _, err := w.Write(aacData); err != nil {
+--- a/internal/vibez/player/browserless/streamer_test.go
++++ b/internal/vibez/player/browserless/streamer_test.go
+@@ -218,8 +218,8 @@
+ 		t.Fatalf("Seek(14s) returned error: %v", err)
+ 	}
+ 	st, _ := p.GetState()
+-	if st.Position != 12*time.Second {
+-		t.Errorf("Position after Seek(14s) = %v, want 12s (start of segment 2)", st.Position)
++	if st.Position > 14*time.Second || 14*time.Second-st.Position > 24*time.Millisecond {
++		t.Errorf("Position after Seek(14s) = %v, want within one AAC frame before 14s", st.Position)
+ 	}
+ }
+ 

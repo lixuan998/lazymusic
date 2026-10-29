@@ -1,0 +1,196 @@
+{
+  "project": "https://github.com/simonepelosi/vibez",
+  "tag": "v2.0.6",
+  "commit": "31def02bd334f76ecc8a69caeb6c3c642df0fe55",
+  "license": "MIT",
+  "files": {
+    "internal/audioquality/quality.go": {
+      "upstream_sha256": "2c36d6ea5e6da5a7a2115bdf349c4aeef5b7f64aa3027b2eb7dcf9dfc5685dbe",
+      "imported_sha256": "2c36d6ea5e6da5a7a2115bdf349c4aeef5b7f64aa3027b2eb7dcf9dfc5685dbe"
+    },
+    "internal/audioquality/quality_test.go": {
+      "upstream_sha256": "6d96c9d26d5d8df7bbc9f5003715b65e429dc4c0a79cb9d3de87f1702f94fdfb",
+      "imported_sha256": "6d96c9d26d5d8df7bbc9f5003715b65e429dc4c0a79cb9d3de87f1702f94fdfb"
+    },
+    "internal/config/config.go": {
+      "upstream_sha256": "944313cb6aa3ea9f3cad16a6f769ecc836acce74a280935d1a63992fa6c9e51f",
+      "imported_sha256": "503b91e980ad61b0a8ab446fe8ee06546cf11d919ee59b2142fa8ee4d70c5a50"
+    },
+    "internal/config/config_test.go": {
+      "upstream_sha256": "48fcfa89d6311cebd8fdb4523f732a4d9346a3380bbc8f75bc4d8f992de3bc08",
+      "imported_sha256": "51988d2c5bb0e45bc97c7393e66bd25375df510dceecfa9738b0a7f7b783e1cb"
+    },
+    "internal/provider/clean.go": {
+      "upstream_sha256": "f236276522861eea70089ffdf4f55c1e00423f5698a8ea21615d053c58053c5a",
+      "imported_sha256": "f236276522861eea70089ffdf4f55c1e00423f5698a8ea21615d053c58053c5a"
+    },
+    "internal/provider/clean_test.go": {
+      "upstream_sha256": "54a6802f71faeca188c4b95c0acc9ba3d959ce3d6b0c43aa9d753450c180fa06",
+      "imported_sha256": "54a6802f71faeca188c4b95c0acc9ba3d959ce3d6b0c43aa9d753450c180fa06"
+    },
+    "internal/provider/provider.go": {
+      "upstream_sha256": "8f8d1892f84efc0ca0ea84628648bfd0908db84bb63df95ac57782927a6fa35c",
+      "imported_sha256": "8f8d1892f84efc0ca0ea84628648bfd0908db84bb63df95ac57782927a6fa35c"
+    },
+    "internal/provider/apple/apple.go": {
+      "upstream_sha256": "e8553b80d8fa9ae711aab21536e7f6f27c19e8ea6264858548c574b5fa1058d9",
+      "imported_sha256": "4a551ad697d8ffe77810e531ca1cc33758af3af4ab67b5a4e9c2dc09a622bae7"
+    },
+    "internal/provider/apple/apple_test.go": {
+      "upstream_sha256": "dea73d907f22b53510fc43c10137d03240f0df0cb195c25e313eff03e054a96e",
+      "imported_sha256": "c5b2df4677c3761197f3ea84995b34accd3c1b3113ab51be571871b3e2208e0c"
+    },
+    "internal/provider/apple/artist_test.go": {
+      "upstream_sha256": "39f1c37eff43ed2b43838b02f7110ce9f77b516f77d7c66e667e485021ad0c5d",
+      "imported_sha256": "39f1c37eff43ed2b43838b02f7110ce9f77b516f77d7c66e667e485021ad0c5d"
+    },
+    "internal/provider/apple/audio_variants_internal_test.go": {
+      "upstream_sha256": "48701b7654936e8d2adcd78cdb0cf7148c3d629c6dc99959eb0750974c1e6698",
+      "imported_sha256": "48701b7654936e8d2adcd78cdb0cf7148c3d629c6dc99959eb0750974c1e6698"
+    },
+    "internal/provider/apple/audio_variants_test.go": {
+      "upstream_sha256": "10e5cf214ee1b4ca1c8e811d94ce35cc02418c1ea5bf719693632460225d757f",
+      "imported_sha256": "10e5cf214ee1b4ca1c8e811d94ce35cc02418c1ea5bf719693632460225d757f"
+    },
+    "internal/provider/apple/resolve_internal_test.go": {
+      "upstream_sha256": "9f8aeed6b93f530597b49ad5416a4f1fe6efb4a0c97471073f9c5cb8d8ac8b71",
+      "imported_sha256": "9f8aeed6b93f530597b49ad5416a4f1fe6efb4a0c97471073f9c5cb8d8ac8b71"
+    },
+    "internal/player/broadcast.go": {
+      "upstream_sha256": "0b79710470da7e72d37e6987724332cdfc4c04aa97877fffc98c11f69f093d1d",
+      "imported_sha256": "0b79710470da7e72d37e6987724332cdfc4c04aa97877fffc98c11f69f093d1d"
+    },
+    "internal/player/broadcast_test.go": {
+      "upstream_sha256": "15621737437454fc97a56e9abab192147b3ef12a12da260185616d77c64a4c62",
+      "imported_sha256": "15621737437454fc97a56e9abab192147b3ef12a12da260185616d77c64a4c62"
+    },
+    "internal/player/player.go": {
+      "upstream_sha256": "74fdf41a54c6f86d1b8cb4f0b39fe747e74caa0f21ca7ba779b02bcbe89d7065",
+      "imported_sha256": "e7b7be893807d9465fd6921bf64334e74339e6c6ae1214af05b96aef7e1a41cb"
+    },
+    "internal/player/browserless/cdm_downloader.go": {
+      "upstream_sha256": "05bde87209776202b57806079fb4a88f8a900d74f0736f7b0d1856802384237e",
+      "imported_sha256": "05bde87209776202b57806079fb4a88f8a900d74f0736f7b0d1856802384237e"
+    },
+    "internal/player/browserless/cdm_downloader_test.go": {
+      "upstream_sha256": "70265e181a3ccef3229b6b34dc6e5f959d0e4b8f546be22d52c331d3be93347f",
+      "imported_sha256": "70265e181a3ccef3229b6b34dc6e5f959d0e4b8f546be22d52c331d3be93347f"
+    },
+    "internal/player/browserless/cdm_finder.go": {
+      "upstream_sha256": "f7b495b3d514c3170d53b98cb0c164c8ea665ca79b983fea8f5cf205923b1fae",
+      "imported_sha256": "f7b495b3d514c3170d53b98cb0c164c8ea665ca79b983fea8f5cf205923b1fae"
+    },
+    "internal/player/browserless/cdm_paths_darwin.go": {
+      "upstream_sha256": "7a3ab4e5e4975c43fc6040d93d9d4f20868dea4a4aa9f5b92d78051886b28710",
+      "imported_sha256": "7a3ab4e5e4975c43fc6040d93d9d4f20868dea4a4aa9f5b92d78051886b28710"
+    },
+    "internal/player/browserless/cdm_paths_linux.go": {
+      "upstream_sha256": "7547c17d03a7a980c59905ace62b08178131e6fc423528772e98616043515880",
+      "imported_sha256": "7547c17d03a7a980c59905ace62b08178131e6fc423528772e98616043515880"
+    },
+    "internal/player/browserless/player.go": {
+      "upstream_sha256": "b6ceb4f99e55645683fb151a7a1daca9d83aa90c665e30d9fc88ca1b647b4bfe",
+      "imported_sha256": "964f82ddf0f69c08092dd4e8a9d6dff092826cf9170113a300b0ae1af02fbd3b"
+    },
+    "internal/player/browserless/player_test.go": {
+      "upstream_sha256": "4cec56664feb5444fb6fd1943cc7964994f5c9d0abc5a89b969b1e1ee08f7eef",
+      "imported_sha256": "9f841141c76df51a999042f5585231b3a126d90d04b8d750a903004ce2ab266b"
+    },
+    "internal/player/browserless/rawformat.go": {
+      "upstream_sha256": "da8e39794916d82964548b19502230171a4609d7a9c3a79379282b123c9f9c57",
+      "imported_sha256": "da8e39794916d82964548b19502230171a4609d7a9c3a79379282b123c9f9c57"
+    },
+    "internal/player/browserless/rawformat_test.go": {
+      "upstream_sha256": "4f44acb85132f5910120dc7803e5d51dcb932a1e7474599b87860ecaed7a0dd4",
+      "imported_sha256": "4f44acb85132f5910120dc7803e5d51dcb932a1e7474599b87860ecaed7a0dd4"
+    },
+    "internal/player/browserless/sink_darwin.cpp": {
+      "upstream_sha256": "ee6b948110ac89415f7ab1e2695b4c2ec5b8ed5b5b0a8791ab201b8519c762a8",
+      "imported_sha256": "ee6b948110ac89415f7ab1e2695b4c2ec5b8ed5b5b0a8791ab201b8519c762a8"
+    },
+    "internal/player/browserless/sink_darwin.go": {
+      "upstream_sha256": "bf541efe66406081c77e8150eade03c62e0cfcbd3a324e7e0c95679d9792b06e",
+      "imported_sha256": "bf541efe66406081c77e8150eade03c62e0cfcbd3a324e7e0c95679d9792b06e"
+    },
+    "internal/player/browserless/sink_darwin.h": {
+      "upstream_sha256": "a2d454a6f9582dd469844fea10b6995bd67eb1cf3fc3fb0b538bb7e619ca8504",
+      "imported_sha256": "a2d454a6f9582dd469844fea10b6995bd67eb1cf3fc3fb0b538bb7e619ca8504"
+    },
+    "internal/player/browserless/sink_darwin_nocgo.go": {
+      "upstream_sha256": "49634baba8080f84e5187cc31b15d0084cbee1a8689e91efec52e08ccb25836d",
+      "imported_sha256": "49634baba8080f84e5187cc31b15d0084cbee1a8689e91efec52e08ccb25836d"
+    },
+    "internal/player/browserless/sink_linux.go": {
+      "upstream_sha256": "fd41d80dc77515c6fa4d8e7282eb23b3c418b7799103e5bd3e79bfa65715c709",
+      "imported_sha256": "ae8c39a2eec295e1d796bca765876fafc2d093715c33aa5c8e74ac2fe581df4f"
+    },
+    "internal/player/browserless/streamer.go": {
+      "upstream_sha256": "e8429468267112389ddc721ff952be9a9780b5f448a43602f940320eea0a2a8f",
+      "imported_sha256": "45d4154a3f8c9580ae33d7298fa3978651f97cd87106261ce72f3bb6521b9ec7"
+    },
+    "internal/player/browserless/streamer_test.go": {
+      "upstream_sha256": "5c2c004580a4737ebbac4a80393122477ff564241b576acd283a0b2a62573804",
+      "imported_sha256": "eacd19c55c65de3acd65418c08179ca14ef511f3390a5e9d97323b9dddc3e4b9"
+    },
+    "internal/player/browserless/cdm/cdm.go": {
+      "upstream_sha256": "34668351c5373526d3c7a0a248cd6e3f36eab86b92ab8bd7acd764ee42e91479",
+      "imported_sha256": "34668351c5373526d3c7a0a248cd6e3f36eab86b92ab8bd7acd764ee42e91479"
+    },
+    "internal/player/browserless/cdm/cdm_bridge.cpp": {
+      "upstream_sha256": "d986f136e7f3b02bb202b82c0435da617d12b089febfca0a4670aa8b0434b654",
+      "imported_sha256": "d986f136e7f3b02bb202b82c0435da617d12b089febfca0a4670aa8b0434b654"
+    },
+    "internal/player/browserless/cdm/cdm_bridge.h": {
+      "upstream_sha256": "04dd5ee96bb51993f7ab4477c1e515c202578e2644da6ed4467cf7c8bf810ea0",
+      "imported_sha256": "04dd5ee96bb51993f7ab4477c1e515c202578e2644da6ed4467cf7c8bf810ea0"
+    },
+    "internal/player/browserless/cdm/cdm_nocgo.go": {
+      "upstream_sha256": "89970cb5cf218c6bd5a15013843ca01c163c3381333e2dacb64092f76c69c024",
+      "imported_sha256": "89970cb5cf218c6bd5a15013843ca01c163c3381333e2dacb64092f76c69c024"
+    },
+    "internal/player/browserless/cdm/content_decryption_module.h": {
+      "upstream_sha256": "09ce855530a35c3e0d682f6c355902c6a5a0b712ea4e65dadc8c8a168d3c1455",
+      "imported_sha256": "09ce855530a35c3e0d682f6c355902c6a5a0b712ea4e65dadc8c8a168d3c1455"
+    },
+    "internal/player/browserless/cdm/content_decryption_module_export.h": {
+      "upstream_sha256": "9121772e68e2ecc6a65ddddab55726f28f9a38b1da2b5b839cbef719bf49b278",
+      "imported_sha256": "9121772e68e2ecc6a65ddddab55726f28f9a38b1da2b5b839cbef719bf49b278"
+    },
+    "internal/player/browserless/license/client.go": {
+      "upstream_sha256": "ae8461c70dd178821c31b37c5259671ff74b729dba7e9306953d6db38af59b30",
+      "imported_sha256": "bc5bafbd25e3f8a8954abdbace437eb414388d067a4a1b7d5949c89b6d42e406"
+    },
+    "internal/player/browserless/license/client_test.go": {
+      "upstream_sha256": "d8b18adc32c611899af5c2157ec4169e18bc88f0410087df2ceae99bff15cd67",
+      "imported_sha256": "b54ba1135ebb30d22211dcb00421d91c5c68a41648411065e30d4f0267569b8f"
+    },
+    "internal/player/browserless/mp4/decryptor.go": {
+      "upstream_sha256": "3c6dec1be8797118f5a8fd86589b2333dd4a2259321c2864b1b0e07abf084d02",
+      "imported_sha256": "3c6dec1be8797118f5a8fd86589b2333dd4a2259321c2864b1b0e07abf084d02"
+    },
+    "internal/player/browserless/mp4/decryptor_test.go": {
+      "upstream_sha256": "68ff171dc45c1f1f559420c97b8ab02f8e099bc24e208ef753cf80e378726985",
+      "imported_sha256": "68ff171dc45c1f1f559420c97b8ab02f8e099bc24e208ef753cf80e378726985"
+    },
+    "internal/player/browserless/mp4/verify_fuzz_test.go": {
+      "upstream_sha256": "2a6197e393b2adcbd2a6ca636b4bbd5f7c7f9576433d74c3dc34d652336244d1",
+      "imported_sha256": "2a6197e393b2adcbd2a6ca636b4bbd5f7c7f9576433d74c3dc34d652336244d1"
+    },
+    "internal/player/gst/player.go": {
+      "upstream_sha256": "f726bb07d83f051e410e67afa27c1bb4f0639a5c2fec385af9c8121191178a13",
+      "imported_sha256": "f726bb07d83f051e410e67afa27c1bb4f0639a5c2fec385af9c8121191178a13"
+    },
+    "internal/player/gst/player_test.go": {
+      "upstream_sha256": "6ca75edcd29dcb466505559128284c9b18c8e6ef236b51ebcafebf03401b40d2",
+      "imported_sha256": "6ca75edcd29dcb466505559128284c9b18c8e6ef236b51ebcafebf03401b40d2"
+    }
+  },
+  "patch": {
+    "path": "third_party/vibez-session.patch",
+    "sha256": "082b7de3e6ea130c9a96c417c68aaf8b1e63c7bb7031e287ec5c1da953e77c34"
+  },
+  "local_additions": {
+    "internal/vibez/player/browserless/session.go": "2e025a3bc46d65ae32759e31edde3facaf866da1c67d3f5b19c2c96fcfee73ec",
+    "internal/vibez/player/browserless/session_test.go": "1384a7e918e77023667e3401d4b54974d8072d65b5e3b062fec67d845adbbbe0"
+  }
+}
