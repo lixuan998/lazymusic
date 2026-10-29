@@ -275,13 +275,14 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		loginMsg := msg
 		if a.login.phase != "folder" && k != "esc" && k != "ctrl+c" {
-			canonical := map[string]string{"down": "j", "up": "k", "open": "l", "back": "h", "activate": "enter", "login_retry": "r"}[a.keys.ActionFor("Login", k)]
-			if canonical != "" {
-				if canonical == "enter" {
-					loginMsg = tea.KeyPressMsg{Code: tea.KeyEnter}
-				} else {
-					loginMsg = tea.KeyPressMsg{Code: []rune(canonical)[0], Text: canonical}
-				}
+			canonical := map[string]string{"down": "j", "up": "k", "open": "l", "back": "h", "activate": "enter", "login_retry": "r", "login_copy": "y"}[a.keys.ActionFor("Login", k)]
+			if canonical == "" {
+				return a, nil
+			}
+			if canonical == "enter" {
+				loginMsg = tea.KeyPressMsg{Code: tea.KeyEnter}
+			} else {
+				loginMsg = tea.KeyPressMsg{Code: []rune(canonical)[0], Text: canonical}
 			}
 		}
 		_, cmd := a.login.Update(loginMsg)
@@ -303,6 +304,7 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.login.cancel()
 		a.login.generation++
 		a.login.busy = false
+		a.login.loginURL = ""
 	}
 	return a, cmd
 }

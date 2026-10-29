@@ -6,6 +6,7 @@
 
 - `cmd/lazymusic/`：CLI 解析、信号与启动入口；不包含平台业务或绘制代码。
 - `internal/app/`：单个 Bubble Tea application、内嵌 Login、来源配置与授权组件安装。异步消息使用来源 epoch，防止切换来源后旧响应污染新页面。
+- `internal/app/auth_runtime.go`：仅为存在 C++ ABI 缺口的 Linux amd64 官方授权子进程准备固定、双重摘要校验的兼容运行库。来源为 conda-forge GCC，保存在来源私有 helpers/runtime 中；只解包指定的普通库文件，不执行包脚本、不安装系统包。通过系统 ELF loader 的 --library-path 启动，不导出 LD_LIBRARY_PATH，避免影响浏览器、父进程或播放后端。不得以兼容 C++ 的方式替换 glibc。
 - `internal/nvimconfig/`：为已安装的 Lua 插件生成 lazy.nvim 配置，幂等更新、原子替换并备份不同的旧内容；运行路径不得包含 DESTDIR。
 - `internal/music/`：平台无关的 Source、Capabilities、Quality、Track、Query、State；曲目标识是 `(Source, ID)`。
 - `internal/catalog/`：Browser、Page、Item、Tab、Inspector 和可选 Editor 合约及有界集合分页。Item.Open/Play、Actions.Playlists 为后端提供的 opaque Query；Item.Writable 仅表示可编辑的目标歌单。
@@ -38,6 +39,7 @@
 - macOS 的无损 / Hi-Res 只能由经实际 ALAC 播放验证的后端声明到现有音质选择列表中，不能仅按 GOOS 或曲目 audioVariants 开放；Linux 未验证的格式不得出现。入口、布局和键位保持共用，平台差异只在后端能力与实现。
 - 整个应用只有一个 terminal program。Login 是 Content 子页面；移动到 Login 不得自动授权、启动外部程序或停止音乐。Enter/l 才执行选择。
 - Apple 授权保留自动浏览器打开，并从官方 helper 输出中只提取预期端口的 loopback /login URL 显示手动入口。URL 的 state 参数仅在当前 Login 过程中使用，不得写日志或 session；取消/完成后清除，迟到事件按 generation 与请求流隔离。
+- 登录组件 stdout/stderr 共用有界过滤器，兼容 ANSI、CR 和无末尾换行；原始输出不能写日志。只向 UI 返回白名单错误类别、严格格式的库名/ABI/HTTP 状态。不得用统一的 try again 吞掉具体原因。手动 URL 必须在最小 60×16 窗口也完整可见，Login 的 y 按当前绑定复制完整 URL；不以剪贴板请求等同于已确认复制成功。
 - 普通字符按终端生成的文本处理，保留基本键位消歧和备用字符码；不要在缺少关联文本时强制所有字符用 CSI-u 上报，否则 Shift+/ 等符号会退化成原键。所有页面与弹窗共用同一键盘协议配置。
 - h/l 在面板内进退，Ctrl-h/j/k/l 切焦点。`,.` 必须按当前焦点分发：Navigation 动画、Content 分类、Player 播放模式；Sound 提供 Pulse/Wave/真实 EQ。Queue/Log 不得隐式操作旧 Content。
 - 布局切换后焦点必须落在可见面板，Player 始终可见；日志可在所有布局用 @ 打开。页脚显示实际页面或当前焦点，不写死 NORMAL。

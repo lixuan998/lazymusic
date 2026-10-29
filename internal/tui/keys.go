@@ -61,6 +61,7 @@ var keyDefinitions = []keyDefinition{
 	{"category_previous", "Content Navigation Player Sound", "Previous category / mode / visualization", []string{","}},
 	{"refresh", "Content", "Refresh content", []string{"r"}},
 	{"login_retry", "Login", "Sign in again (account options)", []string{"r"}},
+	{"login_copy", "Login", "Copy current sign-in link", []string{"y"}},
 	{"add", "Content Queue Player", "Add to queue / library / playlist", []string{"a"}},
 	{"enqueue", "Content", "Copy selection to queue", []string{"y"}},
 	{"play_next", "Content", "Play selection next", []string{"P"}},

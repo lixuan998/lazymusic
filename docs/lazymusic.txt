@@ -53,6 +53,12 @@ Sound EQ: h/l band, j/k gain, e bypass, r flat, p preset.
 o/c opens album/artist links or credits in Content, Queue and Player.
 Login is available through Navigation or :login. Text fields keep letters
 as text; Esc/Ctrl+c cancels. The plugin has no separate music keymap.
+In Apple sign-in, Enter/l starts authorization. The full manual URL appears at
+the top when ready; y requests clipboard copy using OSC 52 (Nvim's configured
+clipboard provider). You can also select the displayed URL manually. WSL users
+can open it in their Windows browser. Preparation/download and safe failure
+reasons stay in Login. Older Linux C++ runtimes are handled with verified,
+private compatibility libraries used only by the authorization helper.
 Navigation is immediate. Holding h/j/k/l repeats within the focused panel.
 There are no double-tap bindings. Ctrl+< / Ctrl+> (Ctrl+Shift+comma/period)
 seeks backward/forward 10 seconds from any panel.

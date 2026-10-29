@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,21 +14,21 @@ import (
 // endpoint/client key are never extracted, copied, or embedded in lazymusic.
 // Developer/user tokens remain associated with the Vibez application identity.
 func LoginViaVibez(ctx context.Context, stateDir, helper string, port int) error {
-	return loginViaVibez(ctx, stateDir, helper, port, false, nil)
+	return loginViaVibez(ctx, stateDir, helper, port, false, nil, "")
 }
 
 // LoginViaVibezQuiet keeps helper output out of the in-app Login screen.
 func LoginViaVibezQuiet(ctx context.Context, stateDir, helper string, port int) error {
-	return loginViaVibez(ctx, stateDir, helper, port, true, nil)
+	return loginViaVibez(ctx, stateDir, helper, port, true, nil, "")
 }
 
 // LoginViaVibezProgress reports only the helper's validated local login URL.
 // Its state parameter is transient: callers must not log or persist the URL.
-func LoginViaVibezProgress(ctx context.Context, stateDir, helper string, port int, onURL func(string)) error {
-	return loginViaVibez(ctx, stateDir, helper, port, true, onURL)
+func LoginViaVibezProgress(ctx context.Context, stateDir, helper string, port int, onURL func(string), libraryDir string) error {
+	return loginViaVibez(ctx, stateDir, helper, port, true, onURL, libraryDir)
 }
 
-func loginViaVibez(ctx context.Context, stateDir, helper string, port int, quiet bool, onURL func(string)) error {
+func loginViaVibez(ctx context.Context, stateDir, helper string, port int, quiet bool, onURL func(string), libraryDir string) error {
 	helper, err := exec.LookPath(helper)
 	if err != nil {
 		return fmt.Errorf("Vibez login helper: %w", err)
@@ -56,17 +55,17 @@ func loginViaVibez(ctx context.Context, stateDir, helper string, port int, quiet
 		fmt.Fprintln(os.Stderr, "The browser is needed only for authorization; close its login pages when done.")
 	}
 	cmd := exec.CommandContext(ctx, helper, "auth", "login", "--config", path, "--no-update", "--no-discord")
+	setHelperLibrary(cmd, libraryDir)
+	output := &loginURLWriter{port: port, onURL: onURL}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if quiet {
 		cmd.Stdin = nil
-		cmd.Stdout = io.Discard
-		cmd.Stderr = io.Discard
-		if onURL != nil {
-			cmd.Stdout = &loginURLWriter{port: port, onURL: onURL}
-		}
+		cmd.Stdout, cmd.Stderr = output, output
 	}
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("Vibez authorization helper: %w", err)
+	err = cmd.Run()
+	output.flush()
+	if err != nil {
+		return helperFailure(ctx, err, output.problem)
 	}
 	cfg, err = ReadConfig(stateDir)
 	if err != nil {

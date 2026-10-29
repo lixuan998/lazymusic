@@ -169,9 +169,13 @@ lazymusic --source local --music-dir "$HOME/Music"
 
 ### WSL 或无法自动打开浏览器
 
-Apple 登录仍会尝试自动打开浏览器。若没有弹出窗口，Login 面板会在授权服务准备好后显示完整的手动链接（包括本次授权的 `state` 参数）。将链接复制到浏览器，保持 lazymusic 运行，完成 Apple 官方页面的授权即可。
+选择 **APPLE MUSIC** 后按 `Enter` / `l` 开始登录。首次运行可能先下载授权组件，页面会显示当前准备阶段。授权服务启动后，官方组件约需 4 秒输出链接；Login 面板顶部会显示完整的手动链接（包括本次授权的 `state` 参数），并尝试自动打开浏览器。按 `y` 通过终端剪贴板协议复制链接，或直接选择、点击显示的地址。保持 lazymusic 运行，在 Apple 官方页面完成授权。
 
 在 WSL 中，可将该链接打开在 Windows 浏览器中；这依赖 Windows 到 WSL 的 localhost 转发，参见 [Microsoft WSL 网络说明](https://learn.microsoft.com/en-us/windows/wsl/networking)。手动链接仅在当前登录过程中显示，取消、完成或超时后失效，不写入日志或 session。通过 SSH 在其他机器上登录时，需要先将相同的 localhost 端口转发到浏览器所在机器。
+
+Ubuntu 22.04 默认的 C++ 运行库可能无法启动官方授权组件（缺少 `GLIBCXX_3.4.32`）。lazymusic 会在检测到这种兼容性问题时，自动下载并校验固定版本的 [conda-forge GCC 运行库](https://github.com/conda-forge/ctng-compilers-feedstock)，保存在当前来源的 `helpers/runtime/` 下，只由授权子进程加载；无需安装 Conda、添加软件源或升级系统运行库。首次准备需要能访问 `conda.anaconda.org`。新版系统通过检查后不会下载兼容库。
+
+如果授权组件在生成链接前失败，Login 会保留具体原因，`@` 可查看日志：缺少 GStreamer 动态库时安装上方 Ubuntu 依赖；DNS、代理或证书失败时按提示检查网络。复制功能需要终端支持 OSC 52，Neovim 浮窗使用编辑器配置的 clipboard provider；不支持时仍可手动复制屏幕上的链接。
 
 ## 键位
 
@@ -223,7 +227,7 @@ Apple 登录仍会尝试自动打开浏览器。若没有弹出窗口，Login �
 | 6 Sound | `,/.` | 切换 Pulse / Wave / Equalizer |
 | 6 Sound · EQ | `h/l`、`j/k` | 选择频段、降低 / 提高 1 dB |
 | 6 Sound · EQ | `e`、`r`、`p` | 旁路、归零、轮换 Flat / Bass / Vocal / Treble 预设 |
-| 2 Login | `j/k`、`l` / `Enter`、`h` | 选择来源、进入 / 确认、返回；账户选项中 `r` 重新授权 |
+| 2 Login | `j/k`、`l` / `Enter`、`h`、`y` | 选择来源、进入 / 确认、返回；账户选项中 `r` 重新授权，授权过程中 `y` 复制完整链接 |
 
 同一个字母可以在不同面板复用，如 Content / Queue / Player 的 `a`、Content / Queue 的 `d`，以及 Content / Sound 的 `p`。全局 `m` 轮转播放模式；`r/s` 只在 Queue / Player 调整循环和随机。Content 刷新用 `r`，Search 范围用 `s`，EQ 归零用 `r`。尺寸调节统一用大写 `H/J/K/L`，Queue 调序用 `[/]`，Login 使用 Navigation 或 `:login`。
 
@@ -362,4 +366,5 @@ make help
 
 - [Bubble Tea](https://github.com/charmbracelet/bubbletea) 与 [Lip Gloss](https://github.com/charmbracelet/lipgloss)：终端交互与绘制。
 - [Vibez](https://github.com/simonepelosi/vibez)：当前 Apple 授权组件与固定版本的原生播放代码子集。来源清单见 [vibez-source.json](third_party/vibez-source.json)，保留其 [MIT 许可证](third_party/VIBEZ-LICENSE)。
+- [conda-forge GCC runtimes](https://github.com/conda-forge/ctng-compilers-feedstock)：旧版 Linux 的授权组件兼容运行库，按需下载，不随 binary 分发；采用 [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) 及 [GCC Runtime Library Exception 3.1](https://www.gnu.org/licenses/gcc-exception-3.1.html)。
 - Chromium CDM 接口头文件遵循 [BSD 3-Clause](third_party/CHROMIUM-CDM-BSD-3-Clause.txt)。下载的 CDM 组件不随源码分发。

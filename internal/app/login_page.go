@@ -139,14 +139,22 @@ func (m *loginPage) connect(force bool) tea.Cmd {
 			changed = changed || old.Root != cfg.Root
 		} else if source == music.Apple {
 			if force || !wasReady {
+				if _, err := FindVibezHelper(dir); err != nil {
+					report("Downloading Apple sign-in component…", "")
+				}
 				helper, err := ensureAuthHelper(ctx, dir)
 				if err != nil {
 					return finish(err)
 				}
+				libraryDir, err := prepareAuthRuntime(ctx, dir, helper, func(status string) { report(status, "") })
+				if err != nil {
+					return finish(err)
+				}
+				report("Starting authorization; the manual link may take a few seconds…", "")
 				if err = account.LoginViaVibezProgress(ctx, dir, helper, 38747, func(url string) {
 					report("Complete Apple authorization in your browser.", url)
-				}); err != nil {
-					return finish(fmt.Errorf("Apple sign-in did not complete; try again"))
+				}, libraryDir); err != nil {
+					return finish(err)
 				}
 			}
 			report("Verifying account and preparing playback…", "")
@@ -248,6 +256,10 @@ func (m *loginPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.busy {
+			if key == "y" && m.loginURL != "" {
+				m.status = "Copy requested; paste the link into your browser."
+				return m, tea.SetClipboard(m.loginURL)
+			}
 			return m, nil
 		}
 		if m.phase == "sources" {
@@ -263,7 +275,7 @@ func (m *loginPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.phase == "account" {
 			switch key {
-			case "enter":
+			case "enter", "l":
 				return m, m.connect(false)
 			case "r":
 				return m, m.connect(true)
@@ -325,18 +337,24 @@ func (m *loginPage) RowsForWidth(width int) []string {
 		case "account":
 			lines = append(lines, "APPLE MUSIC", "")
 			if m.busy {
-				lines = append(lines, accent.Render(m.status), "")
 				if m.loginURL != "" {
-					lines = append(lines, "Browser did not open? Open this link:", "")
+					// Keep the complete URL above secondary text, even at 60x16.
+					lines = []string{accent.Bold(true).Render("APPLE MUSIC · Sign in"), muted.Render("y copy link · Esc cancel")}
 					for _, line := range strings.Split(ansi.Hardwrap(m.loginURL, max(1, width), false), "\n") {
 						lines = append(lines, ansi.SetHyperlink(m.loginURL)+line+ansi.ResetHyperlink())
 					}
-					lines = append(lines, "", muted.Render("WSL: use your Windows browser."), muted.Render("Keep lazymusic running until authorization finishes."))
+					lines = append(lines, "", muted.Render("WSL: open the link in your Windows browser."))
 				} else {
-					lines = append(lines, muted.Render("A manual link appears here when sign-in is ready."))
+					lines = append(lines, muted.Render("The manual link appears when sign-in is ready."))
 				}
+				lines = append(lines, strings.Split(ansi.Wrap(accent.Render(m.status), max(1, width), ""), "\n")...)
 				lines = append(lines, "", muted.Render("Esc cancel"))
 				break
+			}
+			if m.problem != "" {
+				lines = []string{accent.Bold(true).Render("APPLE MUSIC · Sign-in failed"), ""}
+				lines = append(lines, strings.Split(ansi.Wrap(accent.Render(m.problem), max(1, width), ""), "\n")...)
+				return append(lines, "", muted.Render("Enter retry · Esc back · @ log"))
 			}
 			if m.ready {
 				lines = append(lines, "An Apple Music account is connected.", "", "Enter continue · r sign in again")
