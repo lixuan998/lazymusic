@@ -61,3 +61,25 @@ func TestConfigureCanonicalizesSelectedFolderAndStoresPrivateConfig(t *testing.T
 		t.Fatal("local config was not stored privately")
 	}
 }
+
+func TestInspectLocalLinksAreRootedAndCreditsAreNotInvented(t *testing.T) {
+	root := t.TempDir()
+	album := filepath.Join(root, "Artist", "Album")
+	if err := os.MkdirAll(album, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(album, "Song.flac"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	b := &Browser{Root: root}
+	d, err := b.Inspect(context.Background(), catalog.Subject{Source: "local", ID: "Artist/Album/Song.flac", Credits: true})
+	if err != nil || len(d.Links) != 2 || d.Links[0].Open.ID != "Artist/Album" || d.Links[1].Open.ID != "Artist" {
+		t.Fatalf("local related links: %+v %v", d, err)
+	}
+	if len(d.Credits) != 0 || d.CreditsNote == "" {
+		t.Fatal("folder names were presented as verified credits")
+	}
+	if _, err := b.Inspect(context.Background(), catalog.Subject{ID: "../outside.flac"}); err == nil {
+		t.Fatal("metadata inspection accepted traversal")
+	}
+}

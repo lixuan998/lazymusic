@@ -105,4 +105,9 @@ func (c *Client) Browse(ctx context.Context, q catalog.Query) (catalog.Page, err
 	err := c.call(ctx, http.MethodGet, "/v1/browse?q="+url.QueryEscape(string(b)), nil, &p)
 	return p, err
 }
+func (c *Client) Inspect(ctx context.Context, subject catalog.Subject) (catalog.Details, error) {
+	var details catalog.Details
+	err := c.call(ctx, http.MethodPost, "/v1/inspect", subject, &details)
+	return details, err
+}
 func (c *Client) Close() { c.http.CloseIdleConnections() }

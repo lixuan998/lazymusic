@@ -638,6 +638,33 @@ func (s *Service) Handler() http.Handler {
 		}
 		write(w, page)
 	})
+	mux.HandleFunc("POST /v1/inspect", func(w http.ResponseWriter, r *http.Request) {
+		var subject catalog.Subject
+		if !decode(w, r, &subject) {
+			return
+		}
+		if subject.ID == "" || (subject.Source != "" && subject.Source != s.source.ID) {
+			fail(w, 400, fmt.Errorf("invalid work or music source"))
+			return
+		}
+		subject.Source = s.source.ID
+		s.mu.Lock()
+		browser := s.browser
+		s.mu.Unlock()
+		inspector, ok := browser.(catalog.Inspector)
+		if !ok {
+			write(w, catalog.Details{CreditsNote: "This source does not provide contributor credits."})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		defer cancel()
+		details, err := inspector.Inspect(ctx, subject)
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		write(w, details)
+	})
 	mux.HandleFunc("POST /v1/quit", func(w http.ResponseWriter, r *http.Request) {
 		s.commandMu.Lock()
 		defer s.commandMu.Unlock()

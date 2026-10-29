@@ -4,13 +4,16 @@ PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
 DESTDIR ?=
 
-.PHONY: build test vet install uninstall help
+.PHONY: build test test-nvim vet install uninstall help
 
 build:
 	CGO_ENABLED=1 $(GO) build -buildvcs=false -trimpath -o bin/lazymusic ./cmd/lazymusic
 
 test:
 	CGO_ENABLED=1 $(GO) test -count=1 -timeout=120s ./...
+
+test-nvim:
+	nvim --headless -u NONE -i NONE -l tests/nvim_spec.lua
 
 vet:
 	CGO_ENABLED=1 $(GO) vet ./...
@@ -28,6 +31,7 @@ help:
 	  'make install    Build and install to BINDIR (default: ~/.local/bin)' \
 	  'make uninstall  Remove the installed binary; preserve config and sessions' \
 	  'make test       Run unit tests' \
+	  'make test-nvim  Test the Neovim plugin (requires nvim 0.10+)' \
 	  'make vet        Run Go static checks' \
 	  '' \
 	  'Overrides: GO, INSTALL, PREFIX, BINDIR, DESTDIR' \

@@ -159,16 +159,7 @@ func (b *Browser) scan(ctx context.Context) ([]music.Track, error) {
 		if err != nil {
 			return err
 		}
-		t := music.Track{Source: music.Local, ID: filepath.ToSlash(rel), Title: strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))}
-		folder := filepath.Dir(rel)
-		if folder != "." {
-			t.Album = filepath.Base(folder)
-			artist := filepath.Dir(folder)
-			if artist != "." {
-				t.Artist = filepath.Base(artist)
-			}
-		}
-		tracks = append(tracks, t)
+		tracks = append(tracks, localTrack(filepath.ToSlash(rel)))
 		if len(tracks) > 100000 {
 			return fmt.Errorf("local library exceeds 100000 audio files")
 		}
@@ -279,4 +270,18 @@ func (b *Browser) Browse(ctx context.Context, q catalog.Query) (catalog.Page, er
 }
 func trackItem(t music.Track) catalog.Item {
 	return catalog.Item{Source: music.Local, ID: t.ID, Kind: "songs", Title: t.Title, Subtitle: t.Artist, Track: &t}
+}
+
+func localTrack(id string) music.Track {
+	file := filepath.FromSlash(id)
+	name := filepath.Base(file)
+	t := music.Track{Source: music.Local, ID: id, Title: strings.TrimSuffix(name, filepath.Ext(name))}
+	folder := filepath.Dir(file)
+	if folder != "." {
+		t.Album = filepath.Base(folder)
+		if artist := filepath.Dir(folder); artist != "." {
+			t.Artist = filepath.Base(artist)
+		}
+	}
+	return t
 }

@@ -41,16 +41,22 @@ type resource struct {
 	ID         string `json:"id"`
 	Type       string `json:"type"`
 	Attributes struct {
-		Name       string `json:"name"`
-		Artist     string `json:"artistName"`
-		Album      string `json:"albumName"`
-		Curator    string `json:"curatorName"`
-		Duration   int64  `json:"durationInMillis"`
-		TrackCount int    `json:"trackCount"`
+		Name       string   `json:"name"`
+		Artist     string   `json:"artistName"`
+		Album      string   `json:"albumName"`
+		Curator    string   `json:"curatorName"`
+		Duration   int64    `json:"durationInMillis"`
+		TrackCount int      `json:"trackCount"`
+		Composer   string   `json:"composerName"`
+		Label      string   `json:"recordLabel"`
+		Copyright  string   `json:"copyright"`
+		Title      string   `json:"title"`
+		Roles      []string `json:"roleNames"`
 		PlayParams struct {
 			CatalogID string `json:"catalogId"`
 		} `json:"playParams"`
 	} `json:"attributes"`
+	Relationships map[string]collection `json:"relationships"`
 }
 
 type collection struct {

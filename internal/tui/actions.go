@@ -98,6 +98,8 @@ func (m *Model) normal(key string) tea.Cmd {
 		}
 	}
 	switch action {
+	case "related", "credits":
+		return m.inspectWork(action)
 	case "zen":
 		m.UI.Zen = !m.UI.Zen
 		if m.UI.Zen {

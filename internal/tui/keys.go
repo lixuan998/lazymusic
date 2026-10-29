@@ -16,8 +16,8 @@ func DefaultKeys() Keys {
 		"open": {"l", "right"}, "activate": {"enter"}, "back": {"h", "left", "esc", "backspace"}, "filter": {"/"}, "query": {"ctrl+f"}, "scope": {"S"},
 		"category_next": {"."}, "category_previous": {","}, "toggle": {"space"}, "stop": {"x"}, "next": {"]"}, "previous": {"["},
 		"seek_forward": {">"}, "seek_backward": {"<"}, "volume_up": {"="}, "volume_down": {"-"}, "repeat": {"r"}, "shuffle": {"z"},
-		"enqueue": {"a"}, "play_next": {"A"}, "play_selection": {"p"}, "remove": {"d"}, "clear": {"c"}, "queue_up": {"K"}, "queue_down": {"J"},
-		"resize_up": {"ctrl+shift+up"}, "resize_down": {"ctrl+shift+down"}, "resize_left": {"ctrl+shift+left"}, "resize_right": {"ctrl+shift+right"},
+		"enqueue": {"a"}, "play_next": {"A"}, "play_selection": {"p"}, "remove": {"d"}, "clear": {"C"}, "queue_up": {"K"}, "queue_down": {"J"}, "related": {"o"}, "credits": {"c"},
+		"resize_up": {"ctrl+shift+k"}, "resize_down": {"ctrl+shift+j"}, "resize_left": {"ctrl+shift+h"}, "resize_right": {"ctrl+shift+l"},
 		"layout_reset": {"ctrl+="}, "zen": {"ctrl++", "ctrl+shift++", "ctrl+shift+=", "ctrl+-", "ctrl+_", "ctrl+shift+_", "ctrl+shift+-"},
 		"layout_next": {"+", "shift+="}, "layout_previous": {"_", "shift+-"}, "logs": {"@"}, "quality": {"b"}, "login": {"L"}, "refresh": {"R"}, "help": {"?"}, "leave": {"q", "Q", "ctrl+c"}, "command": {":"},
 	}

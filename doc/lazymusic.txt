@@ -1,0 +1,35 @@
+*lazymusic.txt*  Music in a Neovim floating terminal
+
+Requirements: Neovim 0.10+, macOS or Linux, and an installed lazymusic binary.
+
+SETUP                                                       *lazymusic-setup*
+>
+  require("lazymusic").setup({
+    cmd = "lazymusic",          -- executable, not a shell command
+    args = {},                 -- e.g. { "--source", "local" }
+    width = 0.94,               -- fraction of available columns, or cell count
+    height = 0.92,              -- fraction of available rows, or cell count
+    border = "rounded",
+    keymap = "<leader>mm",      -- false disables the normal-mode mapping
+  })
+<
+The default command is resolved through PATH, then ~/.local/bin/lazymusic.
+Arguments are passed directly to the executable without a shell.
+
+COMMANDS                                                 *lazymusic-commands*
+
+:LazyMusic      Open or focus the existing lazymusic terminal.
+:LazyMusicHide  Hide its floating window and keep the same TUI process.
+
+<leader>mm opens the terminal in normal mode after setup. In terminal mode,
+Esc, Ctrl+h/j/k/l, Ctrl+Shift+h/j/k/l, Ctrl+= and Ctrl++/- are forwarded to
+lazymusic. The terminal must distinguish modified keys for them to work.
+
+Use the TUI's q then q to detach and close the float while music keeps playing;
+q then Q stops the selected source's background service. Reopen with <leader>mm
+to restore the session. To access Neovim commands from the terminal, press
+Ctrl-\ Ctrl-n. Closing the float alone hides the TUI and reuses it next time.
+
+On a nonzero exit, the terminal output remains available for diagnosis.
+
+ vim:tw=78:ts=8:noet:ft=help:norl:

@@ -47,40 +47,43 @@ type exitMsg struct {
 }
 
 type Model struct {
-	toastVersion   uint64
-	logOffset      int
-	toast          *eventlog.Entry
-	seenLog        uint64
-	localLogs      []eventlog.Entry
-	qualityDialog  bool
-	qualityCursor  int
-	api            API
-	keys           Keys
-	ctx            context.Context
-	State          daemon.State
-	UI             session.UI
-	width, height  int
-	items          []catalog.Item
-	tabs           []catalog.Tab
-	next           string
-	nextSeen       map[string]bool
-	loading        bool
-	loadCancel     context.CancelFunc
-	generation     uint64
-	revision       uint64
-	cursor, offset int
-	restore        session.Cursor
-	restorePages   int
-	restoring      bool
-	mode           string
-	draft          string
-	prompt         bool
-	help           bool
-	gPrefix        bool
-	exiting        bool
-	ExitAction     string
-	notice         string
-	problem        string
+	work              *workDialog
+	inspectGeneration uint64
+	inspectCancel     context.CancelFunc
+	toastVersion      uint64
+	logOffset         int
+	toast             *eventlog.Entry
+	seenLog           uint64
+	localLogs         []eventlog.Entry
+	qualityDialog     bool
+	qualityCursor     int
+	api               API
+	keys              Keys
+	ctx               context.Context
+	State             daemon.State
+	UI                session.UI
+	width, height     int
+	items             []catalog.Item
+	tabs              []catalog.Tab
+	next              string
+	nextSeen          map[string]bool
+	loading           bool
+	loadCancel        context.CancelFunc
+	generation        uint64
+	revision          uint64
+	cursor, offset    int
+	restore           session.Cursor
+	restorePages      int
+	restoring         bool
+	mode              string
+	draft             string
+	prompt            bool
+	help              bool
+	gPrefix           bool
+	exiting           bool
+	ExitAction        string
+	notice            string
+	problem           string
 }
 
 func (m *Model) RevisionForExit() uint64 { m.remember(); m.revision++; return m.revision }
@@ -210,6 +213,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case detailsMsg:
+		m.acceptDetails(msg)
+		return m, nil
 	case toastExpired:
 		if uint64(msg) == m.toastVersion {
 			m.toast = nil
@@ -334,6 +340,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		key := msg.String()
+		if m.work != nil {
+			return m, m.workKey(key)
+		}
 		if m.qualityDialog {
 			switch key {
 			case "esc":

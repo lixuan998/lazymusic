@@ -205,7 +205,7 @@ func TestSplitSoundZenResizeAndReset(t *testing.T) {
 		t.Fatal("equalizer controls did not dispatch")
 	}
 	before := m.navWidth()
-	m.normal("ctrl+shift+right")
+	m.normal("ctrl+shift+l")
 	if m.navWidth() <= before {
 		t.Fatal("resize did not change width")
 	}
@@ -235,8 +235,8 @@ func TestResizedAndZenLayoutsAlwaysFit(t *testing.T) {
 				for _, focus := range []int{0, 1, 2, 3, 4, 5} {
 					m.UI.Focus = focus
 					for range 20 {
-						m.normal("ctrl+shift+right")
-						m.normal("ctrl+shift+down")
+						m.normal("ctrl+shift+l")
+						m.normal("ctrl+shift+j")
 					}
 				}
 				lines := strings.Split(m.View().Content, "\n")

@@ -1,10 +1,10 @@
 # lazymusic
 
-**把音乐留在终端。** 一个受 [lazygit](https://github.com/jesseduffield/lazygit) 启发的音乐 TUI，支持 Apple Music 和本地音乐库，默认使用 Vim 键位。
+**把音乐留在终端。** 一个支持 Apple Music 和本地音乐库的音乐 TUI，默认使用 Vim 键位。
 
 在同一界面浏览推荐、搜索收藏、管理队列和调整音效。关闭 TUI 后继续播放，下次打开接着听。
 
-[安装](#安装) · [快速上手](#快速上手) · [键位](#键位) · [配置](#配置) · [常见问题](#常见问题) · [参与开发](#参与开发)
+[安装](#安装) · [快速上手](#快速上手) · [键位](#键位) · [Neovim](#neovim) · [配置](#配置) · [常见问题](#常见问题) · [参与开发](#参与开发)
 
 ## 功能
 
@@ -150,7 +150,7 @@ lazymusic --source local --music-dir "$HOME/Music"
 | `,` / `.` | Content 切分类；Navigation / Sound 切律动与 EQ；Player 切播放模式 |
 | `+` / `_`（`Shift+=` / `Shift+-`） | 轮换完整、Content + Player、Queue + Player 布局 |
 | `Ctrl++` / `Ctrl+-` | 开关 Zen：律动 + Equalizer + Player |
-| `Ctrl+Shift+方向键` | 调整当前面板尺寸 |
+| `Ctrl+Shift+h/j/k/l` | 向左 / 下 / 上 / 右调整当前面板尺寸 |
 | `Ctrl+=` | 恢复默认布局 |
 | `@`、`L`、`R`、`Esc` | 日志窗口、Login、刷新、取消或返回 |
 
@@ -164,7 +164,8 @@ lazymusic --source local --music-dir "$HOME/Music"
 | `b`、`r`、`z` | 音质偏好、循环模式、随机播放 |
 | `a` / `A`、`p` | 加入队列 / 下一首播放、播放整个集合 |
 | `/`、`i` / `Ctrl+f`、`S` | 过滤已加载内容、编辑搜索、切换 catalog / library 搜索 |
-| Queue：`d`、`c`、`J` / `K` | 移除、清空、调整顺序 |
+| 窗口 2 / 3 / 4：`o` / `c` | 打开专辑与艺人跳转菜单 / 查看 credits |
+| Queue：`d`、`C`、`J` / `K` | 移除、清空、调整顺序 |
 | `q` → `q` / `Q` | 后台运行 / 完全退出当前来源服务 |
 
 ### 均衡器
@@ -178,6 +179,42 @@ lazymusic --source local --music-dir "$HOME/Music"
 | `Space`、`r`、`p` | 切换旁路、归零、轮换 Flat / Bass / Vocal / Treble 预设 |
 
 Pulse / Wave 是随播放状态和进度变化的律动动画，未进行实时音频频谱分析。Ctrl 组合键需要终端正确上报，应用会请求增强键盘协议。
+
+### 作品信息
+
+在 Content 选中作品、Queue 选中歌曲或聚焦 Player 时，按 `o` 打开跳转菜单。专辑和每位艺人分别列为一项，使用 `j/k` 选择，`Enter` / `l` 在 Content 中打开，`h` 返回原页面。不会改变播放队列。
+
+按 `c` 查看 credits，`j/k` 或 `Ctrl+u/d` 滚动，`Esc` 关闭。显示音源实际提供的贡献者、角色、作曲及发行信息；没有完整制作人员名单时会明确注明。LOCAL 当前按文件与目录组织，支持专辑 / 艺人跳转，但尚不读取嵌入式 credits。为避免冲突，Queue 清空改为大写 `C`。
+
+## Neovim
+
+仓库内包含 Neovim 0.10+ 插件，用 `<leader>mm` 在浮动终端打开 lazymusic。先运行 `make install`，再将以下配置加入 `lazy.nvim` 插件列表；LazyVim 可保存为 `lua/plugins/lazymusic.lua`：
+
+```lua
+return {
+  {
+    "lixuan998/lazymusic",
+    main = "lazymusic",
+    cmd = { "LazyMusic", "LazyMusicHide" },
+    keys = {
+      { "<leader>mm", function() require("lazymusic").open() end, desc = "Open lazymusic" },
+    },
+    opts = {
+      cmd = "lazymusic", -- 默认查找 PATH，再查找 ~/.local/bin/lazymusic
+      args = {},        -- 例如 { "--source", "local" }
+      width = 0.94,
+      height = 0.92,
+      border = "rounded",
+    },
+  },
+}
+```
+
+本地开发可将仓库地址替换为 `dir = "/absolute/path/to/code/lazy-music"`。插件不代替 binary 安装；可用 `opts.cmd` 指定可执行文件的完整路径，参数通过 `opts.args` 逐项传入，不经过 shell。
+
+重复打开会复用已有终端；`:LazyMusicHide` 只隐藏浮窗。TUI 内 `q q` 会关闭浮窗并保持后台播放，`q Q` 停止当前来源服务；再次 `<leader>mm` 恢复 session。`Esc`、面板焦点和窗口调节键使用当前 buffer 的透传映射，不影响其他终端。
+
+需要临时回到 Neovim 普通模式时，使用 `Ctrl-\\` 后按 `Ctrl-n`。完整配置见 `:help lazymusic` 或 [插件帮助](doc/lazymusic.txt)。
 
 ## 配置
 
@@ -246,6 +283,7 @@ Apple 多设备播放冲突如果由服务返回明确错误，会显示脱敏�
 ```sh
 make build
 make test
+make test-nvim  # 修改 Neovim 插件时运行，需要 nvim
 make vet
 make help
 ```
@@ -256,7 +294,6 @@ make help
 
 ## 致谢
 
-- [lazygit](https://github.com/jesseduffield/lazygit)：面板布局与键盘交互灵感。
 - [Bubble Tea](https://github.com/charmbracelet/bubbletea) 与 [Lip Gloss](https://github.com/charmbracelet/lipgloss)：终端交互与绘制。
 - [Vibez](https://github.com/simonepelosi/vibez)：当前 Apple 授权组件与固定版本的原生播放代码子集。来源清单见 [vibez-source.json](third_party/vibez-source.json)，保留其 [MIT 许可证](third_party/VIBEZ-LICENSE)。
 - Chromium CDM 接口头文件遵循 [BSD 3-Clause](third_party/CHROMIUM-CDM-BSD-3-Clause.txt)。下载的 CDM 组件不随源码分发。

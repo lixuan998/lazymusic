@@ -18,6 +18,7 @@
 - `internal/tui/`：`model.go` 接收异步状态，`actions.go` 分发按键，`browse.go` 管理查询/分类，`navigation.go` 管理层级与焦点，`panels.go` 管理布局/日志/动画，`sound.go` 管理分栏尺寸、Zen 和均衡器，`view.go` 渲染，`keys.go` 定义动作绑定。
 - `internal/vibez/`：固定版本的第三方原生播放子集。保留来源与许可证；变更需同步 `third_party/vibez-session.patch`、摘要或 local_additions。
 - `scripts/`：仅保留依赖准备和第三方代码导入等维护工具。不要加入一次性实测脚本、账号探针、构建产物或测试报告。
+- `lua/lazymusic/`：Neovim 浮动终端插件，可通过 lazy.nvim 加载；`doc/lazymusic.txt` 为帮助，`tests/nvim_spec.lua` 为独立 headless 回归测试。插件只启动/复用 TUI，不另建播放或授权逻辑。
 
 ## 增加音乐平台
 
@@ -37,7 +38,8 @@
 - h/l 在面板内进退，Ctrl-h/j/k/l 切焦点。`,.` 必须按当前焦点分发：Navigation 动画、Content 分类、Player 播放模式；Sound 提供 Pulse/Wave/真实 EQ。Queue/Log 不得隐式操作旧 Content。
 - 布局切换后焦点必须落在可见面板，Player 始终可见；日志可在所有布局用 @ 打开。页脚显示实际页面或当前焦点，不写死 NORMAL。
 - q 首次提示，第二次 q 后台，Q 退出当前来源服务；退出/切换前保存 UI，冷恢复暂停。不可让迟到请求覆盖新 revision/epoch。
-- Ctrl+Shift+方向键调当前面板尺寸，Ctrl+= 恢复默认布局；Ctrl++/Ctrl+- 开关 Zen，Zen 必须同时显示律动、真实 EQ 和播放条。尺寸、音效与 Zen 状态持久化。EQ 操作按当前焦点路由，不能冒用播放音量或显示假频谱。
+- Ctrl+Shift+h/j/k/l 调当前面板尺寸，Ctrl+= 恢复默认布局；Ctrl++/Ctrl+- 开关 Zen，Zen 必须同时显示律动、真实 EQ 和播放条。尺寸、音效与 Zen 状态持久化。EQ 操作按当前焦点路由，不能冒用播放音量或显示假频谱。
+- o/c 作品跳转与 credits 必须作用于窗口 2/3/4 的实际选中作品；Queue 清空使用 C。通过 catalog.Inspector 返回中立的链接与署名，UI 不猜测艺人 ID、不拆分 artistName 拼搜索，不把目录推断当作真实 credits。弹框异步请求可取消，关闭后迟到结果不能重开弹框或抢焦点。
 - UI 音量只调整系统默认输出。原生播放器增益保持 1，禁止重复缩放。外部系统音量变化应在轮询后反映。
 - warning/error 需可查看，通知 3 秒自动消失、不抢焦点且日志保留；主动取消旧请求不能作为 error 入库或通知。没有明确服务错误时，不把普通暂停推断为多设备冲突。
 - 日志、快照、错误信息不能含 token、cookie、私钥、CDM 密钥、授权头或签名流地址。清理整个签名 URL 的 path/query，不只 query。会话只存恢复所需的稳定元数据。
@@ -49,5 +51,6 @@
 - 使用 `gofmt`。`make build`、`make test`、`make vet` 是标准检查；原生链接要求 CGO。测试不得操作真实系统音量、默认账号或正在播放的服务；注入 mixer/browser/engine。
 - `make install` 默认安装至 `~/.local/bin`，支持 PREFIX、BINDIR 和 DESTDIR；保持 macOS/Linux 可移植，不使用 GNU 专有 install 参数。安装/卸载验证使用临时 staging 目录，不操作真实账号、服务或系统目录；卸载不得删除配置和 session。
 - 保留有价值的单元测试。回归测试围绕用户行为、边界和并发，避免照抄实现。实测脚本放临时目录，验证后清理。
+- 修改 Neovim 插件时运行 `make test-nvim`；使用真实的无声测试进程验证浮窗与终端生命周期，不使用真实音乐账号。按键映射限当前音乐 buffer，不覆盖编辑器全局终端行为；命令及参数以 argv 传递，不拼 shell。
 - 更改第三方代码前核对固定版本与许可证，保持导入可复现。`scripts/vendor_vibez.py /path/to/pinned/source` 重新导入后应用本地 patch。
 - 在提交前 review 暂存区，检查秘密/产物、macOS/Linux 构建、session 兼容、异步取消与资源释放。不要为了完成提交删除用户已有修改或重置账号。

@@ -229,6 +229,9 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		v := terminalView(fmt.Sprintf("lazymusic\nResize terminal to at least 60×16 (currently %d×%d).\n%s", w, h, label))
 		return v
 	}
+	if m.work != nil {
+		return m.workView()
+	}
 	if m.qualityDialog {
 		rows := []string{}
 		for i, q := range m.State.Source.Qualities {
@@ -253,7 +256,7 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		title := "Leave lazymusic?"
 		if m.help {
 			title = "Keyboard · Vim mode"
-			rows = []string{"j/k / ↑↓    Move through a list", "Ctrl-h/l    Left/right panel · Ctrl-j/k Down/up", "gg / G      Top / bottom    Ctrl-u/d Half page", "h/l         Parent/child   Enter Open/play", "Ctrl-f / i  Search query    S Search scope", "L           Login / switch music source", ", / .       Change category / search type", "/           Filter loaded items", "Space       Play/pause      x Stop", "[ / ]       Previous/next   < / > Seek ±10s", "= / -       System volume   b Quality", "+ / _       Cycle layouts   @ Runtime logs", "Ctrl +/-    Zen · Ctrl-Shift-arrows resize · Ctrl-= reset", "6 Sound     ,/. Pulse/Wave/EQ · h/l band j/k gain", "Player ,/.  Playback mode   r Repeat  z Shuffle", "a / A       Add to queue / play next", "p           Play album/playlist", "Queue: d remove · c clear · J/K reorder", ":seek 30    :vol 50  :pause  :play", "", "q / Esc closes help · keys.json customizes keys"}
+			rows = []string{"j/k / ↑↓    Move through a list", "Ctrl-h/l    Left/right panel · Ctrl-j/k Down/up", "gg / G      Top / bottom    Ctrl-u/d Half page", "h/l         Parent/child   Enter Open/play", "Ctrl-f / i  Search query    S Search scope", "L           Login / switch music source", ", / .       Change category / search type", "/           Filter loaded items", "Space       Play/pause      x Stop", "[ / ]       Previous/next   < / > Seek ±10s", "= / -       System volume   b Quality", "+ / _       Cycle layouts   @ Runtime logs", "Ctrl +/-    Zen · Ctrl-Shift-hjkl resize · Ctrl-= reset", "6 Sound     ,/. Pulse/Wave/EQ · h/l band j/k gain", "Player ,/.  Playback mode   r Repeat  z Shuffle", "a / A       Add to queue / play next", "p           Play album/playlist", "o / c       Album/artist links / credits (2/3/4)", "Queue: d remove · C clear · J/K reorder", ":seek 30    :vol 50  :pause  :play", "", "q / Esc closes help · keys.json customizes keys"}
 		} else {
 			rows = []string{"Your queue, position and view are saved.", "", accent.Bold(true).Render("q   Keep running in background"), "    Close the TUI; music keeps playing.", "", accent.Bold(true).Render("Q   Quit completely"), "    Stop playback and exit the background service.", "", muted.Render("Esc Return to music")}
 			if m.exiting {
@@ -377,18 +380,21 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		label = strings.ToUpper(override.Title)
 	}
 	footer := muted.Render(" " + label + "  h/l navigate · +/_ layout · @ logs · ? help · q leave")
+	if m.UI.Focus == 1 {
+		footer = muted.Render(" " + label + "  h/l open/back · o links · c credits · a queue · ? help · q leave")
+	}
 	if m.UI.Focus == 2 {
-		footer = muted.Render(" QUEUE  Enter play · d remove · J/K move · c clear · @ logs")
+		footer = muted.Render(" QUEUE  Enter play · d remove · J/K move · C clear · o links · c credits · @ logs")
 	}
 	if m.UI.Focus == 5 {
-		footer = muted.Render(" SOUND  ,/. view · Ctrl-Shift-arrows resize · Ctrl-= reset")
+		footer = muted.Render(" SOUND  ,/. view · Ctrl-Shift-hjkl resize · Ctrl-= reset")
 		if m.UI.Visualizer == 2 || m.UI.Zen {
 			footer = muted.Render(" EQUALIZER  h/l band · j/k ±1dB · Space bypass · r flat · p preset")
 		}
 	}
 	statusLine := m.notice
 	if m.UI.Focus == 3 {
-		footer = muted.Render(" PLAYER  Space play/pause · ,/. mode · b quality · =/- system volume · @ logs")
+		footer = muted.Render(" PLAYER  Space play/pause · ,/. mode · b quality · o links · c credits · @ logs")
 	}
 	if m.UI.Focus == 4 {
 		footer = muted.Render(" LOG  j/k scroll · gg/G first/latest · @ close")

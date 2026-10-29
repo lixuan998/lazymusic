@@ -54,9 +54,9 @@ func TestShiftedSymbolsKeepTheirActionsAndInputText(t *testing.T) {
 	m, _ = testModel()
 	m.UI.Focus = 0
 	before := m.navWidth()
-	m.Update(decodeKey(t, "\x1b[1;6C"))
+	m.Update(decodeKey(t, "\x1b[108;6u"))
 	if m.navWidth() <= before {
-		t.Fatal("Ctrl+Shift+Right lost resize behavior")
+		t.Fatal("Ctrl+Shift+l lost resize behavior")
 	}
 	m.Update(decodeKey(t, "\x1b[61;5u"))
 	if m.UI.NavWidth != 0 || m.UI.Layout != "full" {
@@ -82,6 +82,30 @@ func TestKeyboardNegotiationPreservesPrintableTextInEveryView(t *testing.T) {
 		flags := m.View().KeyboardEnhancements
 		if flags.ReportAllKeysAsEscapeCodes || !flags.ReportAlternateKeys {
 			t.Fatalf("%s view negotiates ambiguous shifted input", mode)
+		}
+	}
+}
+
+func TestCtrlShiftVimKeysResizeTheFocusedPanel(t *testing.T) {
+	for _, wire := range []string{"\x1b[104;6u", "\x1b[106;6u", "\x1b[107;6u", "\x1b[108:76;6u"} {
+		m, _ := testModel()
+		m.UI.Focus = 0
+		m.Update(decodeKey(t, wire))
+		if m.UI.Focus != 0 || (m.UI.NavWidth == 0 && m.UI.NavHeight == 0) {
+			t.Fatalf("Ctrl+Shift+hjkl moved focus or did not resize: %q", wire)
+		}
+	}
+}
+
+func TestTerminalControlVimKeysRemainDistinctFromBackspaceAndEnter(t *testing.T) {
+	m, _ := testModel()
+	for _, step := range []struct {
+		wire  string
+		focus int
+	}{{"\x1b[108;5u", 2}, {"\x1b[106;5u", 3}, {"\x1b[107;5u", 2}, {"\x1b[104;5u", 1}} {
+		m.Update(decodeKey(t, step.wire))
+		if m.UI.Focus != step.focus || m.prompt {
+			t.Fatalf("control key lost focus navigation: %q", step.wire)
 		}
 	}
 }

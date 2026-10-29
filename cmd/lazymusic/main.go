@@ -40,6 +40,9 @@ Run lazymusic to open or restore your session. Login lives in the content panel.
   @              Toggle Log window; Esc dismisses a runtime notification
   h/j/k/l        Navigate within a panel
   Ctrl-h/j/k/l   Focus a neighboring panel
+  Ctrl-Shift-h/j/k/l  Resize the focused panel
+  o / c          Album/artist links / credits in panels 2, 3 and 4
+  C              Clear the queue (panel 3)
   , / .         Content category, navigation animation, or player mode
   b              Choose a supported preferred audio quality
   = / -          System output volume

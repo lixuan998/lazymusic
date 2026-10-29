@@ -3,6 +3,7 @@
 /build/
 /dist/
 /coverage/
+/doc/tags
 *.test
 *.out
 *.o
