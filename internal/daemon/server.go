@@ -404,17 +404,31 @@ func (s *Service) execute(ctx context.Context, c Command) error {
 		err = e.SetShuffle(!state.ShuffleMode)
 	case "select":
 		_, q, _ := e.State()
+		if c.ExpectedQueue != "" && c.ExpectedQueue != music.QueueKey(q) {
+			return fmt.Errorf("queue changed; select the song again")
+		}
 		if c.Index < 0 || c.Index >= len(q) {
 			return fmt.Errorf("queue index out of range")
 		}
 		err = e.Replace(q, c.Index, true)
 	case "remove":
+		_, q, _ := e.State()
+		if c.ExpectedQueue != "" && c.ExpectedQueue != music.QueueKey(q) {
+			return fmt.Errorf("queue changed; select the song again")
+		}
 		err = e.Remove(c.Index)
 	case "move":
+		_, q, _ := e.State()
+		if c.ExpectedQueue != "" && c.ExpectedQueue != music.QueueKey(q) {
+			return fmt.Errorf("queue changed; pick the song again")
+		}
+		if c.Index < 0 || c.Index >= len(q) || c.To < 0 || c.To >= len(q) {
+			return fmt.Errorf("queue index out of range")
+		}
 		err = e.Move(c.Index, c.To)
 	case "clear":
 		err = e.Clear()
-	case "replace", "append", "play-next":
+	case "replace", "append", "play-next", "insert":
 		tracks := session.CleanTracks(c.Tracks)
 		if c.Query != nil {
 			s.mu.Lock()
@@ -468,7 +482,14 @@ func (s *Service) execute(ctx context.Context, c Command) error {
 			if len(q)+len(tracks) > 10000 {
 				return fmt.Errorf("queue exceeds 10000 tracks")
 			}
-			err = e.Append(tracks, c.Op == "play-next")
+			if c.Op == "insert" {
+				if c.ExpectedQueue != music.QueueKey(q) {
+					return fmt.Errorf("queue changed; choose the insertion position again")
+				}
+				err = e.Insert(tracks, c.To)
+			} else {
+				err = e.Append(tracks, c.Op == "play-next")
+			}
 		}
 	default:
 		return fmt.Errorf("unknown command %q", c.Op)

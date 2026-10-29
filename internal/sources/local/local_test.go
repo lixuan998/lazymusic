@@ -41,6 +41,26 @@ func TestFoldersSearchAndSourceIdentities(t *testing.T) {
 	}
 }
 
+func TestArtistCollectionIncludesEveryLocalAlbum(t *testing.T) {
+	root := t.TempDir()
+	for _, album := range []string{"One", "Two"} {
+		dir := filepath.Join(root, "Artist", album)
+		os.MkdirAll(dir, 0700)
+		if err := os.WriteFile(filepath.Join(dir, "Song.mp3"), []byte("fixture"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b := &Browser{Root: root}
+	p, err := b.Browse(context.Background(), catalog.Query{Page: "library", Section: "artists"})
+	if err != nil || len(p.Items) != 1 || p.Items[0].Play == nil {
+		t.Fatal("local artist has no collection query")
+	}
+	tracks, err := catalog.All(context.Background(), b, *p.Items[0].Play)
+	if err != nil || len(tracks) != 2 || tracks[0].Artist != "Artist" || tracks[1].Artist != "Artist" {
+		t.Fatalf("artist collection: %v %v", tracks, err)
+	}
+}
+
 func TestConfigureCanonicalizesSelectedFolderAndStoresPrivateConfig(t *testing.T) {
 	root := t.TempDir()
 	link := filepath.Join(t.TempDir(), "music-link")

@@ -127,6 +127,7 @@ func (m *Model) acceptEditOptions(msg editOptionsMsg) tea.Cmd {
 	}
 	if d.queue != nil {
 		d.choices = append(d.choices, editChoice{"Playback queue", "queue"})
+		d.choices = append(d.choices, editChoice{"Play next", "play-next"})
 	}
 	if d.actions.AddLibrary {
 		d.choices = append(d.choices, editChoice{"Music library", catalog.AddLibrary})
@@ -317,8 +318,11 @@ func (m *Model) editKey(msg tea.KeyPressMsg, key string) tea.Cmd {
 		switch choice.op {
 		case "cancel":
 			m.closeEdit()
-		case "queue":
+		case "queue", "play-next":
 			cmd := *d.queue
+			if choice.op == "play-next" {
+				cmd.Op = "play-next"
+			}
 			m.closeEdit()
 			return m.command(cmd)
 		case "playlist":

@@ -10,7 +10,7 @@ import (
 	"lazymusic/internal/volume"
 )
 
-const ProtocolVersion = 7
+const ProtocolVersion = 8
 
 type State struct {
 	Equalizer        music.Equalizer  `json:"equalizer"`
@@ -32,22 +32,23 @@ type State struct {
 }
 
 type Command struct {
-	EQBand   int            `json:"eq_band,omitempty"`
-	EQDelta  float64        `json:"eq_delta,omitempty"`
-	EQAction string         `json:"eq_action,omitempty"`
-	EQPreset string         `json:"eq_preset,omitempty"`
-	Quality  string         `json:"quality,omitempty"`
-	ModeStep int            `json:"mode_step,omitempty"`
-	Op       string         `json:"op"`
-	Tracks   []music.Track  `json:"tracks,omitempty"`
-	Query    *catalog.Query `json:"query,omitempty"`
-	IDs      []string       `json:"ids,omitempty"`
-	StartID  string         `json:"start_id,omitempty"`
-	Index    int            `json:"index,omitempty"`
-	To       int            `json:"to,omitempty"`
-	Position time.Duration  `json:"position_ns,omitempty"`
-	Delta    time.Duration  `json:"delta_ns,omitempty"`
-	Volume   float64        `json:"volume,omitempty"`
+	ExpectedQueue string         `json:"expected_queue,omitempty"`
+	EQBand        int            `json:"eq_band,omitempty"`
+	EQDelta       float64        `json:"eq_delta,omitempty"`
+	EQAction      string         `json:"eq_action,omitempty"`
+	EQPreset      string         `json:"eq_preset,omitempty"`
+	Quality       string         `json:"quality,omitempty"`
+	ModeStep      int            `json:"mode_step,omitempty"`
+	Op            string         `json:"op"`
+	Tracks        []music.Track  `json:"tracks,omitempty"`
+	Query         *catalog.Query `json:"query,omitempty"`
+	IDs           []string       `json:"ids,omitempty"`
+	StartID       string         `json:"start_id,omitempty"`
+	Index         int            `json:"index,omitempty"`
+	To            int            `json:"to,omitempty"`
+	Position      time.Duration  `json:"position_ns,omitempty"`
+	Delta         time.Duration  `json:"delta_ns,omitempty"`
+	Volume        float64        `json:"volume,omitempty"`
 }
 
 type UIUpdate struct {

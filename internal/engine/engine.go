@@ -23,6 +23,7 @@ type Engine interface {
 	SetRepeat(int) error
 	SetShuffle(bool) error
 	Append([]music.Track, bool) error
+	Insert([]music.Track, int) error
 	Remove(int) error
 	Move(int, int) error
 	Clear() error

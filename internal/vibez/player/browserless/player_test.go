@@ -159,10 +159,10 @@ func TestPlayTrack_TriggersOnSessionExpiredOn401(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{AppleDeveloperToken: "dev", AppleUserToken: "expired"}
-	lic := license.NewClient(cfg)
 	origTransport := http.DefaultTransport
 	http.DefaultTransport = rewriteTransport{target: srv.URL, rt: origTransport}
 	t.Cleanup(func() { http.DefaultTransport = origTransport })
+	lic := license.NewClient(cfg)
 
 	streamer, err := NewStreamServer(nil, lic)
 	if err != nil {
@@ -205,10 +205,10 @@ func TestPlayTrack_SkipsUnavailableTrackAndAdvances(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{AppleDeveloperToken: "dev", AppleUserToken: "user"}
-	lic := license.NewClient(cfg)
 	origTransport := http.DefaultTransport
 	http.DefaultTransport = rewriteTransport{target: srv.URL, rt: origTransport}
 	t.Cleanup(func() { http.DefaultTransport = origTransport })
+	lic := license.NewClient(cfg)
 
 	streamer, err := NewStreamServer(nil, lic)
 	if err != nil {

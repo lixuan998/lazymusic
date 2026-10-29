@@ -38,6 +38,10 @@ for lhs, want in pairs({ ["<Esc>"] = "\27[27u", ["<C-h>"] = "\27[104;5u", ["<C-j
   map.callback()
   assert(sent[#sent] == want, "wrong bytes passed to TUI")
 end
+local play_map = vim.fn.maparg("<C-CR>", "t", false, true)
+assert(play_map.buffer == 1 and type(play_map.callback) == "function", "missing collection-play passthrough")
+play_map.callback()
+assert(sent[#sent] == "\27[13;5u", "wrong collection-play key encoding")
 vim.api.nvim_chan_send = original_send
 
 local old_width = vim.api.nvim_win_get_config(win).width

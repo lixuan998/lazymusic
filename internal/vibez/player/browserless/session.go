@@ -113,3 +113,31 @@ func (p *Player) AppendTracks(tracks []provider.Track, next bool) {
 	p.bcast.Send(s)
 	p.scheduleNextPrefetch()
 }
+
+// InsertTracks changes queue metadata atomically, retaining the active stream,
+// current song and position even when insertion shifts its queue index.
+func (p *Player) InsertTracks(tracks []provider.Track, at int) error {
+	p.mu.Lock()
+	if at < 0 || at > len(p.queue) {
+		p.mu.Unlock()
+		return fmt.Errorf("queue insertion index out of range")
+	}
+	p.cancelPrefetchLocked()
+	if len(p.queue) > 0 && at <= p.idx {
+		p.idx += len(tracks)
+	}
+	q := make([]provider.Track, 0, len(p.queue)+len(tracks))
+	q = append(q, p.queue[:at]...)
+	q = append(q, tracks...)
+	p.queue = append(q, p.queue[at:]...)
+	if p.state.Track == nil && len(p.queue) > 0 {
+		p.idx = 0
+		t := p.queue[0]
+		p.state.Track = &t
+	}
+	s := p.state
+	p.mu.Unlock()
+	p.bcast.Send(s)
+	p.scheduleNextPrefetch()
+	return nil
+}

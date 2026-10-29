@@ -212,6 +212,11 @@ func (l *Local) Append(q []music.Track, next bool) error {
 	return l.d.Append(q, next)
 }
 func (l *Local) Move(a, b int) error { l.mu.Lock(); defer l.mu.Unlock(); return l.d.Move(a, b) }
+func (l *Local) Insert(q []music.Track, at int) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.d.Insert(q, at)
+}
 func (l *Local) Remove(i int) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()

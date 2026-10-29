@@ -79,6 +79,7 @@ local function passthrough(buf, job)
 		["<C-=>"] = "\27[61;5u",
 		["<C-+>"] = "\27[43;5u",
 		["<C-->"] = "\27[45;5u",
+		["<C-CR>"] = "\27[13;5u",
 	}
 	for lhs, bytes in pairs(keys) do
 		vim.keymap.set("t", lhs, function()

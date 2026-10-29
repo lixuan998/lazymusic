@@ -94,7 +94,7 @@
     },
     "internal/player/browserless/player_test.go": {
       "upstream_sha256": "4cec56664feb5444fb6fd1943cc7964994f5c9d0abc5a89b969b1e1ee08f7eef",
-      "imported_sha256": "9f841141c76df51a999042f5585231b3a126d90d04b8d750a903004ce2ab266b"
+      "imported_sha256": "2cb58ea818834fe70be21e0ea620290cfa767aa8d52cc381c2a7cb246d998149"
     },
     "internal/player/browserless/rawformat.go": {
       "upstream_sha256": "da8e39794916d82964548b19502230171a4609d7a9c3a79379282b123c9f9c57",
@@ -158,7 +158,7 @@
     },
     "internal/player/browserless/license/client.go": {
       "upstream_sha256": "ae8461c70dd178821c31b37c5259671ff74b729dba7e9306953d6db38af59b30",
-      "imported_sha256": "bc5bafbd25e3f8a8954abdbace437eb414388d067a4a1b7d5949c89b6d42e406"
+      "imported_sha256": "199caeeb323b418b81f85a8060618342ca150c0b721d4aba21c7cc98bd1879a2"
     },
     "internal/player/browserless/license/client_test.go": {
       "upstream_sha256": "d8b18adc32c611899af5c2157ec4169e18bc88f0410087df2ceae99bff15cd67",
@@ -187,10 +187,10 @@
   },
   "patch": {
     "path": "third_party/vibez-session.patch",
-    "sha256": "082b7de3e6ea130c9a96c417c68aaf8b1e63c7bb7031e287ec5c1da953e77c34"
+    "sha256": "6be70c2eb6c967332b28eb0b7f514990ad1a9965659e20e8c2712534b9e5549b"
   },
   "local_additions": {
-    "internal/vibez/player/browserless/session.go": "2e025a3bc46d65ae32759e31edde3facaf866da1c67d3f5b19c2c96fcfee73ec",
-    "internal/vibez/player/browserless/session_test.go": "1384a7e918e77023667e3401d4b54974d8072d65b5e3b062fec67d845adbbbe0"
+    "internal/vibez/player/browserless/session.go": "85183ebb163fd20dc83cb32e82decb21886de6182f3c74110705e26dd559c6f5",
+    "internal/vibez/player/browserless/session_test.go": "88caf6502b04b92628b51aeea7038c43fd94b10cb03f465d16a412b31cf09ce6"
   }
 }

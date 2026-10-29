@@ -56,6 +56,7 @@ type UI struct {
 	Focus          int               `json:"focus"`
 	NavIndex       int               `json:"nav_index"`
 	QueueCursor    int               `json:"queue_cursor"`
+	QueueOffset    int               `json:"queue_offset,omitempty"`
 	Filter         string            `json:"filter,omitempty"`
 	Cursors        map[string]Cursor `json:"cursors"`
 }
@@ -177,6 +178,8 @@ func (s *Snapshot) Normalize() {
 	} else {
 		s.Playback.Index = max(0, min(len(s.Playback.Queue)-1, s.Playback.Index))
 	}
+	s.UI.QueueCursor = max(0, min(len(s.Playback.Queue)-1, s.UI.QueueCursor))
+	s.UI.QueueOffset = max(0, min(s.UI.QueueCursor, s.UI.QueueOffset))
 	s.UI.EQBand = max(0, min(9, s.UI.EQBand))
 	if err := s.Playback.Equalizer.Validate(); err != nil {
 		s.Playback.Equalizer = music.Equalizer{}

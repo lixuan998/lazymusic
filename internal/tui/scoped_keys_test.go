@@ -58,6 +58,9 @@ func TestKeyConfigurationAllowsReuseOnlyAcrossDisjointScopes(t *testing.T) {
 		{`{"refresh":["a"]}`, false},
 		{`{"refresh":["space"]}`, false},
 		{`{"leave":["ctrl+q"],"refresh":["q"]}`, true},
+		{`{"queue_focus_playing":["/"]}`, true},
+		{`{"queue_focus_playing":["space"]}`, false},
+		{`{"queue_focus_playing":["d"]}`, false},
 	} {
 		dir := t.TempDir()
 		if err := os.WriteFile(filepath.Join(dir, "keys.json"), []byte(tc.config), 0600); err != nil {

@@ -45,7 +45,9 @@
 - 布局切换后焦点必须落在可见面板，Player 始终可见；日志可在所有布局用 @ 打开。页脚显示实际页面或当前焦点，不写死 NORMAL。
 - q 首次提示，第二次 q 后台，Q 退出当前来源服务；退出/切换前保存 UI，冷恢复暂停。不可让迟到请求覆盖新 revision/epoch。
 - H/J/K/L 调当前面板尺寸，Ctrl+= 恢复默认布局；Ctrl++/Ctrl+- 开关 Zen，Zen 必须同时显示律动、真实 EQ 和播放条。尺寸、音效与 Zen 状态持久化。EQ 操作按当前焦点路由，不能冒用播放音量或显示假频谱。
-- o/c 作品跳转与 credits、a 添加菜单必须作用于窗口 2/3/4 的实际选中作品；Queue 清空使用 D，d 移除当前队列项。Content 的 a 在歌单列表新建歌单，y 加入播放队列，P 下一首播放。通过 catalog.Inspector/Editor 返回中立数据，UI 不猜测艺人 ID、不拆分 artistName 拼搜索，不把目录推断当作真实 credits。弹框异步查询可取消，关闭后迟到结果不能重开弹框或抢焦点；已提交的写入必须等回复，重复 Enter 不得重发。
+- o/c 作品跳转与 credits、a 添加菜单必须作用于窗口 2/3/4 的实际选中作品；Queue 清空使用 D，d 移除当前队列项。Content 的 a 在歌单列表新建歌单，y 加入播放队列，添加菜单提供 Play next。通过 catalog.Inspector/Editor 返回中立数据，UI 不猜测艺人 ID、不拆分 artistName 拼搜索，不把目录推断当作真实 credits。弹框异步查询可取消，关闭后迟到结果不能重开弹框或抢焦点；已提交的写入必须等回复，重复 Enter 不得重发。
+- Queue 的 f 按 State.Index 定位当前曲目（含暂停），使用实际可见曲目行数居中并在首尾夹紧；重复曲目不能按 ID 猜位置。QueueOffset 与 QueueCursor 一同保存，普通导航仅在移出视口时滚动，不随播放轮询抢选中项。
+- `internal/tui/pick.go`：Content p/P 拾取单曲或集合；Queue p/P 初次拾取，之后 p 放光标后、P 放前，Esc 取消。Queue 拾取是移动，Content 是复制加入。通过 Item.Play 和 catalog.All 异步展开全部分页及嵌套集合，不能在 UI 猜平台 kind/URL；最多 10000 首/1000 页/16 层，失败不得部分放置。拾取状态不持久化，来源切换取消读请求，generation 拦截迟到消息；写入必须等结果，重复按键不得重复提交。使用 QueueKey 守卫索引，集合一次 Insert，保留真实当前曲目/流/进度，不能以 Replace 重新播放。Content Ctrl+Enter 保留整组播放，Neovim 需透传。
 - 快捷键注册在 keys.go：Global 与每个面板冲突检查独立，面板可复用字符，不能覆盖 Global。? 只显示当前面板和 Global，必须可滚动且反映自定义绑定；新增动作同时走 dispatch/help/validation。保留 Vim 导航、文本输入时的字符含义与 Ctrl-c/Esc 取消。修饰键优先按 Code/Mod 路由，普通 Shift 符号仍按 Text；覆盖 CSI-u 大写码、alternate/associated text、XTerm modifyOtherKeys 和 Neovim 的终端透传。默认 resize 使用普通大写 H/J/K/L，避免终端对 Ctrl+Shift+j 等键的拦截。不识别连按；h/j/k/l 必须立即响应，长按只在当前窗口移动。播放/暂停、停止、m 轮转模式是 Global；r/s 循环/随机只在 Queue/Player。< / > 上下曲，Ctrl+< / Ctrl+> 快退进（兼容 Ctrl+Shift+逗号/句号编码）。Content 刷新 r、Search 范围 s、EQ 归零 r。Queue 的 [/] 调整顺序；Login 从 Navigation 或 :login 进入。
 - UI 音量只调整系统默认输出。原生播放器增益保持 1，禁止重复缩放。外部系统音量变化应在轮询后反映。
 - warning/error 需可查看，通知 3 秒自动消失、不抢焦点且日志保留；主动取消旧请求不能作为 error 入库或通知。没有明确服务错误时，不把普通暂停推断为多设备冲突。

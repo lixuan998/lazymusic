@@ -130,3 +130,41 @@
  	}
  }
  
+--- a/internal/vibez/player/browserless/player_test.go
++++ b/internal/vibez/player/browserless/player_test.go
+@@ -159,10 +159,10 @@
+ 	defer srv.Close()
+ 
+ 	cfg := &config.Config{AppleDeveloperToken: "dev", AppleUserToken: "expired"}
+-	lic := license.NewClient(cfg)
+ 	origTransport := http.DefaultTransport
+ 	http.DefaultTransport = rewriteTransport{target: srv.URL, rt: origTransport}
+ 	t.Cleanup(func() { http.DefaultTransport = origTransport })
++	lic := license.NewClient(cfg)
+ 
+ 	streamer, err := NewStreamServer(nil, lic)
+ 	if err != nil {
+@@ -205,10 +205,10 @@
+ 	defer srv.Close()
+ 
+ 	cfg := &config.Config{AppleDeveloperToken: "dev", AppleUserToken: "user"}
+-	lic := license.NewClient(cfg)
+ 	origTransport := http.DefaultTransport
+ 	http.DefaultTransport = rewriteTransport{target: srv.URL, rt: origTransport}
+ 	t.Cleanup(func() { http.DefaultTransport = origTransport })
++	lic := license.NewClient(cfg)
+ 
+ 	streamer, err := NewStreamServer(nil, lic)
+ 	if err != nil {
+--- a/internal/vibez/player/browserless/license/client.go
++++ b/internal/vibez/player/browserless/license/client.go
+@@ -45,7 +45,8 @@
+ 	return &Client{
+ 		cfg: cfg,
+ 		httpClient: &http.Client{
+-			Timeout: 15 * time.Second,
++			Timeout:   15 * time.Second,
++			Transport: http.DefaultTransport,
+ 		},
+ 	}
+ }

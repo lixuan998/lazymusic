@@ -110,7 +110,7 @@ func (m *Model) mainRows(h int) []string {
 		}
 		rows = append(rows, strings.Join(tabs, "  "))
 	} else {
-		rows = append(rows, muted.Render("Enter open/play   p play collection   a add   y queue"))
+		rows = append(rows, muted.Render("Enter open/play   p/P pick   Ctrl+Enter play   y queue"))
 	}
 	if l.Page == "search" {
 		scope := m.State.Source.Name + " catalog"
@@ -155,6 +155,9 @@ func (m *Model) mainRows(h int) []string {
 				prefix = "› "
 			}
 			label := plain(item.Title)
+			if p := m.picked; p != nil && !p.fromQueue && p.origin == m.query().Key() && p.itemID == item.CursorID() {
+				label = "◆ " + label
+			}
 			if l.Page == "home" && item.Track == nil {
 				label += "  " + muted.Render("["+plain(item.Kind)+"]")
 			}
@@ -188,9 +191,8 @@ func (m *Model) mainRows(h int) []string {
 func (m *Model) queueRows(h int) []string {
 	rows := []string{}
 	q := m.State.Queue
-	cursor := max(0, min(len(q)-1, m.UI.QueueCursor))
 	available := max(1, h-2)
-	offset := max(0, cursor-available+1)
+	cursor, offset := m.queueViewport(available)
 	if len(q) == 0 {
 		rows = append(rows, muted.Render("Your queue is empty"), muted.Render("Content: y copies a song here"))
 	}
@@ -204,6 +206,9 @@ func (m *Model) queueRows(h int) []string {
 			}
 		}
 		label := prefix + plain(q[i].Title)
+		if p := m.picked; p != nil && p.fromQueue && !p.placing && p.index == i {
+			label = "◆ " + label
+		}
 		if i == cursor && m.UI.Focus == 2 {
 			label = selected.Render(label)
 		} else if i == m.State.Index {
@@ -382,10 +387,16 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	}
 	footer := muted.Render(" " + label + "  h/l navigate · +/_ layout · @ logs · ? help · q leave")
 	if m.UI.Focus == 1 {
-		footer = muted.Render(" " + label + "  h/l open/back · a add · y queue · o links · c credits · ? help")
+		footer = muted.Render(" " + label + "  h/l open/back · p/P pick · Ctrl+Enter play · y queue · a add · ? help")
 	}
 	if m.UI.Focus == 2 {
-		footer = muted.Render(" QUEUE  Enter play · a add · d remove · [/] move · D clear · o/c info · ? help")
+		footer = muted.Render(" QUEUE  p/P pick · f current · Enter play · [/] move · d remove · ? help")
+		if m.picked != nil {
+			footer = muted.Render(" QUEUE  p after · P before · Esc cancel · f current · Enter play · ? help")
+			if m.picked.placing {
+				footer = muted.Render(" QUEUE  Placing selection… · f current · ? help")
+			}
+		}
 	}
 	if m.UI.Focus == 5 {
 		footer = muted.Render(" SOUND  ,/. view · HJKL resize · Ctrl-= reset")
@@ -394,6 +405,9 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		}
 	}
 	statusLine := m.notice
+	if m.picked != nil {
+		statusLine = m.pickedStatus()
+	}
 	if m.UI.Focus == 3 {
 		footer = muted.Render(" PLAYER  Space play/pause · ,/. mode · b quality · o links · c credits · @ logs")
 	}

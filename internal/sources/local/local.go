@@ -247,11 +247,8 @@ func (b *Browser) Browse(ctx context.Context, q catalog.Query) (catalog.Page, er
 			}
 			groups[id] = true
 			open := catalog.Query{Source: music.Local, Page: "detail", Section: "songs", Kind: section, ID: id}
-			var play *catalog.Query
-			if section == "albums" {
-				v := open
-				play = &v
-			}
+			v := open
+			play := &v
 			items = append(items, catalog.Item{Source: music.Local, ID: id, Kind: section, Title: title, Subtitle: subtitle, Open: &open, Play: play})
 		}
 	}

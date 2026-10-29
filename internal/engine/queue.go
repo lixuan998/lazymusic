@@ -196,6 +196,24 @@ func (d *Queue) Remove(i int) error {
 	d.selectTrack()
 	return nil
 }
+
+func (d *Queue) Insert(tracks []music.Track, at int) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if at < 0 || at > len(d.q) {
+		return fmt.Errorf("queue insertion index out of range")
+	}
+	d.refresh()
+	if len(d.q) > 0 && at <= d.idx {
+		d.idx += len(tracks)
+	}
+	q := make([]music.Track, 0, len(d.q)+len(tracks))
+	q = append(q, d.q[:at]...)
+	q = append(q, tracks...)
+	d.q = append(q, d.q[at:]...)
+	d.selectTrack()
+	return nil
+}
 func (d *Queue) Move(from, to int) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()

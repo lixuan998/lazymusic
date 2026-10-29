@@ -28,12 +28,22 @@ func (m *Model) actionEnabled(action string) bool {
 		}
 	case "remove":
 		return m.UI.Focus == 2 || m.UI.Location.Page == "library" || m.UI.Location.Page == "playlists" || m.UI.Location.Scope == "library"
+	case "cancel_pick":
+		return m.picked != nil && !m.picked.placing
 	}
 	return true
 }
 
 func (m *Model) helpDescription(d keyDefinition) string {
 	switch d.action {
+	case "pick_after", "pick_before":
+		if m.UI.Focus == 2 && m.picked != nil {
+			if d.action == "pick_before" {
+				return "Place picked selection before cursor"
+			}
+			return "Place picked selection after cursor"
+		}
+		return "Pick selected song / collection"
 	case "add":
 		if m.UI.Focus == 1 && m.UI.Location.Page == "playlists" && m.State.Source.Capabilities.PlaylistCreate {
 			return "Create playlist"
@@ -60,6 +70,9 @@ func (m *Model) helpDescription(d keyDefinition) string {
 			return "Next EQ frequency band"
 		}
 	case "back":
+		if m.UI.Focus == 1 && m.picked != nil {
+			return "Back / Esc cancels picked selection"
+		}
 		if m.UI.Focus == 5 {
 			return "Previous EQ frequency band"
 		}

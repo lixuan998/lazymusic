@@ -58,3 +58,16 @@ func TestQueueMoveDownChangesOrderAndPreservesCurrentSong(t *testing.T) {
 		t.Fatalf("move playing song: queue=%v current=%d", p.queue, p.idx)
 	}
 }
+
+func TestInsertTracksDoesNotResetActivePlayback(t *testing.T) {
+	p := &Player{queue: []provider.Track{{ID: "a"}, {ID: "b"}}, idx: 1, curStream: "active-stream", resumePosition: 17 * time.Second, resumeTrackID: "b"}
+	p.state.Track = &p.queue[1]
+	p.state.Playing = true
+	p.state.Position = 17 * time.Second
+	if err := p.InsertTracks([]provider.Track{{ID: "x"}, {ID: "y"}}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if p.idx != 3 || p.state.Track.ID != "b" || !p.state.Playing || p.state.Position != 17*time.Second || p.curStream != "active-stream" || p.resumePosition != 17*time.Second {
+		t.Fatal("insertion restarted or interrupted the active stream")
+	}
+}

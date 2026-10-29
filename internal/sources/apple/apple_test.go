@@ -3,6 +3,7 @@ package apple
 import (
 	"context"
 	"encoding/json"
+	"lazymusic/internal/catalog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,6 +19,40 @@ func testClient(t *testing.T, fn http.HandlerFunc) *Client {
 	c := New(&config.Config{AppleDeveloperToken: "dev", AppleUserToken: "user", StoreFront: "cn"})
 	c.base = server.URL + "/v1"
 	return c
+}
+
+func TestArtistPickExpandsAllAlbumAndTrackPages(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/catalog/cn/search":
+			w.Write([]byte(`{"results":{"artists":{"data":[{"id":"artist","type":"artists","attributes":{"name":"Artist"}}]}}}`))
+		case "/v1/catalog/cn/artists/artist/albums":
+			if r.URL.Query().Get("offset") == "50" {
+				w.Write([]byte(`{"data":[{"id":"two","type":"albums"}]}`))
+			} else {
+				w.Write([]byte(`{"data":[{"id":"one","type":"albums"}],"next":"/v1/catalog/cn/artists/artist/albums?offset=50"}`))
+			}
+		case "/v1/catalog/cn/albums/one/tracks":
+			if r.URL.Query().Get("offset") == "50" {
+				w.Write([]byte(`{"data":[{"id":"b","type":"songs"}]}`))
+			} else {
+				w.Write([]byte(`{"data":[{"id":"a","type":"songs"}],"next":"/v1/catalog/cn/albums/one/tracks?offset=50"}`))
+			}
+		case "/v1/catalog/cn/albums/two/tracks":
+			w.Write([]byte(`{"data":[{"id":"c","type":"songs"}]}`))
+		default:
+			t.Errorf("unexpected collection route %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	})
+	p, err := c.Browse(context.Background(), Query{Page: "search", Section: "artists", Term: "Artist"})
+	if err != nil || len(p.Items) != 1 || p.Items[0].Play == nil {
+		t.Fatal("artist does not expose a collection query")
+	}
+	tracks, err := catalog.All(context.Background(), c, *p.Items[0].Play)
+	if err != nil || len(tracks) != 3 || tracks[0].ID != "a" || tracks[1].ID != "b" || tracks[2].ID != "c" {
+		t.Fatalf("artist collection: %v %v", tracks, err)
+	}
 }
 
 func TestSearchScopesAndWrappedPagination(t *testing.T) {

@@ -47,6 +47,9 @@ type exitMsg struct {
 }
 
 type Model struct {
+	picked            *pickedSelection
+	pickGeneration    uint64
+	pickCancel        context.CancelFunc
 	rhythm            rhythmAnimation
 	edit              *editDialog
 	editGeneration    uint64
@@ -144,7 +147,7 @@ func (m *Model) query() catalog.Query {
 
 func (m *Model) remember() {
 	m.align()
-	m.UI.QueueCursor = max(0, min(m.UI.QueueCursor, len(m.State.Queue)-1))
+	m.alignQueue()
 	items := m.visible()
 	m.cursor = max(0, min(m.cursor, len(items)-1))
 	id := ""
@@ -154,6 +157,7 @@ func (m *Model) remember() {
 	m.UI.Cursors[m.query().Key()] = session.Cursor{Index: m.cursor, Offset: m.offset, ID: id}
 }
 func (m *Model) dirty() tea.Cmd {
+	m.alignQueue()
 	if !m.restoring {
 		m.remember()
 	}
@@ -222,6 +226,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case pickResolvedMsg:
+		m.acceptPicked(msg)
+		return m, nil
+	case queuePlacedMsg:
+		return m, m.acceptPlaced(msg)
 	case rhythmFrame:
 		if msg.generation == m.rhythm.generation && m.rhythm.running {
 			m.rhythm.running = false
@@ -254,7 +263,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if !msg.s.ObservedAt.Before(m.State.ObservedAt) {
 			m.State = msg.s
 			m.acceptLogs(msg.s.Logs)
-			m.UI.QueueCursor = max(0, min(m.UI.QueueCursor, len(m.State.Queue)-1))
+			m.alignQueue()
+			m.validatePickedQueue()
 		}
 		if m.exiting {
 			return m, nil
@@ -268,7 +278,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !msg.s.ObservedAt.Before(m.State.ObservedAt) {
 				m.State = msg.s
 				m.acceptLogs(msg.s.Logs)
-				m.UI.QueueCursor = max(0, min(m.UI.QueueCursor, len(m.State.Queue)-1))
+				m.alignQueue()
+				m.validatePickedQueue()
 			}
 			m.problem = ""
 		}
@@ -385,7 +396,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if key == "esc" && m.toast != nil {
+		if key == "esc" && m.toast != nil && !(m.picked != nil && (m.UI.Focus == 1 || m.UI.Focus == 2)) {
 			m.toast = nil
 			m.problem = ""
 			return m, nil

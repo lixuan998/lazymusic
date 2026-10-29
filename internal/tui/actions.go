@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"lazymusic/internal/catalog"
 	"lazymusic/internal/daemon"
+	"lazymusic/internal/music"
 	"strconv"
 	"strings"
 	"time"
@@ -65,6 +66,12 @@ func (m *Model) normal(key string) tea.Cmd {
 	if !m.actionEnabled(action) {
 		return nil
 	}
+	if m.picked != nil && m.picked.placing && m.UI.Focus == 2 {
+		switch action {
+		case "remove", "clear", "queue_up", "queue_down", "activate":
+			return nil
+		}
+	}
 	if strings.HasPrefix(action, "focus_") && len(action) == len("focus_1") {
 		panel := action[len(action)-1]
 		if panel != '6' {
@@ -101,6 +108,10 @@ func (m *Model) normal(key string) tea.Cmd {
 	switch action {
 	case "related", "credits":
 		return m.inspectWork(action)
+	case "pick_after", "pick_before":
+		return m.pickOrPlace(action == "pick_before")
+	case "cancel_pick":
+		return m.cancelPicked()
 	case "zen":
 		m.UI.Zen = !m.UI.Zen
 		if m.UI.Zen {
@@ -223,6 +234,9 @@ func (m *Model) normal(key string) tea.Cmd {
 		}
 		return m.selectItem("replace")
 	case "back":
+		if key == "esc" && m.picked != nil {
+			return m.cancelPicked()
+		}
 		if m.UI.Focus != 1 {
 			return nil
 		}
@@ -262,9 +276,11 @@ func (m *Model) normal(key string) tea.Cmd {
 		return m.selectItem("play-next")
 	case "play_selection":
 		return m.selectItem("play-selection")
+	case "queue_focus_playing":
+		return m.focusPlayingQueue()
 	case "remove":
 		if m.UI.Focus == 2 {
-			return m.command(daemon.Command{Op: "remove", Index: m.UI.QueueCursor})
+			return m.command(daemon.Command{Op: "remove", Index: m.UI.QueueCursor, ExpectedQueue: music.QueueKey(m.State.Queue)})
 		}
 		return m.openEdit("remove")
 	case "add":
@@ -291,7 +307,7 @@ func (m *Model) normal(key string) tea.Cmd {
 			if to >= 0 && to < len(m.State.Queue) {
 				from := m.UI.QueueCursor
 				m.UI.QueueCursor = to
-				return tea.Batch(m.command(daemon.Command{Op: "move", Index: from, To: to}), m.dirty())
+				return tea.Batch(m.command(daemon.Command{Op: "move", Index: from, To: to, ExpectedQueue: music.QueueKey(m.State.Queue)}), m.dirty())
 			}
 		}
 	case "refresh":

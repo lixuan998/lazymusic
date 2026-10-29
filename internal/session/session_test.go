@@ -65,3 +65,21 @@ func TestV1MigrationKeepsAppleTrackIdentityAndView(t *testing.T) {
 		t.Fatalf("migration lost data: %+v", s)
 	}
 }
+
+func TestQueueViewportRoundTripAndBounds(t *testing.T) {
+	s := Snapshot{UI: DefaultUI(), Playback: Playback{Queue: make([]music.Track, 30)}}
+	s.UI.QueueCursor, s.UI.QueueOffset = 18, 10
+	dir := t.TempDir()
+	if err := Save(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(dir)
+	if err != nil || loaded.UI.QueueCursor != 18 || loaded.UI.QueueOffset != 10 {
+		t.Fatalf("queue viewport did not survive saving: %v", err)
+	}
+	loaded.Playback.Queue = nil
+	loaded.Normalize()
+	if loaded.UI.QueueCursor != 0 || loaded.UI.QueueOffset != 0 {
+		t.Fatal("empty queue retained an invalid viewport")
+	}
+}

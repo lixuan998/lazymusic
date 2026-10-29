@@ -266,10 +266,8 @@ func convert(r collection) Page {
 		if strings.HasSuffix(v.Type, "albums") || strings.HasSuffix(v.Type, "playlists") || strings.HasSuffix(v.Type, "artists") {
 			q := Query{Source: music.Apple, Page: "detail", Section: "songs", Kind: v.Type, ID: v.ID}
 			i.Open = &q
-			if !strings.HasSuffix(v.Type, "artists") {
-				p := q
-				i.Play = &p
-			}
+			p := q
+			i.Play = &p
 		}
 		out.Items = append(out.Items, i)
 	}

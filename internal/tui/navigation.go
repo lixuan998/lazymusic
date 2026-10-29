@@ -8,6 +8,35 @@ import (
 
 type navItem struct{ page, title string }
 
+// Keep an independent queue viewport so focusing the current song can center
+// it, and subsequent navigation scrolls only when the cursor leaves the view.
+func (m *Model) queueViewport(rows int) (cursor, offset int) {
+	rows = max(1, rows)
+	cursor = max(0, min(len(m.State.Queue)-1, m.UI.QueueCursor))
+	offset = max(0, min(max(0, len(m.State.Queue)-rows), m.UI.QueueOffset))
+	if cursor < offset {
+		offset = cursor
+	} else if cursor >= offset+rows {
+		offset = cursor - rows + 1
+	}
+	return cursor, offset
+}
+
+func (m *Model) alignQueue() {
+	m.UI.QueueCursor, m.UI.QueueOffset = m.queueViewport(max(1, m.bodyHeight()-4))
+}
+
+func (m *Model) focusPlayingQueue() tea.Cmd {
+	index := m.State.Index
+	if index < 0 || index >= len(m.State.Queue) {
+		return nil
+	}
+	rows := max(1, m.bodyHeight()-4)
+	m.UI.QueueCursor = index
+	m.UI.QueueOffset = max(0, min(index-rows/2, len(m.State.Queue)-rows))
+	return m.dirty()
+}
+
 func (m *Model) navItems() []navItem {
 	c := m.State.Source.Capabilities
 	var out []navItem

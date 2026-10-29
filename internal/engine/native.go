@@ -179,7 +179,10 @@ func (n *Native) Remove(i int) error {
 	return nil
 }
 func (n *Native) Move(a, b int) error { return n.p.MoveInQueue(a, b) }
-func (n *Native) Clear() error        { _ = n.p.Stop(); n.p.RestoreTracks(nil, 0, 0); return nil }
+func (n *Native) Insert(q []music.Track, at int) error {
+	return n.p.InsertTracks(toNativeTracks(q), at)
+}
+func (n *Native) Clear() error { _ = n.p.Stop(); n.p.RestoreTracks(nil, 0, 0); return nil }
 func (n *Native) Close() error {
 	var err error
 	n.closeOnce.Do(func() { close(n.done); _ = n.p.Stop(); err = n.p.Close() })

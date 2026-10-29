@@ -227,6 +227,7 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.client = msg.client
 		a.options.Dir, a.options.Source = msg.dir, msg.source
 		a.epoch++
+		a.music.CancelPick()
 		// Connecting is an explicit transition back to the selected source's content.
 		if msg.state.UI.NavPage == "login" || msg.state.UI.Location.Page == "login" {
 			msg.state.UI = session.DefaultUI()

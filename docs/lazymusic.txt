@@ -27,7 +27,7 @@ COMMANDS                                                 *lazymusic-commands*
 :LazyMusicHide  Hide its floating window and keep the same TUI process.
 
 <leader>mm opens the terminal in normal mode after setup. In terminal mode,
-Esc, Ctrl+h/j/k/l, Ctrl+u/d, H/J/K/L, Ctrl+= and Ctrl++/- are forwarded
+Esc, Ctrl+h/j/k/l, Ctrl+u/d, H/J/K/L, Ctrl+Enter, Ctrl+= and Ctrl++/- are forwarded
 to lazymusic using buffer-local mappings. Resize uses ordinary uppercase
 H/J/K/L; Ctrl+Shift+j is no longer a default binding. The terminal must
 distinguish control keys for focus/layout shortcuts to work.
@@ -45,11 +45,21 @@ TUI KEYS                                                   *lazymusic-keys*
 help, ? or Esc closes it. Global: H/J/K/L resize, Ctrl+h/j/k/l focus, Space
 play/pause, =/- system volume, @ log, +/_ layouts, Ctrl+= reset.
 
-Content: a add menu (a creates in Playlists), y queue, P play next, p play,
-r refresh, / filter. Search: i query, s scope. Queue: d remove, D clear,
-[/] reorder. Global: </> previous/next, Ctrl+< / Ctrl+> seek 10s, x stop,
+Content: a add menu (a creates in Playlists), y queue, Ctrl+Enter play a song or
+entire collection; Play next is in the add menu. r refresh, / filter.
+Search: i query, s scope. Queue: Enter play, d remove, D clear,
+[/] reorder, f focus the current song and center it when space permits.
+Near the queue ends, the view clamps to the first/last page. Queue scrolling
+is saved with the session. Global: </> previous/next, Ctrl+< / Ctrl+> seek 10s, x stop,
 m playback mode. Queue/Player: r repeat, s shuffle. Player: b quality.
 Sound EQ: h/l band, j/k gain, e bypass, r flat, p preset.
+Content p/P picks a song or collection. Queue p/P picks a song when nothing is
+held; then p places after the cursor song, P places before it. Esc cancels.
+Queue pickups move; Content pickups copy into Queue. Albums/playlists expand
+all track pages; artists expand all their albums and tracks in source order.
+The picked item is marked with a diamond and a status line. Collection reads
+are asynchronous and cancellable. Placement is a single guarded queue edit,
+preserves playback, and waits for its reply before allowing another placement.
 o/c opens album/artist links or credits in Content, Queue and Player.
 Login is available through Navigation or :login. Text fields keep letters
 as text; Esc/Ctrl+c cancels. The plugin has no separate music keymap.

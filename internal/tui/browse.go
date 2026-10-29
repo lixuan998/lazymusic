@@ -153,7 +153,7 @@ func (m *Model) category(next bool) tea.Cmd {
 func (m *Model) selectItem(op string) tea.Cmd {
 	if m.UI.Focus == 2 {
 		if op == "replace" || op == "play-selection" {
-			return m.command(daemon.Command{Op: "select", Index: m.UI.QueueCursor})
+			return m.command(daemon.Command{Op: "select", Index: m.UI.QueueCursor, ExpectedQueue: music.QueueKey(m.State.Queue)})
 		}
 		return nil
 	}

@@ -156,7 +156,7 @@ make uninstall BINDIR="$HOME/bin"
 1. 运行 `lazymusic`，在 Content 的 Login 页面选择 **APPLE MUSIC** 或 **LOCAL**，按 `Enter` / `l` 确认。
 2. Apple Music 按官方页面提示完成授权；LOCAL 默认使用 `~/Music`，也可在 Login 中修改目录。
 3. 按 `1` 进入 Navigation，使用 `j/k` 选择 Home、Library、Playlists 或 Search，按 `l` / `Enter` 进入内容。
-4. 歌曲按 `Enter` 播放；专辑或歌单按 `p` 播放全部，按 `y` 加入队列。
+4. 歌曲按 `Enter` 播放；专辑、歌单或艺人按 `Ctrl+Enter` 播放全部，按 `y` 加入队列。也可用 `p/P` 拾取，再到 Queue 指定位置放置。
 5. 按 `q` 打开离开提示，再按 `q` 后台播放；下次运行 `lazymusic` 恢复。在离开提示中按 `Q` 则完全退出当前来源的服务。
 
 直接指定本地音乐目录：
@@ -214,10 +214,13 @@ Ubuntu 22.04 默认的 C++ 运行库可能无法启动官方授权组件（缺�
 | 1 Navigation | `,/.` | 切换下方 Pulse / Wave / Equalizer |
 | 2 Content | `,/.`、`r`、`/` | 分类 / 搜索类型、刷新、过滤已加载内容 |
 | 2 Content · Search | `i`、`s` | 编辑搜索词、切换 catalog / library 范围 |
-| 2 Content | `p`、`y`、`P` | 播放歌曲或整个集合、复制到队列、下一首播放 |
+| 2 Content | `Ctrl+Enter`、`y` | 播放歌曲或整个集合、直接加入队列；添加菜单中 **Play next** 安排为下一首 |
+| 2 Content | `p` / `P` | 拾取单曲或完整集合，切到 Queue 后选择插入位置 |
 | 2 Content | `a`、`d` | 当前作品添加菜单、移除收藏入口；Playlists 列表中 `a` 新建歌单 |
 | 2 / 3 / 4 | `o`、`c` | 专辑 / 艺人跳转、credits |
-| 3 Queue | `Enter` / `p` | 播放选中的歌曲 |
+| 3 Queue | `Enter` | 播放选中的歌曲 |
+| 3 Queue | `p` / `P`、`Esc` | 未拾取时任一键拾取歌曲；拾取后 `p` 放到光标歌曲后、`P` 放到前，`Esc` 取消 |
+| 3 Queue | `f` | 定位当前播放曲目，并尽量居中显示；靠近队列首尾时按边界显示 |
 | 3 Queue | `r` / `s` | 调整循环 / 随机，仅 Queue / Player 可用 |
 | 3 Queue | `a`、`d`、`D` | 添加到收藏 / 歌单、移除队列项、清空队列 |
 | 3 Queue | `[` / `]` | 将选中的歌曲向上 / 下移动 |
@@ -231,6 +234,8 @@ Ubuntu 22.04 默认的 C++ 运行库可能无法启动官方授权组件（缺�
 
 同一个字母可以在不同面板复用，如 Content / Queue / Player 的 `a`、Content / Queue 的 `d`，以及 Content / Sound 的 `p`。全局 `m` 轮转播放模式；`r/s` 只在 Queue / Player 调整循环和随机。Content 刷新用 `r`，Search 范围用 `s`，EQ 归零用 `r`。尺寸调节统一用大写 `H/J/K/L`，Queue 调序用 `[/]`，Login 使用 Navigation 或 `:login`。
 
+拾取的内容会以 `◆` 和底部状态提示显示。从 Queue 拾取再放置是移动；从 Content 拾取后放置是复制加入。单曲插入一首，album / playlist 插入其全部歌曲，artist 会展开其专辑中的全部歌曲，包含分页，按来源顺序整体插入；空 Queue 直接插入。集合准备期间可继续导航，`Esc` 取消准备；提交放置后等待结果，重复按键不会重复插入。拾取状态只在当前前端保留，Queue 的滚动位置随 session 保存。若队列已经变化，放置会要求重新选择位置，避免使用旧索引修改错误的歌曲。
+
 `h/j/k/l` 单击立即生效，长按在当前窗口连续移动；没有连按切窗或输入等待。切窗仅用 `Ctrl+h/j/k/l`。输入搜索、目录和歌单名称时，普通字母保持文本含义。
 
 均衡器支持 **32 Hz–16 kHz 十段、±12 dB**，应用于实际输出并随 session 保存。
@@ -242,7 +247,7 @@ Pulse 用带间距的渐变柱形、缓降峰值和淡色倒影；Wave 用每个
 - 在 Search / Home 选中歌曲或专辑，按 `a` 选择 **Music library**，添加歌曲或整张专辑。Library / 资料库搜索返回的项目不会再显示重复收藏入口。
 - 在 Playlists 列表按 `a`，输入名称、`Enter` 新建歌单；空列表也可创建。
 - 在 Content / Queue / Player 的歌曲上按 `a` → **Choose playlist**，从可编辑歌单中选择目标。只读推荐歌单不会混入目标列表，提交前会再次检查编辑权限。
-- `y` 直接加入播放队列，`P` 安排为下一首；收藏和云端歌单写入不会打断正在播放的音乐。
+- `y` 直接加入播放队列，添加菜单的 **Play next** 安排为下一首；收藏和云端歌单写入不会打断正在播放的音乐。
 
 Apple 返回 **202 Accepted** 时会提示已受理；同步可能稍有延迟，可在 Content 按 `r` 刷新。写入请求不会自动重试，遇到连接错误应先检查 Apple Music 中的实际结果，再决定是否重试。
 
