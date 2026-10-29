@@ -51,6 +51,7 @@ type Quality struct {
 	Bitrate int    `json:"bitrate,omitempty"`
 }
 type Source struct {
+	QualityNote    string       `json:"quality_note,omitempty"`
 	Qualities      []Quality    `json:"qualities,omitempty"`
 	DefaultQuality string       `json:"default_quality,omitempty"`
 	ID             string       `json:"id"`

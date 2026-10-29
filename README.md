@@ -1,80 +1,262 @@
 # lazymusic
 
-macOS / Linux 原生音乐 TUI。布局参考 lazygit，默认 Vim 键位。支持 APPLE MUSIC 与 LOCAL，运行 `lazymusic` 即可在 Content 中选择来源、登录或恢复 session。
+**把音乐留在终端。** 一个受 [lazygit](https://github.com/jesseduffield/lazygit) 启发的音乐 TUI，支持 Apple Music 和本地音乐库，默认使用 Vim 键位。
 
-## 构建
+在同一界面浏览推荐、搜索收藏、管理队列和调整音效。关闭 TUI 后继续播放，下次打开接着听。
 
-需要 Go 1.25+、CGO 和 C/C++ 编译工具。
+[安装](#安装) · [快速上手](#快速上手) · [键位](#键位) · [配置](#配置) · [常见问题](#常见问题) · [参与开发](#参与开发)
+
+## 功能
+
+- **两种音乐来源**：Apple Music 个性化推荐、收藏、歌单和搜索；LOCAL 浏览并播放自己的音乐目录。
+- **键盘优先**：Vim 导航、面板焦点切换、可调分栏，以及 Content / Queue 精简布局。
+- **持续播放**：独立后台服务保存队列、位置和界面，重新运行即可恢复 session。
+- **播放控制**：播放、暂停、停止、切歌、快进退、随机和循环；直接调整系统默认输出音量。
+- **音效与 Zen**：十段均衡器、预设及旁路；Zen 同屏显示律动、均衡器和播放条。
+- **运行日志**：`@` 查看日志；运行错误显示 3 秒提示，不抢走当前焦点。
+
+### 音乐来源
+
+| 来源 | 浏览与搜索 | 播放与音质 |
+| --- | --- | --- |
+| APPLE MUSIC | 按平台分类的 Home 推荐、个人收藏、歌单、catalog / library 双范围搜索 | 原生播放，提供 AAC 64 / 256 kbps 偏好；需要有效订阅 |
+| LOCAL | 默认 `~/Music`，支持自定义目录、目录浏览和文件名搜索 | 直接播放原文件，格式支持取决于系统解码器 |
+
+Apple Music **仅授权时临时使用浏览器，播放不依赖浏览器**。当前授权使用固定版本、校验摘要的 Vibez 官方组件，Apple 授权页中的应用身份为 **Vibez**，依赖其授权服务。首次使用会下载授权组件和播放所需的 CDM；凭据保存在本机私有目录。
+
+当前 Apple 后端尚未验证出真正的无损 / Hi-Res，因此音质菜单只展示可兑现的 AAC 选项。LOCAL 不转码，也不读取 Apple 下载的 DRM 文件；暂不解析音乐文件的嵌入标签。详细边界与原生 MusicKit 实测见 [音质说明](docs/audio-quality.md)。
+
+## 安装
+
+目前从源码安装。需要 **Go 1.25+**、CGO 和 C/C++ 工具链；先按系统准备依赖，再执行下方安装命令。
+
+Apple Music 的授权和 CDM 组件目前支持 **macOS Apple Silicon / Intel、Linux x86_64**。LOCAL 的格式支持由对应平台的音频栈决定。
+
+### macOS
+
+安装 Xcode Command Line Tools，并按 [Go 官方说明](https://go.dev/doc/install) 安装 Go：
 
 ```sh
-make build
-./bin/lazymusic
+xcode-select --install
+go version
 ```
 
-macOS 需要 Xcode Command Line Tools，使用系统 Core Audio / AVFoundation（LOCAL 经 AVAudioEngine 与 AVAudioUnitEQ 输出）。Linux 需要 `pkg-config`、GStreamer 开发头文件及解码插件，例如 Debian/Ubuntu 的 `libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav`。系统音量使用 PipeWire 的 `wpctl` 或 PulseAudio 的 `pactl`。已有运行库但缺少头文件时，`scripts/linux-local-deps.sh` 可以准备隔离的构建依赖。
+使用系统 Core Audio / AVFoundation，无需额外安装 GStreamer。
 
-## 来源与播放
+### Ubuntu
 
-- **APPLE MUSIC**：Home 顶部按平台返回的分类显示推荐，支持歌曲、专辑、艺人、歌单、个人收藏，以及 catalog/library 双范围搜索。`Enter` 播放歌曲或打开集合，`p` 播放整个集合，`a` 加入队列，`A` 下一首播放。
-- **LOCAL**：默认 `~/Music`；可在 Login 中输入目录，或用 `--source local --music-dir PATH` 配置。支持目录浏览、按文件名搜索、按目录组织专辑/艺人；暂未解析嵌入标签。实际格式支持取决于系统解码器，不读取 Apple 下载的 DRM 文件。
-- Apple 登录暂时使用校验摘要固定的 Vibez v2.0.6 官方授权组件，授权身份是 Vibez。仅登录时临时打开浏览器；播放使用本机 CDM 和原生音频输出，无需保留浏览器。此方案依赖其授权服务以及 Apple 订阅权限。
-- Apple 原生路径提供 AAC 64 / 256 kbps 的**偏好选择**，按 `b` 设置；切换会在当前位置重新准备歌曲。实际可用流取决于服务响应，暂不提供无损/Hi-Res。LOCAL 直接播放原文件，不转码。
+安装编译工具、GStreamer 开发包、解码与音频输出插件：
 
-首次进入时列出全部来源，不会自动发起 Apple 登录。导航到 Login 只显示选项，`Enter` / `l` 进入操作。来源切换后，之前的来源暂停，保留各自队列和界面。
+```sh
+sudo apt update
+sudo apt install -y \
+  build-essential pkg-config git ca-certificates \
+  libgstreamer1.0-dev gstreamer1.0-tools \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+  gstreamer1.0-libav gstreamer1.0-pulseaudio \
+  pulseaudio-utils
+```
+
+随后按 [Go 官方说明](https://go.dev/doc/install) 安装 **Go 1.25 或更新版本**。Ubuntu 仓库里的 `golang-go` 可能低于此要求，请先检查 `go version`。
+
+| 依赖 | 用途 |
+| --- | --- |
+| `build-essential`、`pkg-config`、`libgstreamer1.0-dev` | CGO / C++ 编译与 GStreamer 链接 |
+| `gstreamer1.0-plugins-base`、`gstreamer1.0-plugins-good` | 播放管线、常用格式和音频输出 |
+| `gstreamer1.0-libav` | AAC 等音频解码 |
+| `gstreamer1.0-pulseaudio` | 通过 PulseAudio 或 PipeWire 的 PulseAudio 兼容服务输出音频 |
+| `pulseaudio-utils` | 提供 `pactl`，用于系统音量；已有 `wpctl` 时优先使用它 |
+
+在普通用户的桌面音频会话中运行。仅有 SSH 或无音频服务的服务器，需要先配置可用的输出设备和用户音频服务。相关包说明见 [GStreamer 官方安装文档](https://gstreamer.freedesktop.org/documentation/installing/on-linux.html)、[Ubuntu 解码插件](https://packages.ubuntu.com/noble/gstreamer1.0-libav)和[音量工具](https://packages.ubuntu.com/noble/pulseaudio-utils)。
+
+### 编译与安装
+
+```sh
+git clone https://github.com/lixuan998/lazymusic.git
+cd lazymusic
+make install
+```
+
+默认安装到 `~/.local/bin/lazymusic`，不需要 `sudo`。如果该目录尚未加入 `PATH`：
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+lazymusic
+```
+
+将这行 `export` 加入 `~/.zshrc` 或 `~/.bashrc`，即可在新终端中直接运行。
+
+也可以只编译，或指定安装位置：
+
+```sh
+make build                              # 产物：bin/lazymusic
+./bin/lazymusic
+make install PREFIX="$HOME/Applications/lazymusic"  # 安装到 PREFIX/bin
+make install BINDIR="$HOME/bin"          # 直接指定 binary 目录
+```
+
+`make install` 会先编译；支持 `GO`、`INSTALL`、`PREFIX`、`BINDIR` 和用于打包的 `DESTDIR` 覆盖。`DESTDIR` 仅作为安装路径的前缀，不影响运行时配置位置。
+
+### 更新与卸载
+
+退出正在运行的 TUI，并停止相应来源的后台服务后更新：
+
+```sh
+lazymusic quit
+git pull --ff-only
+make install
+lazymusic
+```
+
+如曾使用多个来源，可通过 `--source apple` / `--source local` 分别停止其服务；使用自定义状态目录时需同时传入相同的 `--state-dir`。
+
+```sh
+make uninstall
+# 自定义安装位置时，传入与安装时相同的 PREFIX 或 BINDIR
+make uninstall BINDIR="$HOME/bin"
+```
+
+卸载只删除 binary；配置、登录信息和 session 会保留。卸载前可用 `lazymusic logout` 清除当前来源的登录与 session。
+
+## 快速上手
+
+1. 运行 `lazymusic`，在 Content 的 Login 页面选择 **APPLE MUSIC** 或 **LOCAL**，按 `Enter` / `l` 确认。
+2. Apple Music 按官方页面提示完成授权；LOCAL 默认使用 `~/Music`，也可在 Login 中修改目录。
+3. 按 `1` 进入 Navigation，使用 `j/k` 选择 Home、Library、Playlists 或 Search，按 `l` / `Enter` 进入内容。
+4. 歌曲按 `Enter` 播放；专辑或歌单按 `p` 播放全部，按 `a` 加入队列。
+5. 按 `q` 打开离开提示，再按 `q` 后台播放；下次运行 `lazymusic` 恢复。在离开提示中按 `Q` 则完全退出当前来源的服务。
+
+直接指定本地音乐目录：
+
+```sh
+lazymusic --source local --music-dir "$HOME/Music"
+```
+
+切换来源会暂停之前的来源，各自保留队列和界面。后台恢复会连接仍在播放的服务；服务已退出时，恢复队列及位置并保持暂停。
 
 ## 键位
 
+按 `?` 查看内置帮助。最低终端尺寸为 **60 × 16**；较宽的终端可同时显示 Content 和 Queue。
+
+### 导航与布局
+
 | 按键 | 操作 |
 | --- | --- |
-| `j/k`、方向键 | 列表上下移动 |
-| `h/l`、`Enter` | 上级 / 下级、确认或播放 |
-| `Ctrl-h/l`、`Ctrl-j/k` | 左右、上下切换面板 |
-| `1/2/3/4/5/6`、`Tab` | Navigation / Content / Queue / Player / Log / Sound，或轮转焦点 |
-| `,` / `.` | Content 切分类；Navigation/Sound 切 Pulse/Wave/EQ；Player 切顺序/单曲循环/列表循环/随机 |
-| `Ctrl+方向键`、`Ctrl+=` | 调整当前面板尺寸、恢复默认布局 |
+| `j` / `k`、`↑` / `↓` | 列表上下移动 |
+| `h` / `l`、`Enter` | 返回上级 / 打开下级、确认或播放 |
+| `Ctrl+h/j/k/l` | 切换到左 / 下 / 上 / 右面板 |
+| `1`–`6`、`Tab` / `Shift+Tab` | Navigation / Content / Queue / Player / Log / Sound；轮转焦点 |
+| `gg` / `G`、`Ctrl+u/d` | 顶部 / 底部、半页滚动 |
+| `,` / `.` | Content 切分类；Navigation / Sound 切律动与 EQ；Player 切播放模式 |
+| `+` / `_`（`Shift+=` / `Shift+-`） | 轮换完整、Content + Player、Queue + Player 布局 |
 | `Ctrl++` / `Ctrl+-` | 开关 Zen：律动 + Equalizer + Player |
-| `+` / `_`（Shift `=` / `-`） | 轮换完整、Content+Player、Queue+Player 布局 |
-| `Space`、`x` | 播放/暂停、停止 |
-| `[` / `]`、`<` / `>` | 上一首/下一首、后退/前进 10 秒 |
+| `Ctrl+Shift+方向键` | 调整当前面板尺寸 |
+| `Ctrl+=` | 恢复默认布局 |
+| `@`、`L`、`R`、`Esc` | 日志窗口、Login、刷新、取消或返回 |
+
+### 播放与搜索
+
+| 按键 | 操作 |
+| --- | --- |
+| `Space` / `x` | 播放暂停 / 停止 |
+| `[` / `]`、`<` / `>` | 上一首 / 下一首、后退 / 前进 10 秒 |
 | `=` / `-` | 系统默认输出音量 ±5% |
-| `b`、`r`、`z` | 支持的音质偏好、循环模式、随机播放 |
-| `/`、`i` / `Ctrl-f`、`S` | 过滤已加载项、编辑搜索、切换 catalog/library |
-| `d`、`c`、`J/K`（Queue） | 移除、清空、调整顺序 |
-| `@` | 开关运行日志窗口 |
-| `Esc` | 退出输入/对话框或返回上级 |
-| Sound 的 EQ：`h/l`、`j/k`、`Space`、`r`、`p` | 频段、±1 dB、旁路、归零、切预设 |
-| `L`、`R`、`?` | Login、刷新、帮助 |
-| `q`，再按 `q` / `Q` | 后台运行 / 完全退出当前来源的服务 |
+| `b`、`r`、`z` | 音质偏好、循环模式、随机播放 |
+| `a` / `A`、`p` | 加入队列 / 下一首播放、播放整个集合 |
+| `/`、`i` / `Ctrl+f`、`S` | 过滤已加载内容、编辑搜索、切换 catalog / library 搜索 |
+| Queue：`d`、`c`、`J` / `K` | 移除、清空、调整顺序 |
+| `q` → `q` / `Q` | 后台运行 / 完全退出当前来源服务 |
 
-左侧 Navigation 与 Sound 上下分栏，Sound 可用 `,.` 切换 Pulse/Wave/Equalizer。EQ 为 32 Hz–16 kHz 十段真实音效调节，范围 ±12 dB，支持 Flat/Bass/Vocal/Treble 预设、旁路及持久化；Apple 与 LOCAL 的 macOS/Linux 输出均接入音效处理。Pulse/Wave 是随播放状态和进度变化的动画，不是音频频谱分析。播放器显示播放状态图标、模式及音质偏好。默认输出设备不提供系统音量时，界面显示不可用并在操作时提示错误。
+### 均衡器
 
-## Session、日志和配置
+按 `6` 聚焦 Sound，使用 `,.` 切到 Equalizer。支持 **32 Hz–16 kHz 十段、±12 dB** 调节，音效应用于实际输出，并随 session 保存。
 
-`q q` 关闭 TUI，服务继续播放；再次运行恢复焦点、布局、分类、列表光标、队列及播放状态。`q Q` 停止服务；再次启动保留队列和位置，以暂停状态恢复。切换音源时各来源的配置和 session 隔离。
+| 按键 | 操作 |
+| --- | --- |
+| `h` / `l` | 选择频段 |
+| `j` / `k` | 降低 / 提高 1 dB |
+| `Space`、`r`、`p` | 切换旁路、归零、轮换 Flat / Bass / Vocal / Treble 预设 |
 
-Ctrl 组合键依赖终端正确报告相应按键；应用请求增强键盘协议。窗口尺寸、分栏与 Zen 状态也会保存。
+Pulse / Wave 是随播放状态和进度变化的律动动画，未进行实时音频频谱分析。Ctrl 组合键需要终端正确上报，应用会请求增强键盘协议。
 
-配置默认保存在 macOS 的 `~/Library/Application Support/lazymusic`、Linux 的 `~/.config/lazymusic`，可用 `--state-dir PATH` 或 `LAZYMUSIC_STATE_DIR` 指定精确目录。LOCAL 默认使用 `profiles/local` 子目录，Apple 保留主配置位置。`keys.json` 可覆盖 `internal/tui/keys.go` 中定义的动作绑定。
+## 配置
 
-运行日志保存在私有目录的 `runtime.log`（500 条内存历史，文件约 1 MiB 轮转一次）。后端报告的 warning/error 显示 3 秒后自动消失，不抢焦点，并保留在 `@` 日志窗口。切换页面引起的正常请求取消不会记录为错误。Apple 多设备播放限制若通过播放器/服务返回错误，会展示原始原因的脱敏版本；未收到明确原因时不会猜测为多端冲突。服务启动诊断另见 `service.log`。
+| 位置或选项 | 含义 |
+| --- | --- |
+| macOS：`~/Library/Application Support/lazymusic` | 默认配置和私有运行目录 |
+| Linux：`$XDG_CONFIG_HOME/lazymusic`，未设置时为 `~/.config/lazymusic` | 默认配置和私有运行目录 |
+| `--state-dir PATH` / `LAZYMUSIC_STATE_DIR` | 使用指定的精确状态目录 |
+| `--music-dir PATH` | 设置 LOCAL 音乐根目录，需同时选择 `--source local` |
+| `keys.json` | 当前来源状态目录中的自定义按键 |
+
+默认情况下，Apple Music 使用主状态目录，LOCAL 使用其下的 `profiles/local`；队列、授权和 session 按来源隔离。
+
+`keys.json` 以动作名覆盖对应的默认绑定，例如为帮助添加 `F1`：
+
+```json
+{
+  "help": ["?", "f1"]
+}
+```
+
+动作名与默认值见 [keys.go](internal/tui/keys.go)。同一按键不能分配给多个动作。
+
+也可通过 CLI 查看或控制当前来源：
 
 ```sh
+lazymusic sources
 lazymusic status
 lazymusic ctl --op pause
 lazymusic ctl --op quality --quality high
 lazymusic quit
-lazymusic logout
 ```
 
-同一来源只允许一个 TUI 持有界面写入权。升级协议后，旧服务需要先执行 `lazymusic quit`，再重新进入。
+## 常见问题
 
-## 开发
+### Ubuntu 编译或播放缺少插件
+
+先确认 Go 版本与上述依赖已安装，检查 GStreamer：
 
 ```sh
-make test
-make vet
+go version
+pkg-config --modversion gstreamer-1.0
+gst-inspect-1.0 playbin3
+gst-inspect-1.0 avdec_aac
+pactl info
 ```
 
-有价值的单元测试覆盖 session、IPC 竞争、来源隔离、路径边界、分页、UI 焦点/布局/通知和音质偏好。探针、一次性实测脚本、历史报告、凭据和构建缓存不属于源码。工程结构与新平台接入规范见 [AGENTS.md](AGENTS.md)。
+缺少 `playbin3` 时检查 `gstreamer1.0-plugins-base`；缺少 `avdec_aac` 时检查 `gstreamer1.0-libav`。若 `apt` 找不到这些包，检查是否启用了 Ubuntu 的 Universe 仓库。无声音或无法调整音量时，检查当前用户的 PipeWire / PulseAudio 会话和默认输出设备，使用普通用户运行 `lazymusic`。
 
-原生 Apple 实现导入了 MIT 授权的 Vibez 后端子集，来源、摘要和本地补丁保存在 `third_party/`。CDM 及授权组件按需下载到私有运行目录，不随源码提交。
+### 在哪里看错误？
+
+按 `@` 查看运行日志。warning / error 提示会在 3 秒后自动消失，不改变焦点，日志仍保留；切换页面时的正常请求取消不会作为错误上报。私有状态目录中的 `runtime.log` 保留轮转日志，`service.log` 用于服务启动诊断。提交 issue 前请检查日志中没有个人信息或凭据。
+
+Apple 多设备播放冲突如果由服务返回明确错误，会显示脱敏后的原因；没有明确原因时，不把普通暂停猜测为多端冲突。
+
+### 为什么没有 Apple Music Hi-Res 选项？
+
+当前音源链路提供 AAC，曲目的无损标签不等于实际播放格式。macOS 原生 MusicKit 的实测也尚未得到 ALAC 解码证据。现阶段不显示未验证的音质选项；入口仍为 `b`，未来由后端能力扩展。见 [音质与验证记录](docs/audio-quality.md)。
+
+### 更新后无法连接服务？
+
+旧后台进程可能仍在运行旧协议。先退出 TUI，运行 `lazymusic quit`，再重新进入；自定义来源或状态目录应传入相同参数。同一来源同时只允许一个 TUI 持有界面写入权。
+
+## 参与开发
+
+```sh
+make build
+make test
+make vet
+make help
+```
+
+代码分为平台无关的浏览与播放合约、来源实现、后台服务和 TUI；新增平台从 backend registry 接入。工程结构、session / 安全约定及新来源接入步骤见 [AGENTS.md](AGENTS.md)。
+
+欢迎通过 [Issues](https://github.com/lixuan998/lazymusic/issues) 报告问题或讨论新来源。请附上系统、架构、终端、Go 版本和复现步骤。提交改动前运行检查；不要提交登录凭据、CDM、辅助 binary、一次性探针或构建产物。
+
+## 致谢
+
+- [lazygit](https://github.com/jesseduffield/lazygit)：面板布局与键盘交互灵感。
+- [Bubble Tea](https://github.com/charmbracelet/bubbletea) 与 [Lip Gloss](https://github.com/charmbracelet/lipgloss)：终端交互与绘制。
+- [Vibez](https://github.com/simonepelosi/vibez)：当前 Apple 授权组件与固定版本的原生播放代码子集。来源清单见 [vibez-source.json](third_party/vibez-source.json)，保留其 [MIT 许可证](third_party/VIBEZ-LICENSE)。
+- Chromium CDM 接口头文件遵循 [BSD 3-Clause](third_party/CHROMIUM-CDM-BSD-3-Clause.txt)。下载的 CDM 组件不随源码分发。

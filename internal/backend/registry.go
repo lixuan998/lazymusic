@@ -21,7 +21,7 @@ type Entry struct {
 }
 
 var entries = []Entry{
-	{Source: music.Source{ID: music.Apple, Name: "APPLE MUSIC", DefaultQuality: "high", Qualities: []music.Quality{{ID: "standard", Name: "AAC 64 kbps", Bitrate: 64}, {ID: "high", Name: "AAC 256 kbps", Bitrate: 256}}, RequiresLogin: true, Capabilities: music.Capabilities{Equalizer: true, Home: true, CatalogSearch: true, Library: true, Playlists: true}},
+	{Source: music.Source{ID: music.Apple, Name: "APPLE MUSIC", QualityNote: "This native backend receives AAC streams. Lossless / Hi-Res requires a different playback and authorization path.", DefaultQuality: "high", Qualities: []music.Quality{{ID: "standard", Name: "AAC 64 kbps", Bitrate: 64}, {ID: "high", Name: "AAC 256 kbps", Bitrate: 256}}, RequiresLogin: true, Capabilities: music.Capabilities{Equalizer: true, Home: true, CatalogSearch: true, Library: true, Playlists: true}},
 		Open: func(dir string) (catalog.Browser, []string, error) {
 			cfg, err := account.ReadConfig(dir)
 			if err != nil {

@@ -254,7 +254,7 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if key, ok := msg.(tea.KeyPressMsg); ok && a.music.LoginSelected() && a.music.UI.Focus == 1 {
 		k := key.String()
-		global := k == "ctrl+h" || k == "ctrl+l" || k == "ctrl+j" || k == "ctrl+k" || k == "tab" || k == "shift+tab" || k == "@" || k == "ctrl+up" || k == "ctrl+down" || k == "ctrl+left" || k == "ctrl+right" || k == "ctrl+=" || k == "ctrl++" || k == "ctrl+-" || k == "ctrl+_"
+		global := k == "ctrl+h" || k == "ctrl+l" || k == "ctrl+j" || k == "ctrl+k" || k == "tab" || k == "shift+tab" || k == "@" || k == "ctrl+=" || k == "ctrl++" || k == "ctrl+-" || k == "ctrl+_"
 		action := a.keys.Action(k)
 		global = global || strings.HasPrefix(action, "resize_") || action == "zen" || action == "layout_reset"
 		if a.login.phase != "folder" {

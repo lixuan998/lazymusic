@@ -19,6 +19,16 @@ var (
 	selected = lipgloss.NewStyle().Foreground(lipgloss.Color("#fff1f5")).Background(lipgloss.Color("#442939"))
 )
 
+// Keep printable input as terminal-generated text. Forcing every character to
+// CSI-u without associated text makes Shift+/ indistinguishable from '/'.
+// Basic disambiguation and alternate codes still support modified shortcuts.
+func terminalView(content string) tea.View {
+	v := tea.NewView(content)
+	v.AltScreen = true
+	v.KeyboardEnhancements.ReportAlternateKeys = true
+	return v
+}
+
 func plain(s string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
@@ -216,9 +226,7 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		if m.prompt {
 			label = "Leave lazymusic?\nq Background · Q Quit · Esc Cancel"
 		}
-		v := tea.NewView(fmt.Sprintf("lazymusic\nResize terminal to at least 60×16 (currently %d×%d).\n%s", w, h, label))
-		v.AltScreen = true
-		v.KeyboardEnhancements.ReportAllKeysAsEscapeCodes = true
+		v := terminalView(fmt.Sprintf("lazymusic\nResize terminal to at least 60×16 (currently %d×%d).\n%s", w, h, label))
 		return v
 	}
 	if m.qualityDialog {
@@ -230,10 +238,14 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 			}
 			rows = append(rows, label)
 		}
+		if note := m.State.Source.QualityNote; note != "" {
+			rows = append(rows, "")
+			for _, line := range strings.Split(ansi.Wrap(plain(note), min(60, w-4)-4, ""), "\n") {
+				rows = append(rows, muted.Render(line))
+			}
+		}
 		rows = append(rows, "", "Enter select · Esc cancel")
-		v := tea.NewView(lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box("Preferred quality", rows, min(60, w-4), len(rows)+2, true)))
-		v.AltScreen = true
-		v.KeyboardEnhancements.ReportAllKeysAsEscapeCodes = true
+		v := terminalView(lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box("Preferred quality", rows, min(60, w-4), len(rows)+2, true)))
 		return v
 	}
 	if m.prompt || m.help {
@@ -241,7 +253,7 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		title := "Leave lazymusic?"
 		if m.help {
 			title = "Keyboard · Vim mode"
-			rows = []string{"j/k / ↑↓    Move through a list", "Ctrl-h/l    Left/right panel · Ctrl-j/k Down/up", "gg / G      Top / bottom    Ctrl-u/d Half page", "h/l         Parent/child   Enter Open/play", "Ctrl-f / i  Search query    S Search scope", "L           Login / switch music source", ", / .       Change category / search type", "/           Filter loaded items", "Space       Play/pause      x Stop", "[ / ]       Previous/next   < / > Seek ±10s", "= / -       System volume   b Quality", "+ / _       Cycle layouts   @ Runtime logs", "Ctrl +/-    Zen · Ctrl-arrows resize · Ctrl-= reset", "6 Sound     ,/. Pulse/Wave/EQ · h/l band j/k gain", "Player ,/.  Playback mode   r Repeat  z Shuffle", "a / A       Add to queue / play next", "p           Play album/playlist", "Queue: d remove · c clear · J/K reorder", ":seek 30    :vol 50  :pause  :play", "", "q / Esc closes help · keys.json customizes keys"}
+			rows = []string{"j/k / ↑↓    Move through a list", "Ctrl-h/l    Left/right panel · Ctrl-j/k Down/up", "gg / G      Top / bottom    Ctrl-u/d Half page", "h/l         Parent/child   Enter Open/play", "Ctrl-f / i  Search query    S Search scope", "L           Login / switch music source", ", / .       Change category / search type", "/           Filter loaded items", "Space       Play/pause      x Stop", "[ / ]       Previous/next   < / > Seek ±10s", "= / -       System volume   b Quality", "+ / _       Cycle layouts   @ Runtime logs", "Ctrl +/-    Zen · Ctrl-Shift-arrows resize · Ctrl-= reset", "6 Sound     ,/. Pulse/Wave/EQ · h/l band j/k gain", "Player ,/.  Playback mode   r Repeat  z Shuffle", "a / A       Add to queue / play next", "p           Play album/playlist", "Queue: d remove · c clear · J/K reorder", ":seek 30    :vol 50  :pause  :play", "", "q / Esc closes help · keys.json customizes keys"}
 		} else {
 			rows = []string{"Your queue, position and view are saved.", "", accent.Bold(true).Render("q   Keep running in background"), "    Close the TUI; music keeps playing.", "", accent.Bold(true).Render("Q   Quit completely"), "    Stop playback and exit the background service.", "", muted.Render("Esc Return to music")}
 			if m.exiting {
@@ -252,9 +264,7 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 			rows = append(rows, "", accent.Render(plain(m.problem)))
 		}
 		modal := box(title, rows, min(w-4, 70), min(h-2, len(rows)+2), true)
-		v := tea.NewView(lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, modal))
-		v.AltScreen = true
-		v.KeyboardEnhancements.ReportAllKeysAsEscapeCodes = true
+		v := terminalView(lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, modal))
 		return v
 	}
 	backend := m.State.Source.Name
@@ -371,7 +381,7 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		footer = muted.Render(" QUEUE  Enter play · d remove · J/K move · c clear · @ logs")
 	}
 	if m.UI.Focus == 5 {
-		footer = muted.Render(" SOUND  ,/. view · Ctrl-arrows resize · Ctrl-= reset")
+		footer = muted.Render(" SOUND  ,/. view · Ctrl-Shift-arrows resize · Ctrl-= reset")
 		if m.UI.Visualizer == 2 || m.UI.Zen {
 			footer = muted.Render(" EQUALIZER  h/l band · j/k ±1dB · Space bypass · r flat · p preset")
 		}
@@ -397,9 +407,7 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	if m.toast != nil {
 		statusLine = accent.Bold(true).Render(" " + strings.ToUpper(m.toast.Level) + " · " + plain(m.toast.Message))
 	}
-	v := tea.NewView(strings.Join([]string{fit(header, w), body, playerBox, fit(footer, w), fit(statusLine, w)}, "\n"))
-	v.AltScreen = true
-	v.KeyboardEnhancements.ReportAllKeysAsEscapeCodes = true
+	v := terminalView(strings.Join([]string{fit(header, w), body, playerBox, fit(footer, w), fit(statusLine, w)}, "\n"))
 	return v
 }
 

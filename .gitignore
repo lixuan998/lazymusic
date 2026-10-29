@@ -1,17 +1,28 @@
+# Build and profiling output
 /bin/
-/.p0/
-/results/
-/.deps/
-.DS_Store
+/build/
+/dist/
+/coverage/
 *.test
 *.out
+*.o
+*.a
+*.dSYM/
+*.prof
+
+# Private runtime state, downloaded helpers and CDM
+/.p0/
+/results/
+/profiles/
+/state/
+/runtime/
+/cdm/
+/helpers/
 *.log
 *.log.*
-*.p8
-*.pem
-*.key
-.env
-.env.*
+*.sock
+*.pid
+daemon.lock
 credentials.json
 credential-source.json
 session.json
@@ -19,6 +30,24 @@ session.corrupt-*.json
 local.json
 source.json
 migration.json
-daemon.lock
-/cdm/
-/helpers/
+
+# Local environment, caches and scratch files
+/.deps/
+/.cache/
+/tmp/
+.env
+.env.*
+__pycache__/
+*.py[cod]
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Signing keys and credentials
+*.p8
+*.pem
+*.key
+*.p12
+*.pfx
+*.mobileprovision
