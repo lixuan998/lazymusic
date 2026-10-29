@@ -56,6 +56,9 @@ Options: --source apple|local, --music-dir PATH, --state-dir PATH
 		fmt.Println("lazymusic 0.5.0")
 		return nil
 	}
+	if command == "setup-nvim" {
+		return setupNeovim(args)
+	}
 	if command == "sources" {
 		for _, s := range backend.Sources() {
 			fmt.Printf("%s\t%s\n", s.ID, s.Name)

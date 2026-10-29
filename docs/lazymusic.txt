@@ -1,6 +1,11 @@
-*lazymusic.txt*  Music in a Neovim floating terminal
+*lazymusic.txt* *lazymusic*  Music in a Neovim floating terminal
 
 Requirements: Neovim 0.10+, macOS or Linux, and an installed lazymusic binary.
+
+make install deploys this plugin and creates/updates the lazy.nvim spec under
+~/.config/nvim/lua/plugins/lazymusic.lua (or XDG_CONFIG_HOME/nvim). Existing
+differing content is backed up. Set INSTALL_NVIM=0 to install only the binary,
+or override NVIM_CONFIG_DIR and NVIM_PLUGIN_DIR for a custom installation.
 
 SETUP                                                       *lazymusic-setup*
 >

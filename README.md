@@ -24,7 +24,7 @@
 
 Apple Music **仅授权时临时使用浏览器，播放不依赖浏览器**。当前授权使用固定版本、校验摘要的 Vibez 官方组件，Apple 授权页中的应用身份为 **Vibez**，依赖其授权服务。首次使用会下载授权组件和播放所需的 CDM；凭据保存在本机私有目录。
 
-当前 Apple 后端尚未验证出真正的无损 / Hi-Res，因此音质菜单只展示可兑现的 AAC 选项。LOCAL 不转码，也不读取 Apple 下载的 DRM 文件；暂不解析音乐文件的嵌入标签。详细边界与原生 MusicKit 实测见 [音质说明](docs/audio-quality.md)。
+当前 Apple 后端尚未验证出真正的无损 / Hi-Res，因此音质菜单只展示可兑现的 AAC 选项。LOCAL 不转码，也不读取 Apple 下载的 DRM 文件；暂不解析音乐文件的嵌入标签。
 
 ## 安装
 
@@ -77,7 +77,9 @@ cd lazymusic
 make install
 ```
 
-默认安装到 `~/.local/bin/lazymusic`，不需要 `sudo`。如果该目录尚未加入 `PATH`：
+默认安装到 `~/.local/bin/lazymusic`，不需要 `sudo`。同时会安装 Lua 插件到 `~/.local/share/lazymusic/nvim`，并创建或更新 `~/.config/nvim/lua/plugins/lazymusic.lua`（设置 `XDG_CONFIG_HOME` 时使用相应目录）。配置指向已安装的插件与 binary，重启使用 lazy.nvim / LazyVim 的 Neovim 后即可用 `<leader>mm` 打开。
+
+已有配置内容不同时，会先保存同目录下的 `lazymusic.lua.bak-*` 备份；重复安装相同内容不会产生多余备份。如果 binary 目录尚未加入 `PATH`：
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
@@ -93,9 +95,11 @@ make build                              # 产物：bin/lazymusic
 ./bin/lazymusic
 make install PREFIX="$HOME/Applications/lazymusic"  # 安装到 PREFIX/bin
 make install BINDIR="$HOME/bin"          # 直接指定 binary 目录
+make install NVIM_CONFIG_DIR="$HOME/.config/nvim-work" # 指定 Neovim 配置目录
+make install INSTALL_NVIM=0              # 仅安装 binary
 ```
 
-`make install` 会先编译；支持 `GO`、`INSTALL`、`PREFIX`、`BINDIR` 和用于打包的 `DESTDIR` 覆盖。`DESTDIR` 仅作为安装路径的前缀，不影响运行时配置位置。
+`make install` 会先编译；支持 `GO`、`INSTALL`、`PREFIX`、`BINDIR`、`NVIM_CONFIG_DIR`、`NVIM_PLUGIN_DIR` 和用于打包的 `DESTDIR` 覆盖。`DESTDIR` 同时用于 binary、插件与配置文件的 staging；生成的配置仅引用最终安装路径。
 
 ### 更新与卸载
 
@@ -116,7 +120,7 @@ make uninstall
 make uninstall BINDIR="$HOME/bin"
 ```
 
-卸载只删除 binary；配置、登录信息和 session 会保留。卸载前可用 `lazymusic logout` 清除当前来源的登录与 session。
+卸载只删除 binary；Neovim 配置与 Lua 插件、登录信息和 session 会保留。卸载前可用 `lazymusic logout` 清除当前来源的登录与 session。
 
 ## 快速上手
 
@@ -133,6 +137,12 @@ lazymusic --source local --music-dir "$HOME/Music"
 ```
 
 切换来源会暂停之前的来源，各自保留队列和界面。后台恢复会连接仍在播放的服务；服务已退出时，恢复队列及位置并保持暂停。
+
+### WSL 或无法自动打开浏览器
+
+Apple 登录仍会尝试自动打开浏览器。若没有弹出窗口，Login 面板会在授权服务准备好后显示完整的手动链接（包括本次授权的 `state` 参数）。将链接复制到浏览器，保持 lazymusic 运行，完成 Apple 官方页面的授权即可。
+
+在 WSL 中，可将该链接打开在 Windows 浏览器中；这依赖 Windows 到 WSL 的 localhost 转发，参见 [Microsoft WSL 网络说明](https://learn.microsoft.com/en-us/windows/wsl/networking)。手动链接仅在当前登录过程中显示，取消、完成或超时后失效，不写入日志或 session。通过 SSH 在其他机器上登录时，需要先将相同的 localhost 端口转发到浏览器所在机器。
 
 ## 键位
 
@@ -188,7 +198,9 @@ Pulse / Wave 是随播放状态和进度变化的律动动画，未进行实时�
 
 ## Neovim
 
-仓库内包含 Neovim 0.10+ 插件，用 `<leader>mm` 在浮动终端打开 lazymusic。先运行 `make install`，再将以下配置加入 `lazy.nvim` 插件列表；LazyVim 可保存为 `lua/plugins/lazymusic.lua`：
+仓库内包含 Neovim 0.10+ 插件，用 `<leader>mm` 在浮动终端打开 lazymusic。`make install` 会自动部署本地插件并生成 lazy.nvim 配置，无需手动复制，也不需要插件管理器另外下载仓库。
+
+如果安装时使用 `INSTALL_NVIM=0` 跳过自动接入，也可以将以下配置加入 `lazy.nvim` 插件列表；LazyVim 可保存为 `lua/plugins/lazymusic.lua`，通过 Git 管理插件版本：
 
 ```lua
 return {
@@ -214,7 +226,7 @@ return {
 
 重复打开会复用已有终端；`:LazyMusicHide` 只隐藏浮窗。TUI 内 `q q` 会关闭浮窗并保持后台播放，`q Q` 停止当前来源服务；再次 `<leader>mm` 恢复 session。`Esc`、面板焦点和窗口调节键使用当前 buffer 的透传映射，不影响其他终端。
 
-需要临时回到 Neovim 普通模式时，先按 `Ctrl+反斜杠`，再按 `Ctrl+n`。完整配置见 `:help lazymusic` 或 [插件帮助](doc/lazymusic.txt)。
+需要临时回到 Neovim 普通模式时，先按 `Ctrl+反斜杠`，再按 `Ctrl+n`。自动安装后可使用 `:help lazymusic`，也可阅读 [插件帮助](docs/lazymusic.txt)。
 
 ## 配置
 
@@ -272,7 +284,7 @@ Apple 多设备播放冲突如果由服务返回明确错误，会显示脱敏�
 
 ### 为什么没有 Apple Music Hi-Res 选项？
 
-当前音源链路提供 AAC，曲目的无损标签不等于实际播放格式。macOS 原生 MusicKit 的实测也尚未得到 ALAC 解码证据。现阶段不显示未验证的音质选项；入口仍为 `b`，未来由后端能力扩展。见 [音质与验证记录](docs/audio-quality.md)。
+当前音源链路提供 AAC，曲目的无损标签不等于实际播放格式。macOS 原生 MusicKit 的实测也尚未得到 ALAC 解码证据。现阶段不显示未验证的音质选项；入口仍为 `b`，未来由后端能力扩展。
 
 ### 更新后无法连接服务？
 

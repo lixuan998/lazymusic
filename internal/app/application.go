@@ -126,7 +126,14 @@ func RunApplication(ctx context.Context, opts LaunchOptions) error {
 	return err
 }
 func (a *application) resetLogin() {
-	a.login = &loginPage{ctx: a.ctx, opts: a.options, entries: backend.Sources(), phase: "sources", allowBack: a.client != nil, width: a.width, height: a.height}
+	var generation uint64
+	if a.login != nil {
+		generation = a.login.generation + 1
+		if a.login.cancel != nil {
+			a.login.cancel()
+		}
+	}
+	a.login = &loginPage{ctx: a.ctx, opts: a.options, entries: backend.Sources(), phase: "sources", allowBack: a.client != nil, width: a.width, height: a.height, generation: generation}
 }
 func (a *application) Init() tea.Cmd { return wrapCommand(a.music.Init(), a.epoch) }
 func (a *application) musicUpdate(msg tea.Msg) tea.Cmd {
@@ -241,6 +248,9 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = tea.Batch(cmd, wrapCommand(a.music.NotificationTimer(), a.epoch))
 		}
 		return a, cmd
+	case loginProgress:
+		_, cmd := a.login.Update(msg)
+		return a, cmd
 	}
 	if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "esc" && a.music.HasToast() {
 		return a, a.musicUpdate(msg)
@@ -290,7 +300,7 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (a *application) View() tea.View {
 	if a.music.LoginSelected() {
-		return a.music.ViewWithContent(&tui.ContentPanel{Title: "Login", Rows: a.login.Rows()})
+		return a.music.ViewWithContent(&tui.ContentPanel{Title: "Login", Rows: a.login.RowsForWidth(a.music.ContentWidth())})
 	}
 	return a.music.View()
 }

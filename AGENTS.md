@@ -6,6 +6,7 @@
 
 - `cmd/lazymusic/`：CLI 解析、信号与启动入口；不包含平台业务或绘制代码。
 - `internal/app/`：单个 Bubble Tea application、内嵌 Login、来源配置与授权组件安装。异步消息使用来源 epoch，防止切换来源后旧响应污染新页面。
+- `internal/nvimconfig/`：为已安装的 Lua 插件生成 lazy.nvim 配置，幂等更新、原子替换并备份不同的旧内容；运行路径不得包含 DESTDIR。
 - `internal/music/`：平台无关的 Source、Capabilities、Quality、Track、Query、State；曲目标识是 `(Source, ID)`。
 - `internal/catalog/`：Browser、Page、Item、Tab 合约及有界集合分页。Item.Open/Play 为后端提供的 opaque Query。
 - `internal/sources/apple/`、`internal/sources/local/`：浏览、搜索、推荐与目录配置。任何服务 URL/资源 ID 解释均放在对应后端。
@@ -18,7 +19,7 @@
 - `internal/tui/`：`model.go` 接收异步状态，`actions.go` 分发按键，`browse.go` 管理查询/分类，`navigation.go` 管理层级与焦点，`panels.go` 管理布局/日志/动画，`sound.go` 管理分栏尺寸、Zen 和均衡器，`view.go` 渲染，`keys.go` 定义动作绑定。
 - `internal/vibez/`：固定版本的第三方原生播放子集。保留来源与许可证；变更需同步 `third_party/vibez-session.patch`、摘要或 local_additions。
 - `scripts/`：仅保留依赖准备和第三方代码导入等维护工具。不要加入一次性实测脚本、账号探针、构建产物或测试报告。
-- `lua/lazymusic/`：Neovim 浮动终端插件，可通过 lazy.nvim 加载；`doc/lazymusic.txt` 为帮助，`tests/nvim_spec.lua` 为独立 headless 回归测试。插件只启动/复用 TUI，不另建播放或授权逻辑。
+- `lua/lazymusic/`：Neovim 浮动终端插件，可通过 lazy.nvim 加载；`docs/lazymusic.txt` 为帮助，安装时部署到插件的 doc/；`tests/nvim_spec.lua` 为独立 headless 回归测试。插件只启动/复用 TUI，不另建播放或授权逻辑。
 
 ## 增加音乐平台
 
@@ -34,6 +35,7 @@
 
 - macOS 的无损 / Hi-Res 只能由经实际 ALAC 播放验证的后端声明到现有音质选择列表中，不能仅按 GOOS 或曲目 audioVariants 开放；Linux 未验证的格式不得出现。入口、布局和键位保持共用，平台差异只在后端能力与实现。
 - 整个应用只有一个 terminal program。Login 是 Content 子页面；移动到 Login 不得自动授权、启动外部程序或停止音乐。Enter/l 才执行选择。
+- Apple 授权保留自动浏览器打开，并从官方 helper 输出中只提取预期端口的 loopback /login URL 显示手动入口。URL 的 state 参数仅在当前 Login 过程中使用，不得写日志或 session；取消/完成后清除，迟到事件按 generation 与请求流隔离。
 - 普通字符按终端生成的文本处理，保留基本键位消歧和备用字符码；不要在缺少关联文本时强制所有字符用 CSI-u 上报，否则 Shift+/ 等符号会退化成原键。所有页面与弹窗共用同一键盘协议配置。
 - h/l 在面板内进退，Ctrl-h/j/k/l 切焦点。`,.` 必须按当前焦点分发：Navigation 动画、Content 分类、Player 播放模式；Sound 提供 Pulse/Wave/真实 EQ。Queue/Log 不得隐式操作旧 Content。
 - 布局切换后焦点必须落在可见面板，Player 始终可见；日志可在所有布局用 @ 打开。页脚显示实际页面或当前焦点，不写死 NORMAL。
@@ -49,7 +51,7 @@
 ## 验证与改动规范
 
 - 使用 `gofmt`。`make build`、`make test`、`make vet` 是标准检查；原生链接要求 CGO。测试不得操作真实系统音量、默认账号或正在播放的服务；注入 mixer/browser/engine。
-- `make install` 默认安装至 `~/.local/bin`，支持 PREFIX、BINDIR 和 DESTDIR；保持 macOS/Linux 可移植，不使用 GNU 专有 install 参数。安装/卸载验证使用临时 staging 目录，不操作真实账号、服务或系统目录；卸载不得删除配置和 session。
+- `make install` 默认安装至 `~/.local/bin`，同时部署 Lua 插件并更新 Neovim 的 lua/plugins/lazymusic.lua；支持 PREFIX、BINDIR、NVIM_CONFIG_DIR、NVIM_PLUGIN_DIR、DESTDIR 和 INSTALL_NVIM=0。保持 macOS/Linux 可移植，不使用 GNU 专有 install 参数。安装/卸载验证使用临时 staging 目录，不操作真实账号、服务或系统目录；卸载不得删除配置和 session。用户明确要求真实安装时，验证后再执行。
 - 保留有价值的单元测试。回归测试围绕用户行为、边界和并发，避免照抄实现。实测脚本放临时目录，验证后清理。
 - 修改 Neovim 插件时运行 `make test-nvim`；使用真实的无声测试进程验证浮窗与终端生命周期，不使用真实音乐账号。按键映射限当前音乐 buffer，不覆盖编辑器全局终端行为；命令及参数以 argv 传递，不拼 shell。
 - 更改第三方代码前核对固定版本与许可证，保持导入可复现。`scripts/vendor_vibez.py /path/to/pinned/source` 重新导入后应用本地 patch。

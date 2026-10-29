@@ -28,6 +28,16 @@ func (m *Model) Editing() bool    { return m.mode != "" }
 func (m *Model) HasModal() bool   { return m.prompt || m.help || m.qualityDialog || m.work != nil }
 func (m *Model) Size() (int, int) { return m.width, m.height }
 func (m *Model) SetSize(w, h int) { m.width, m.height = w, h }
+func (m *Model) ContentWidth() int {
+	w := m.width
+	if m.UI.Layout != "content" {
+		w -= m.navWidth()
+		if m.width >= 100 {
+			w -= m.queueWidth()
+		}
+	}
+	return max(1, w-4)
+}
 func (m *Model) cycleLayout(next bool) tea.Cmd {
 	modes := []string{"full", "content", "queue"}
 	i := 0

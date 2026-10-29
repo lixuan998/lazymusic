@@ -15,14 +15,21 @@ import (
 // endpoint/client key are never extracted, copied, or embedded in lazymusic.
 // Developer/user tokens remain associated with the Vibez application identity.
 func LoginViaVibez(ctx context.Context, stateDir, helper string, port int) error {
-	return loginViaVibez(ctx, stateDir, helper, port, false)
+	return loginViaVibez(ctx, stateDir, helper, port, false, nil)
 }
 
 // LoginViaVibezQuiet keeps helper output out of the in-app Login screen.
 func LoginViaVibezQuiet(ctx context.Context, stateDir, helper string, port int) error {
-	return loginViaVibez(ctx, stateDir, helper, port, true)
+	return loginViaVibez(ctx, stateDir, helper, port, true, nil)
 }
-func loginViaVibez(ctx context.Context, stateDir, helper string, port int, quiet bool) error {
+
+// LoginViaVibezProgress reports only the helper's validated local login URL.
+// Its state parameter is transient: callers must not log or persist the URL.
+func LoginViaVibezProgress(ctx context.Context, stateDir, helper string, port int, onURL func(string)) error {
+	return loginViaVibez(ctx, stateDir, helper, port, true, onURL)
+}
+
+func loginViaVibez(ctx context.Context, stateDir, helper string, port int, quiet bool, onURL func(string)) error {
 	helper, err := exec.LookPath(helper)
 	if err != nil {
 		return fmt.Errorf("Vibez login helper: %w", err)
@@ -54,6 +61,9 @@ func loginViaVibez(ctx context.Context, stateDir, helper string, port int, quiet
 		cmd.Stdin = nil
 		cmd.Stdout = io.Discard
 		cmd.Stderr = io.Discard
+		if onURL != nil {
+			cmd.Stdout = &loginURLWriter{port: port, onURL: onURL}
+		}
 	}
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("Vibez authorization helper: %w", err)

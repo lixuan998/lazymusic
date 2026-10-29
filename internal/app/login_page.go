@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 type LaunchOptions struct {
@@ -28,7 +30,15 @@ type loginDone struct {
 	dir, source string
 	err         error
 }
+type loginProgress struct {
+	generation uint64
+	stream     <-chan loginProgress
+	status     string
+	url        string
+}
 type loginPage struct {
+	progress                          <-chan loginProgress
+	loginURL, status                  string
 	allowBack, back                   bool
 	ctx                               context.Context
 	opts                              LaunchOptions
@@ -95,13 +105,28 @@ func (m *loginPage) choose() tea.Cmd {
 func (m *loginPage) connect(force bool) tea.Cmd {
 	m.busy = true
 	m.problem = ""
+	m.loginURL, m.status = "", "Preparing sign-in…"
 	m.generation++
 	generation := m.generation
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.cancel = cancel
 	source, dir, root, wasReady := m.source, m.dir, m.root, m.ready
-	return func() tea.Msg {
+	var events chan loginProgress
+	if source == music.Apple {
+		events = make(chan loginProgress, 8)
+	}
+	m.progress = events
+	report := func(status, url string) {
+		select {
+		case events <- loginProgress{generation, events, status, url}:
+		case <-ctx.Done():
+		}
+	}
+	work := func() tea.Msg {
 		defer cancel()
+		if events != nil {
+			defer close(events)
+		}
 		changed := force || !wasReady
 		finish := func(err error) tea.Msg { return loginDone{generation, dir, source, err} }
 		if source == music.Local {
@@ -117,10 +142,13 @@ func (m *loginPage) connect(force bool) tea.Cmd {
 				if err != nil {
 					return finish(err)
 				}
-				if err = account.LoginViaVibezQuiet(ctx, dir, helper, 38747); err != nil {
+				if err = account.LoginViaVibezProgress(ctx, dir, helper, 38747, func(url string) {
+					report("Complete Apple authorization in your browser.", url)
+				}); err != nil {
 					return finish(fmt.Errorf("Apple sign-in did not complete; try again"))
 				}
 			}
+			report("Verifying account and preparing playback…", "")
 			cfg, err := account.ReadConfig(dir)
 			if err != nil {
 				return finish(err)
@@ -160,9 +188,28 @@ func (m *loginPage) connect(force bool) tea.Cmd {
 
 		return finish(nil)
 	}
+	if events != nil {
+		return tea.Batch(work, waitLoginProgress(events))
+	}
+	return work
+}
+
+func waitLoginProgress(events <-chan loginProgress) tea.Cmd {
+	return func() tea.Msg {
+		if update, ok := <-events; ok {
+			return update
+		}
+		return nil
+	}
 }
 func (m *loginPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case loginProgress:
+		if msg.generation != m.generation || msg.stream != m.progress || !m.busy {
+			return m, nil
+		}
+		m.status, m.loginURL = msg.status, msg.url
+		return m, waitLoginProgress(m.progress)
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case loginDone:
@@ -170,6 +217,7 @@ func (m *loginPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.busy = false
+		m.loginURL = ""
 		if msg.err != nil {
 			m.problem = msg.err.Error()
 			return m, nil
@@ -189,6 +237,7 @@ func (m *loginPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.generation++
 			}
 			m.busy = false
+			m.loginURL = ""
 			m.problem = ""
 			if m.phase == "sources" {
 				m.back = m.allowBack
@@ -243,6 +292,10 @@ func (m *loginPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 func (m *loginPage) Rows() []string {
+	return m.RowsForWidth(max(20, m.width-4))
+}
+
+func (m *loginPage) RowsForWidth(width int) []string {
 	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5c78"))
 	muted := lipgloss.NewStyle().Foreground(lipgloss.Color("#9293a4"))
 	lines := []string{accent.Bold(true).Render("Login"), ""}
@@ -270,6 +323,20 @@ func (m *loginPage) Rows() []string {
 			lines = append(lines, "LOCAL", "Music folder", "", accent.Render(m.root+"▏"), "", muted.Render("Enter open folder · Ctrl-u clear · Esc back"))
 		case "account":
 			lines = append(lines, "APPLE MUSIC", "")
+			if m.busy {
+				lines = append(lines, accent.Render(m.status), "")
+				if m.loginURL != "" {
+					lines = append(lines, "Browser did not open? Open this link:", "")
+					for _, line := range strings.Split(ansi.Hardwrap(m.loginURL, max(1, width), false), "\n") {
+						lines = append(lines, ansi.SetHyperlink(m.loginURL)+line+ansi.ResetHyperlink())
+					}
+					lines = append(lines, "", muted.Render("WSL: use your Windows browser."), muted.Render("Keep lazymusic running until authorization finishes."))
+				} else {
+					lines = append(lines, muted.Render("A manual link appears here when sign-in is ready."))
+				}
+				lines = append(lines, "", muted.Render("Esc cancel"))
+				break
+			}
 			if m.ready {
 				lines = append(lines, "An Apple Music account is connected.", "", "Enter continue · r sign in again")
 			} else {
@@ -278,7 +345,7 @@ func (m *loginPage) Rows() []string {
 			lines = append(lines, "", muted.Render("Sign in on the Apple page; close it when complete."), muted.Render("Playback runs natively after authorization."), muted.Render("Current authorization identity: Vibez"), "", muted.Render("Esc back"))
 		}
 	}
-	if m.busy {
+	if m.busy && m.phase != "account" {
 		label := "Opening music folder…"
 		if m.source == music.Apple {
 			label = "Connecting… complete Apple authorization in your browser."
