@@ -153,8 +153,12 @@ func (m *Model) zenBody(w, h int) string {
 		kind = 0
 	}
 	rhythm := m.rhythmRows(kind, w-eqW-4, h-2)
+	name := "Pulse"
+	if kind == 1 {
+		name = "Wave"
+	}
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		box("Rhythm", rhythm, w-eqW, h, false),
+		box("Rhythm · "+name, rhythm, w-eqW, h, false),
 		box("6 Equalizer", m.equalizerRows(eqW-4, h-2), eqW, h, m.UI.Focus == 5))
 }
 func (m *Model) resize(action string) tea.Cmd {

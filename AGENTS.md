@@ -17,6 +17,7 @@
 - `internal/session/`：版本化 JSON 快照、迁移、原子保存和可持久化字段清理。
 - `internal/eventlog/`：有界历史、脱敏、持久化与轮转。
 - `internal/tui/`：`model.go` 接收异步状态，`actions.go` 分发按键，`browse.go` 管理查询/分类，`navigation.go` 管理层级与焦点，`panels.go` 管理布局/日志/动画，`sound.go` 管理尺寸、Zen 和均衡器，`edit.go` 管理添加/创建与歌单选择流程，`view.go` 渲染，`keys.go` 定义 Global/面板绑定，`help.go` 从同一注册表生成上下文帮助，`keyboard.go` 区分修饰键与文本。
+- `internal/tui/animation.go`：独立前端 30 FPS 时钟、播放/暂停与样式过渡、旧帧取消；`rhythm.go`：Pulse/Wave 的纯字符网格渲染。动画状态不持久化，不调用 IPC 或 dirty；隐藏、弹窗遮盖及暂停收束后停帧。不能以轮询进度驱动逐帧时间；没有 PCM 数据时不得称为实时频谱。
 - `internal/vibez/`：固定版本的第三方原生播放子集。保留来源与许可证；变更需同步 `third_party/vibez-session.patch`、摘要或 local_additions。
 - `scripts/`：仅保留依赖准备和第三方代码导入等维护工具。不要加入一次性实测脚本、账号探针、构建产物或测试报告。
 - `lua/lazymusic/`：Neovim 浮动终端插件，可通过 lazy.nvim 加载；`docs/lazymusic.txt` 为帮助，安装时部署到插件的 doc/；`tests/nvim_spec.lua` 为独立 headless 回归测试。插件只启动/复用 TUI，不另建播放或授权逻辑。

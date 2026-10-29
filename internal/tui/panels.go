@@ -4,7 +4,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"fmt"
 	"lazymusic/internal/eventlog"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -132,54 +131,6 @@ func (m *Model) logRows(h int) []string {
 	}
 	if len(rows) == 0 {
 		rows = []string{muted.Render("No runtime messages")}
-	}
-	return rows
-}
-func (m *Model) visualizerRows(width, height int) []string {
-	return m.rhythmRows(m.UI.Visualizer, width, height)
-}
-func (m *Model) rhythmRows(mode, width, height int) []string {
-	if height < 4 {
-		return nil
-	}
-	height = max(3, height)
-	rows := make([]string, height)
-	phase := m.State.Playback.Position.Seconds()
-	playing := m.State.Playback.Playing
-	if mode == 0 {
-		for row := 0; row < height-1; row++ {
-			var b strings.Builder
-			for col := 0; col < width; col++ {
-				level := 0.0
-				if playing {
-					level = (math.Sin(phase*3+float64(col)*.7) + math.Sin(phase*1.2+float64(col)*.27) + 2) / 4
-				}
-				if int(level*float64(height-1)) >= height-1-row {
-					b.WriteString("▆")
-				} else {
-					b.WriteString(" ")
-				}
-			}
-			rows[row] = accent.Render(b.String())
-		}
-		rows[height-1] = muted.Render("Pulse")
-	} else {
-		for row := 0; row < height-1; row++ {
-			var b strings.Builder
-			for col := 0; col < width; col++ {
-				point := (height - 2) / 2
-				if playing {
-					point = int((math.Sin(float64(col)*.4-phase*4) + 1) / 2 * float64(height-2))
-				}
-				if row == point {
-					b.WriteString("•")
-				} else {
-					b.WriteString(" ")
-				}
-			}
-			rows[row] = accent.Render(b.String())
-		}
-		rows[height-1] = muted.Render("Wave")
 	}
 	return rows
 }

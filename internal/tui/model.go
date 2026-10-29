@@ -47,6 +47,7 @@ type exitMsg struct {
 }
 
 type Model struct {
+	rhythm            rhythmAnimation
 	edit              *editDialog
 	editGeneration    uint64
 	editCancel        context.CancelFunc
@@ -133,7 +134,9 @@ func New(ctx context.Context, api API, state daemon.State, keys Keys) *Model {
 	return m
 }
 
-func (m *Model) Init() tea.Cmd { return tea.Batch(m.poll(), m.fetch(true, false)) }
+func (m *Model) Init() tea.Cmd {
+	return tea.Batch(m.poll(), m.fetch(true, false), m.syncRhythm(time.Now()))
+}
 func (m *Model) query() catalog.Query {
 	l := m.UI.Location
 	return catalog.Query{Source: m.State.Source.ID, Page: l.Page, Section: l.Section, Scope: l.Scope, Term: l.Query, Kind: l.Kind, ID: l.ID}
@@ -211,6 +214,7 @@ func (m *Model) leave(action string) tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	before := m.toastVersion
 	_, cmd := m.update(msg)
+	cmd = tea.Batch(cmd, m.syncRhythm(time.Now()))
 	if before != m.toastVersion {
 		cmd = tea.Batch(cmd, m.NotificationTimer())
 	}
@@ -218,6 +222,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case rhythmFrame:
+		if msg.generation == m.rhythm.generation && m.rhythm.running {
+			m.rhythm.running = false
+			m.rhythm.advance(msg.at, m.rhythmPlaying())
+		}
+		return m, nil
 	case editOptionsMsg:
 		return m, m.acceptEditOptions(msg)
 	case playlistPageMsg:
