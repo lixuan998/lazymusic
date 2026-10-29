@@ -214,7 +214,7 @@ return {
 
 重复打开会复用已有终端；`:LazyMusicHide` 只隐藏浮窗。TUI 内 `q q` 会关闭浮窗并保持后台播放，`q Q` 停止当前来源服务；再次 `<leader>mm` 恢复 session。`Esc`、面板焦点和窗口调节键使用当前 buffer 的透传映射，不影响其他终端。
 
-需要临时回到 Neovim 普通模式时，使用 `Ctrl-\\` 后按 `Ctrl-n`。完整配置见 `:help lazymusic` 或 [插件帮助](doc/lazymusic.txt)。
+需要临时回到 Neovim 普通模式时，先按 `Ctrl+反斜杠`，再按 `Ctrl+n`。完整配置见 `:help lazymusic` 或 [插件帮助](doc/lazymusic.txt)。
 
 ## 配置
 
