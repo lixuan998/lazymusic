@@ -4,7 +4,32 @@
 
 在同一界面浏览推荐、搜索收藏、管理队列和调整音效。关闭 TUI 后继续播放，下次打开接着听。
 
-[安装](#安装) · [快速上手](#快速上手) · [键位](#键位) · [Neovim](#neovim) · [配置](#配置) · [常见问题](#常见问题) · [参与开发](#参与开发)
+[界面演示](#界面演示) · [安装](#安装) · [快速上手](#快速上手) · [键位](#键位) · [Neovim](#neovim) · [配置](#配置) · [常见问题](#常见问题) · [参与开发](#参与开发)
+
+## 界面演示
+
+以下动图来自真实 lazymusic 终端会话，底部附有按键提示。Apple Music 使用实际目录数据；LOCAL 播放演示使用临时静音 WAV 文件。
+
+**布局与音效**：`+` / `_` 切换布局，`Ctrl+Shift+h/j/k/l` 调节窗口，`Ctrl+-` 进入 Zen，调整均衡器后用 `Ctrl+=` 恢复默认布局；`@` 查看运行日志。
+
+![真实操作：布局切换、窗口调节、律动、均衡器与 Zen](docs/media/layouts-equalizer.gif)
+
+<details>
+<summary>展开查看 Apple Music 搜索、队列播放和后台恢复</summary>
+
+**Apple Music 搜索与作品信息**：输入搜索词，按 `o` 跳转到歌曲所在专辑，`h` 返回，按 `c` 查看可用 credits，再用 `.` 切换搜索类型。
+
+![真实操作：Apple Music 搜索、专辑跳转与 credits](docs/media/apple-music-catalog.gif)
+
+**队列与播放控制**：`a` 加入队列，`3` 聚焦队列后按 `Enter` 播放；在 `4` Player 中用 `.` 切换播放模式，`>` 快进，`Space` 暂停或继续，`]` 切到下一首。
+
+![真实操作：加入队列、播放模式、快进、暂停与切歌](docs/media/queue-playback.gif)
+
+**后台运行与 session 恢复**：按 `q q` 关闭 TUI 并继续播放，重新运行 lazymusic 回到原来的队列、界面和播放位置；`q Q` 完全退出。
+
+![真实操作：后台播放、重新进入并恢复 session](docs/media/background-session.gif)
+
+</details>
 
 ## 功能
 
