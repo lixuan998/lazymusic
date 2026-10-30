@@ -14,7 +14,7 @@ func (m *Model) header(title string, w int) string {
 		source = "MUSIC"
 	}
 	source = ansi.Truncate(plain(source), max(8, w/3), "…")
-	brand := accent.Bold(true).Render("LazyMusic") + muted.Render("  /  ") + text.Render(plain(title))
+	brand := accent.Bold(true).Render("LazyMusic ☕️") + muted.Render("  /  ") + text.Render(plain(title))
 	line := fit(brand, max(0, w-4-ansi.StringWidth(source)-2)) + "  " + muted.Render(source)
 	return box("", []string{line}, w, 3, false)
 }
