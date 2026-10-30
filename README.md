@@ -249,7 +249,11 @@ Ubuntu 22.04 默认的 C++ 运行库可能无法启动官方授权组件（缺�
 
 同一个字母可以在不同面板复用，如 Content / Queue / Player 的 `a`、Content / Queue 的 `d`，以及 Content / Sound 的 `p`。全局 `m` 轮转播放模式；`r/s` 只在 Queue / Player 调整循环和随机。Content 刷新用 `r`，Search 范围用 `s`，EQ 归零用 `r`。尺寸调节统一用大写 `H/J/K/L`，Queue 调序用 `[/]`，Login 使用 Navigation 或 `:login`。
 
-窗口 6 的 **Turntable** 是黑胶播放台：在 Navigation / Sound 用 `,/.` 切换，封面嵌入唱片，下面展示专辑、艺人和歌名；播放时唱片高光缓缓转动，暂停后平滑停止。Apple Music 自动获取当前曲目的封面；LOCAL 读取同目录的 `cover.jpg/jpeg/png`、`folder.jpg/png` 或 `front.jpg/png`（文件名不区分大小写）。没有封面时显示默认唱片。使用彩色半格字符绘制，不依赖图片程序或终端图像协议，在 Neovim 浮窗中同样可用。封面只在内存中缓存，切歌与隐藏视图会取消旧请求。
+窗口 6 的 **Turntable** 是黑胶播放台：在 Navigation / Sound 用 `,/.` 切换，封面嵌入唱片，下面展示专辑、艺人和歌名；播放时唱片高光缓缓转动，暂停后平滑停止。Apple Music 自动获取当前曲目的封面；LOCAL 读取同目录的 `cover.jpg/jpeg/png`、`folder.jpg/png` 或 `front.jpg/png`（文件名不区分大小写）。没有封面时显示默认唱片。封面只在内存中缓存，切歌与隐藏视图会取消旧请求。
+
+在 Ghostty / Kitty 中，使用 [Kitty 图像协议](https://sw.kovidgoyal.net/kitty/graphics-protocol/) 显示原图，保持图片分辨率和比例，PNG 原样传输；JPEG 只转换为 PNG，不缩成字符图。采用直接数据传输，支持终端在 SSH / WSL 的另一端。窗口缩放只更新图片位置和显示尺寸，动画帧不会重复上传原图。终端不支持协议时自动回退为彩色像素图；`LAZYMUSIC_IMAGE_DISABLE=1` 可强制回退。tmux / zellij 当前默认使用像素图。
+
+Neovim 浮窗通过随附插件转发图片协议；原图显示需要 **Neovim 0.12+** 和 `termguicolors`（使用 [nvim_ui_send](https://neovim.io/doc/user/api/#nvim_ui_send())）。旧版 Neovim 仍能运行 TUI，并使用像素图。更新时运行 `make install`，将二进制与插件一起更新。
 
 顶部品牌、当前页面和来源统一放在边框内；Player 默认加高，分行显示曲目、艺人 / 专辑、进度、播放状态、系统音量和模式 / 音质。小终端自动收紧布局，仍可用 `H/J/K/L` 调整。
 

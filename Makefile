@@ -27,6 +27,7 @@ install: build
 ifeq ($(INSTALL_NVIM),1)
 	$(INSTALL) -d "$(DESTDIR)$(NVIM_PLUGIN_DIR)/lua/lazymusic" "$(DESTDIR)$(NVIM_PLUGIN_DIR)/doc"
 	$(INSTALL) -m 0644 lua/lazymusic/init.lua "$(DESTDIR)$(NVIM_PLUGIN_DIR)/lua/lazymusic/init.lua"
+	$(INSTALL) -m 0644 lua/lazymusic/graphics.lua "$(DESTDIR)$(NVIM_PLUGIN_DIR)/lua/lazymusic/graphics.lua"
 	$(INSTALL) -m 0644 docs/lazymusic.txt "$(DESTDIR)$(NVIM_PLUGIN_DIR)/doc/lazymusic.txt"
 	bin/lazymusic setup-nvim --config-dir "$(DESTDIR)$(NVIM_CONFIG_DIR)" --plugin-dir "$(NVIM_PLUGIN_DIR)" --binary "$(BINDIR)/lazymusic" --help-dir "$(DESTDIR)$(NVIM_PLUGIN_DIR)/doc"
 endif

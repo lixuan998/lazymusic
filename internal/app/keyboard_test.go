@@ -42,3 +42,18 @@ func TestNavigationIsImmediateAndRepeatedKeysNeverFocusAnotherPanel(t *testing.T
 		}
 	}
 }
+
+func TestTerminalGraphicsOutputKeepsSourceEpoch(t *testing.T) {
+	a := keyboardApplication()
+	_, cmd := a.Update(musicMessage{epoch: a.epoch, message: tea.RawMsg{Msg: "graphics"}})
+	if cmd == nil {
+		t.Fatal("raw terminal output was swallowed by the application wrapper")
+	}
+	if raw, ok := cmd().(tea.RawMsg); !ok || raw.Msg != "graphics" {
+		t.Fatal("graphics did not reach the terminal renderer")
+	}
+	_, cmd = a.Update(musicMessage{epoch: a.epoch - 1, message: tea.RawMsg{Msg: "stale"}})
+	if cmd != nil {
+		t.Fatal("old source emitted terminal graphics")
+	}
+}

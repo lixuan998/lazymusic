@@ -70,5 +70,41 @@ end))
 plugin.setup({ cmd = "/does-not-exist/lazymusic" })
 assert(plugin.open() == nil and not plugin.is_open(), "missing executable left an empty float")
 assert(#notices == 1 and notices[1]:find("not found", 1, true), "missing startup diagnostic")
+-- Exercise the real embedded-terminal parser and the buffer-local original
+-- image relay. No outer terminal, image program or music account is involved.
+local graphics = require("lazymusic.graphics")
+local image_buf = vim.api.nvim_create_buf(false, true)
+local image_win = vim.api.nvim_open_win(image_buf, true, {relative="editor",row=1,col=1,width=60,height=16})
+local image_channel = vim.api.nvim_open_term(image_buf, {})
+local output, responses = {}, {}
+graphics.attach(image_buf, image_channel, {
+  write = function(data) output[#output+1] = data end,
+  send = function(data) responses[#responses+1] = data end,
+})
+local id = 0x6d002a
+local function image_request(body)
+  vim.api.nvim_chan_send(image_channel, "\27]777;LAZYMUSIC;" .. body .. "\7")
+  vim.wait(30)
+end
+image_request("a=q,i="..id..",f=24,s=1,v=1;AAAA")
+assert(#output==1 and output[1]:find("\27_Ga=q",1,true), "image query did not cross the embedded terminal")
+vim.api.nvim_exec_autocmds("TermResponse", {data={sequence="\27_Gi="..id..";OK"}})
+assert(responses[1]=="\27_Gi="..id..";OK\27\\", "image response was not routed to its child")
+image_request("a=T,U=1,f=100,t=d,i="..id..",p=1,c=12,r=6,q=2,m=1;AAAA")
+image_request("q=2,m=0;AAAA")
+assert(#output==3 and output[3]=="\27_Gq=2,m=0;AAAA\27\\", "chunked original image relay failed")
+for _, body in ipairs({"a=d,d=a,i="..id, "a=d,i="..id, "a=T,U=1,f=100,t=f,i="..id..",p=1;AAAA", "a=q,i=1;AAAA"}) do
+  image_request(body)
+end
+assert(#output==3, "unsafe or unrelated terminal controls were forwarded")
+image_request("a=d,d=I,i="..id..",q=2")
+image_request("a=q,i="..(id+1)..",f=24,s=1,v=1;AAAA")
+image_request("a=d,d=I,i="..(id+1)..",q=2")
+image_request("a=q,i="..(id+2)..",f=24,s=1,v=1;AAAA")
+assert(#output==7, "switching music sources exhausted image ownership slots")
+graphics.detach(image_buf)
+assert(output[8]=="\27_Ga=d,d=I,i="..(id+2)..",q=2\27\\", "image cleanup affected another terminal image")
+vim.api.nvim_win_close(image_win,true)
+vim.api.nvim_buf_delete(image_buf,{force=true})
 print("Neovim mapping, terminal input, resize, reuse and exit: PASS")
 vim.cmd("qa!")

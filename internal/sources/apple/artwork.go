@@ -47,7 +47,7 @@ func (c *Client) Artwork(ctx context.Context, subject catalog.Subject) (artwork.
 		return artwork.Image{}, nil
 	}
 	raw := response.Data[0].Attributes.Artwork.URL
-	for key, value := range map[string]string{"{w}": "384", "{h}": "384", "{f}": "jpg", "{c}": "bb"} {
+	for key, value := range map[string]string{"{w}": "1200", "{h}": "1200", "{f}": "jpg", "{c}": "bb"} {
 		raw = strings.ReplaceAll(raw, key, value)
 	}
 	return c.downloadArtwork(ctx, raw)

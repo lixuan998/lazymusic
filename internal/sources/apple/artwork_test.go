@@ -42,7 +42,7 @@ func TestArtworkResolvesCatalogAndDownloadsWithoutAccountHeaders(t *testing.T) {
 		if r.Header.Get("Authorization") != "" || r.Header.Get("Music-User-Token") != "" || r.Header.Get("Cookie") != "" {
 			t.Error("account material sent to artwork host")
 		}
-		if r.URL.Path != "/image/384x384bb.jpg" {
+		if r.URL.Path != "/image/1200x1200bb.jpg" {
 			t.Error("unresolved artwork template")
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(cover.Bytes())), Header: http.Header{}}, nil

@@ -1,4 +1,4 @@
-// Package artwork decodes bounded album art into small, terminal-ready pixels.
+// Package artwork retains original album art and a terminal text fallback.
 package artwork
 
 import (
@@ -6,22 +6,26 @@ import (
 	"fmt"
 	"image"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 	"io"
 )
 
 const Size = 96
 const MaxBytes = 4 << 20
 
-// Image crosses IPC as RGB pixels, never a remote URL or an arbitrary file path.
+// Image crosses IPC as encoded original bytes plus a small RGB fallback,
+// never as a remote URL or an arbitrary file path.
 type Image struct {
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
-	RGB    []byte `json:"rgb,omitempty"`
+	Original []byte `json:"original,omitempty"`
+	Format   string `json:"format,omitempty"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
+	RGB      []byte `json:"rgb,omitempty"`
 }
 
 func (im Image) Valid() bool {
-	return im.Width > 0 && im.Height > 0 && im.Width <= Size && im.Height <= Size && len(im.RGB) == im.Width*im.Height*3
+	return len(im.Original) <= MaxBytes && (len(im.Original) == 0 || im.Format == "png" || im.Format == "jpeg") &&
+		im.Width > 0 && im.Height > 0 && im.Width <= Size && im.Height <= Size && len(im.RGB) == im.Width*im.Height*3
 }
 
 func Decode(r io.Reader) (Image, error) {
@@ -33,11 +37,40 @@ func Decode(r io.Reader) (Image, error) {
 	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > 4096 || cfg.Height > 4096 || cfg.Width*cfg.Height > 16<<20 {
 		return Image{}, fmt.Errorf("album artwork has an unsupported format or size")
 	}
-	im, _, err := image.Decode(bytes.NewReader(data))
+	im, format, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return Image{}, fmt.Errorf("album artwork could not be decoded")
 	}
-	return Thumbnail(im), nil
+	out := Thumbnail(im)
+	out.Original, out.Format = data, format
+	return out, nil
+}
+
+// PNG preserves the original resolution. JPEG needs a lossless format
+// conversion because the terminal graphics protocol accepts PNG, not JPEG.
+func (im Image) PNG() ([]byte, error) {
+	if len(im.Original) == 0 || len(im.Original) > MaxBytes {
+		return nil, fmt.Errorf("original album artwork is unavailable")
+	}
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(im.Original))
+	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > 4096 || cfg.Height > 4096 || cfg.Width*cfg.Height > 16<<20 {
+		return nil, fmt.Errorf("invalid original album artwork")
+	}
+	if format == "png" {
+		return im.Original, nil
+	}
+	if format != "jpeg" {
+		return nil, fmt.Errorf("unsupported original album artwork format")
+	}
+	source, _, err := image.Decode(bytes.NewReader(im.Original))
+	if err != nil {
+		return nil, fmt.Errorf("original album artwork could not be decoded")
+	}
+	var out bytes.Buffer
+	if err := png.Encode(&out, source); err != nil {
+		return nil, fmt.Errorf("original album artwork could not be encoded")
+	}
+	return out.Bytes(), nil
 }
 
 // Thumbnail center-crops and averages the source into a square cover. Alpha is

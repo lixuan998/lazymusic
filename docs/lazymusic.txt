@@ -56,8 +56,17 @@ Sound: ,/. cycles Pulse / Wave / Equalizer / Turntable. The turntable embeds
 the current album cover in a vinyl player, with album, artist and song below.
 Apple Music loads cover art automatically. LOCAL reads adjacent cover.jpg,
 cover.jpeg/png, folder.jpg/png or front.jpg/png (case-insensitive). Missing
-covers use a default record. Color half-block rendering also works in Nvim;
-no external image viewer or terminal graphics protocol is required.
+covers use a default record. Ghostty/Kitty display the original image through
+the Kitty graphics protocol. PNG bytes and source resolution are preserved;
+JPEG is converted to PNG without reducing resolution. Direct data transfer
+also works when the terminal is across SSH/WSL. Resize updates placement;
+animation frames do not re-upload the image.
+Unsupported terminals fall back to color half-block images. Set
+LAZYMUSIC_IMAGE_DISABLE=1 to force this fallback. tmux/zellij default to it.
+Native images in the Nvim float require Nvim 0.12+, termguicolors, and the
+bundled image relay (updated by make install). Older Nvim uses the fallback.
+The relay handles only buffer-local direct image commands and cleans up its
+own images when the music terminal exits; it cannot access arbitrary files.
 Cover requests are cancellable and cached in memory, never in the session.
 The header is framed; Player expands vertically with separate metadata,
 progress and status rows. Small terminals use a compact layout.

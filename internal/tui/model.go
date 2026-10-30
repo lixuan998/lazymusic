@@ -47,6 +47,7 @@ type exitMsg struct {
 }
 
 type Model struct {
+	graphics          graphicsState
 	artwork           artworkState
 	placementBusy     bool
 	picked            *pickedSelection
@@ -125,7 +126,7 @@ func New(ctx context.Context, api API, state daemon.State, keys Keys) *Model {
 	if keys == nil {
 		keys = DefaultKeys()
 	}
-	m := &Model{api: api, keys: keys, ctx: ctx, State: state, UI: u, width: 100, height: 30}
+	m := &Model{graphics: newGraphicsState(), api: api, keys: keys, ctx: ctx, State: state, UI: u, width: 100, height: 30}
 	if u.Layout == "" {
 		m.UI.Layout = "full"
 	}
@@ -143,7 +144,7 @@ func New(ctx context.Context, api API, state daemon.State, keys Keys) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.poll(), m.fetch(true, false), m.syncRhythm(time.Now()), m.syncArtwork())
+	return tea.Batch(m.poll(), m.fetch(true, false), m.syncRhythm(time.Now()), m.syncArtwork(), m.syncGraphics())
 }
 func (m *Model) query() catalog.Query {
 	l := m.UI.Location
@@ -224,8 +225,9 @@ func (m *Model) leave(action string) tea.Cmd {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	before := m.toastVersion
+	m.graphicsMessage(msg)
 	_, cmd := m.update(msg)
-	cmd = tea.Batch(cmd, m.syncRhythm(time.Now()), m.syncArtwork())
+	cmd = tea.Batch(cmd, m.syncRhythm(time.Now()), m.syncArtwork(), m.syncGraphics())
 	if before != m.toastVersion {
 		cmd = tea.Batch(cmd, m.NotificationTimer())
 	}
@@ -233,6 +235,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case graphicsWrite:
+		if data, done, ok := m.TerminalOutput(msg); ok {
+			return m, tea.Sequence(tea.Raw(data), func() tea.Msg { return done })
+		}
+		return m, nil
 	case artworkMsg:
 		m.acceptArtwork(msg)
 		return m, nil

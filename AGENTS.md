@@ -20,10 +20,11 @@
 - `internal/eventlog/`：有界历史、脱敏、持久化与轮转。
 - `internal/tui/`：`model.go` 接收异步状态，`actions.go` 分发按键，`browse.go` 管理查询/分类，`navigation.go` 管理层级与焦点，`panels.go` 管理布局/日志/动画，`sound.go` 管理尺寸、Zen 和均衡器，`edit.go` 管理添加/创建与歌单选择流程，`view.go` 渲染，`keys.go` 定义 Global/面板绑定，`help.go` 从同一注册表生成上下文帮助，`keyboard.go` 区分修饰键与文本。
 - `internal/tui/animation.go`：独立前端 30 FPS 时钟、播放/暂停与样式过渡、旧帧取消；`rhythm.go`：Pulse/Wave 的纯字符网格渲染。动画状态不持久化，不调用 IPC 或 dirty；隐藏、弹窗遮盖及暂停收束后停帧。不能以轮询进度驱动逐帧时间；没有 PCM 数据时不得称为实时频谱。
-- `internal/artwork/`：有界 JPEG/PNG 解码和 96×96 RGB 缩略图；`catalog.ArtworkProvider` 为可选来源合约，通过 daemon 的 artwork IPC 返回像素，不向 TUI 暴露 URL 或任意文件路径。Apple 图片请求仅允许 HTTPS mzstatic.com CDN，不发送 API 授权头 / cookie；LOCAL 封面必须在音乐根目录内且为普通文件。封面不写 session / 磁盘缓存。`tui/artwork.go` 管理异步加载、取消和 generation；`turntable.go` 用彩色半格字符绘制唱片及元数据，复用前端动画时钟。`player_view.go` 负责顶部边框和自适应播放条；改变高度时必须校验 Queue 的实际可见行数。
+- `internal/artwork/`：有界 JPEG/PNG 原图和 96×96 RGB 回退图；`catalog.ArtworkProvider` 为可选来源合约，通过 daemon 的 artwork IPC 返回已校验的原始编码与回退像素，不向 TUI 暴露 URL 或任意文件路径。Apple 图片请求仅允许 HTTPS mzstatic.com CDN，不发送 API 授权头 / cookie；LOCAL 封面必须在音乐根目录内且为普通文件。封面不写 session / 磁盘缓存。`tui/artwork.go` 管理异步加载、取消和 generation；`turntable.go` 绘制唱片及元数据，复用前端动画时钟。`termimage/` 实现 Kitty 直接图片传输及 Unicode placement；`tui/graphics.go` 探测协议、准备原图、按 generation 串行输出、缩放和清理。PNG 保留原字节，JPEG 只转换格式不降低分辨率；只有不支持时使用半格回退图。不得在动画帧重复上传原图，或删除其他程序的图片。application 必须校验 source epoch 后再发 RawMsg；graphicsWrite 的输出 / 完成事件有序处理，不能被包裹器吞掉。`player_view.go` 负责顶部边框和自适应播放条；改变高度时必须校验 Queue 的实际可见行数。
 - `internal/vibez/`：固定版本的第三方原生播放子集。保留来源与许可证；变更需同步 `third_party/vibez-session.patch`、摘要或 local_additions。
 - `scripts/`：仅保留依赖准备和第三方代码导入等维护工具。不要加入一次性实测脚本、账号探针、构建产物或测试报告。
 - `lua/lazymusic/`：Neovim 浮动终端插件，可通过 lazy.nvim 加载；`docs/lazymusic.txt` 为帮助，安装时部署到插件的 doc/；`tests/nvim_spec.lua` 为独立 headless 回归测试。插件只启动/复用 TUI，不另建播放或授权逻辑。
+- `lua/lazymusic/graphics.lua`：Neovim 0.12+ / termguicolors 下的 buffer-local OSC 图片中继。只允许本程序私有 ID 范围内的 Kitty query / 直接 PNG 虚拟 placement / 清理命令，禁止文件或共享内存传输和任意控制序列。TermResponse 按拥有的 ID 返回对应子进程；只清理自己持有的图片。安装时同步部署此模块。旧版 Neovim、GUI 无 stdout TTY、tmux/zellij 保留像素回退，不假装原图已经显示。
 
 ## 增加音乐平台
 

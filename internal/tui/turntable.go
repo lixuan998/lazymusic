@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"lazymusic/internal/artwork"
+	"lazymusic/internal/termimage"
 )
 
 func centered(s string, w int) string {
@@ -20,6 +21,9 @@ func (m *Model) turntableRows(w, h int) []string {
 	}
 	album, artist, title := "No album", "No artist", "Choose a song"
 	im := m.artwork.image
+	if !m.graphics.disabled && !m.graphics.checked || m.graphics.ready() && m.graphics.failed != m.artwork.key {
+		im = artwork.Image{}
+	}
 	if t := m.State.Playback.Track; t != nil {
 		album, artist, title = plain(t.Album), plain(t.Artist), plain(t.Title)
 		if album == "" {
@@ -41,9 +45,26 @@ func (m *Model) turntableRows(w, h int) []string {
 	}
 	var rows []string
 	if h >= 7 {
-		graphicH := min(max(3, (min(w, 44)*3+3)/8+1), h-len(metadata)-1)
+		graphicH := m.turntableGraphicHeight(h, w)
 		rows = recordPlayer(w, graphicH, im, m.rhythm.phase)
+		g := m.graphics
+		left, top, columns, height := recordCoverRect(w, graphicH)
+		if g.active && g.sent == m.artwork.key && g.columns == columns && g.rows == height {
+			placeholders := termimage.PlaceholderRows(g.id, columns, height)
+			for y, line := range placeholders {
+				rows[top+y] = ansi.Cut(rows[top+y], 0, left) + line + ansi.Cut(rows[top+y], left+columns, w)
+			}
+		}
 		label := "VINYL  ·  " + playbackIcon(m.State.Playback.Status, m.State.Playback.Playing, m.State.Playback.Loading)
+		if g.active {
+			label = "ORIGINAL · " + playbackIcon(m.State.Playback.Status, m.State.Playback.Playing, m.State.Playback.Loading)
+		} else if g.disabled || g.checked && !g.ready() || g.failed != "" && g.failed == m.artwork.key {
+			label = "PIXEL · " + playbackIcon(m.State.Playback.Status, m.State.Playback.Playing, m.State.Playback.Loading)
+		} else if g.preparing || g.pending {
+			label = "Preparing original…"
+		} else if g.queried && !g.checked {
+			label = "Detecting images…"
+		}
 		if m.artwork.loading {
 			label = "Loading artwork…"
 		}
@@ -64,8 +85,29 @@ func (m *Model) turntableRows(w, h int) []string {
 	return rows
 }
 
-// Two RGB pixels per cell make covers work in plain terminals and nested
-// Neovim terminals, without external image programs or graphics protocols.
+func (m *Model) turntableGraphicHeight(h, w int) int {
+	metadata := 3
+	if h >= 14 {
+		metadata = 6
+	}
+	return min(max(3, (min(w, 44)*3+3)/8+1), h-metadata-1)
+}
+
+func recordCoverRect(width, height int) (left, top, columns, rows int) {
+	w, ph := min(width, 44), max(2, height*2)
+	cx, cy := float64(w)*.37, float64(ph-1)*.46
+	radius := math.Min(float64(w)*.33, float64(ph-3)*.47)
+	columns = max(2, int(radius*1.18))
+	rows = max(1, columns/2)
+	left = max(0, (width-w)/2+int(cx-float64(columns)/2))
+	top = max(0, int(cy/2-float64(rows)/2))
+	columns = min(columns, width-left)
+	rows = min(rows, height-top)
+	return
+}
+
+// The chassis is decorative terminal art. Cover pixels are only a fallback;
+// native image placements replace the label when the terminal supports them.
 func recordPlayer(width, height int, cover artwork.Image, phase float64) []string {
 	w, ph := min(width, 44), max(2, height*2)
 	const background = 0x15191f

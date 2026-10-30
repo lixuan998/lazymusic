@@ -11,6 +11,7 @@ local defaults = {
 local options = vim.deepcopy(defaults)
 local state = {}
 local configured = false
+local graphics = require("lazymusic.graphics")
 
 local function valid_win(win)
 	return win and vim.api.nvim_win_is_valid(win)
@@ -122,6 +123,7 @@ function M.open()
 	if not running() or not state.buf or not vim.api.nvim_buf_is_valid(state.buf) then
 		M.hide()
 		if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
+			graphics.detach(state.buf)
 			vim.api.nvim_buf_delete(state.buf, { force = true })
 		end
 		state = { buf = vim.api.nvim_create_buf(false, true) }
@@ -133,12 +135,18 @@ function M.open()
 	if not running() then
 		local buf = state.buf
 		local job_options = {
+			env = {
+				LAZYMUSIC_IMAGE_BRIDGE = graphics.available() and "osc" or "",
+				LAZYMUSIC_IMAGE_DISABLE = graphics.available() and "" or "1",
+				LAZYMUSIC_IMAGE_HOST = vim.env.TERM_PROGRAM or vim.env.TERM or "",
+			},
 			on_exit = function(_, code)
 				vim.schedule(function()
 					if state.buf ~= buf then
 						return
 					end
 					state.job = nil
+					graphics.detach(buf)
 					if code == 0 then
 						M.hide()
 						if vim.api.nvim_buf_is_valid(buf) then
@@ -168,6 +176,7 @@ function M.open()
 			return nil
 		end
 		passthrough(buf, state.job)
+		graphics.attach(buf, state.job)
 		vim.bo[buf].filetype = "lazymusic"
 	end
 	vim.cmd.startinsert()
@@ -187,6 +196,10 @@ function M.setup(opts)
 		{ desc = "Hide lazymusic without stopping its TUI", force = true }
 	)
 	local group = vim.api.nvim_create_augroup("lazymusic", { clear = true })
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		group = group,
+		callback = function() if state.buf then graphics.detach(state.buf) end end,
+	})
 	vim.api.nvim_create_autocmd("VimResized", {
 		group = group,
 		callback = function()

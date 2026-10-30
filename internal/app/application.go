@@ -103,6 +103,7 @@ func RunApplication(ctx context.Context, opts LaunchOptions) error {
 	a.resetLogin()
 	program := tea.NewProgram(a, tea.WithContext(ctx))
 	_, err = program.Run()
+	_, _ = fmt.Fprint(os.Stdout, a.music.GraphicsCleanup())
 	cancel()
 	a.poolMu.Lock()
 	a.closed = true
@@ -215,6 +216,13 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.epoch != a.epoch {
 			return a, nil
 		}
+		if raw, ok := msg.message.(tea.RawMsg); ok {
+			return a, func() tea.Msg { return raw }
+		}
+		if data, done, ok := a.music.TerminalOutput(msg.message); ok {
+			epoch := a.epoch
+			return a, tea.Sequence(tea.Raw(data), func() tea.Msg { return musicMessage{epoch, done} })
+		}
 		return a, a.musicUpdate(msg.message)
 	case connectionMessage:
 		a.connecting = false
@@ -226,6 +234,8 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.client = msg.client
 		a.options.Dir, a.options.Source = msg.dir, msg.source
+		cleanup := tea.Raw(a.music.GraphicsCleanup())
+		a.music.ClearGraphics()
 		a.epoch++
 		a.music.CancelPick()
 		a.music.CancelArtwork()
@@ -238,7 +248,7 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.music = tui.New(a.ctx, a.client, msg.state, a.keys)
 		a.music.SetSize(a.width, a.height)
 		a.resetLogin()
-		return a, wrapCommand(a.music.Init(), a.epoch)
+		return a, tea.Sequence(wrapCommand(cleanup, a.epoch), wrapCommand(a.music.Init(), a.epoch))
 	case loginDone:
 		_, cmd := a.login.Update(msg)
 		if a.login.complete {
