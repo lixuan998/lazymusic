@@ -47,6 +47,7 @@ type exitMsg struct {
 }
 
 type Model struct {
+	artwork           artworkState
 	placementBusy     bool
 	picked            *pickedSelection
 	pickGeneration    uint64
@@ -142,7 +143,7 @@ func New(ctx context.Context, api API, state daemon.State, keys Keys) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.poll(), m.fetch(true, false), m.syncRhythm(time.Now()))
+	return tea.Batch(m.poll(), m.fetch(true, false), m.syncRhythm(time.Now()), m.syncArtwork())
 }
 func (m *Model) query() catalog.Query {
 	l := m.UI.Location
@@ -224,7 +225,7 @@ func (m *Model) leave(action string) tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	before := m.toastVersion
 	_, cmd := m.update(msg)
-	cmd = tea.Batch(cmd, m.syncRhythm(time.Now()))
+	cmd = tea.Batch(cmd, m.syncRhythm(time.Now()), m.syncArtwork())
 	if before != m.toastVersion {
 		cmd = tea.Batch(cmd, m.NotificationTimer())
 	}
@@ -232,6 +233,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case artworkMsg:
+		m.acceptArtwork(msg)
+		return m, nil
 	case pickResolvedMsg:
 		m.acceptPicked(msg)
 		return m, nil

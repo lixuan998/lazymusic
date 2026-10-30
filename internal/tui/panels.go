@@ -62,25 +62,35 @@ func (m *Model) cycleLayout(next bool) tea.Cmd {
 	return m.dirty()
 }
 func (m *Model) bodyHeight() int {
-	h := m.height - 3 - m.playerHeight()
+	h := m.height - 5 - m.playerHeight()
 	if m.UI.ShowLogs {
 		h -= m.logHeight()
 	}
 	return max(3, h)
 }
 func (m *Model) playerHeight() int {
+	h := m.UI.PlayerHeight
+	if h == 0 {
+		h = 8
+		if m.height < 28 {
+			h = 6
+		}
+		if m.height < 22 {
+			h = 4
+		}
+	}
 	extra := 0
 	if m.UI.ShowLogs {
 		extra = m.logHeight()
 	}
-	return min(max(4, m.UI.PlayerHeight), max(4, min(m.height/2, m.height-9-extra)))
+	return min(max(4, h), max(4, min(m.height/2, m.height-8-extra)))
 }
 func (m *Model) logHeight() int {
 	h := m.UI.LogHeight
 	if h == 0 {
 		h = 8
 	}
-	return min(max(3, h), max(3, min(m.height/3, m.height-13)))
+	return min(max(3, h), max(3, min(m.height/3, m.height-15)))
 }
 func (m *Model) allLogs() []eventlog.Entry {
 	out := append([]eventlog.Entry(nil), m.State.Logs...)

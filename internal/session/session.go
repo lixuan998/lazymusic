@@ -193,7 +193,7 @@ func (s *Snapshot) Normalize() {
 	if s.UI.Focus == 4 && !s.UI.ShowLogs {
 		s.UI.Focus = 1
 	}
-	s.UI.Visualizer = max(0, min(2, s.UI.Visualizer))
+	s.UI.Visualizer = max(0, min(3, s.UI.Visualizer))
 	s.UI.NavIndex = max(0, min(32, s.UI.NavIndex))
 	if len(s.UI.History) > 32 {
 		s.UI.History = s.UI.History[len(s.UI.History)-32:]

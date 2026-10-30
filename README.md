@@ -225,7 +225,7 @@ Ubuntu 22.04 默认的 C++ 运行库可能无法启动官方授权组件（缺�
 | 面板 | 按键 | 操作 |
 | --- | --- | --- |
 | 1 Navigation | `j/k`、`l` / `Enter` | 选择页面、进入 Content；选中 Login 后确认进入 |
-| 1 Navigation | `,/.` | 切换下方 Pulse / Wave / Equalizer |
+| 1 Navigation | `,/.` | 切换下方 Pulse / Wave / Equalizer / Turntable |
 | 2 Content | `,/.`、`r`、`/` | 分类 / 搜索类型、刷新、过滤已加载内容 |
 | 2 Content · Search | `i`、`s` | 编辑搜索词、切换 catalog / library 范围 |
 | 2 Content | `Ctrl+Enter`、`y` | 播放歌曲或整个集合、直接加入队列；添加菜单中 **Play next** 安排为下一首 |
@@ -242,12 +242,16 @@ Ubuntu 22.04 默认的 C++ 运行库可能无法启动官方授权组件（缺�
 | 4 Player | `,/.`、`b` | 轮换组合播放模式、音质偏好；`r/s` 分别调循环和随机 |
 | 4 Player | `a` | 将正在播放的歌曲加入收藏 / 歌单 |
 | 5 Log | `j/k`、`gg/G` | 滚动、首条 / 最新日志 |
-| 6 Sound | `,/.` | 切换 Pulse / Wave / Equalizer |
+| 6 Sound | `,/.` | 切换 Pulse / Wave / Equalizer / Turntable |
 | 6 Sound · EQ | `h/l`、`j/k` | 选择频段、降低 / 提高 1 dB |
 | 6 Sound · EQ | `e`、`r`、`p` | 旁路、归零、轮换 Flat / Bass / Vocal / Treble 预设 |
 | 2 Login | `j/k`、`l` / `Enter`、`h`、`y` | 选择来源、进入 / 确认、返回；账户选项中 `r` 重新授权，授权过程中 `y` 复制完整链接 |
 
 同一个字母可以在不同面板复用，如 Content / Queue / Player 的 `a`、Content / Queue 的 `d`，以及 Content / Sound 的 `p`。全局 `m` 轮转播放模式；`r/s` 只在 Queue / Player 调整循环和随机。Content 刷新用 `r`，Search 范围用 `s`，EQ 归零用 `r`。尺寸调节统一用大写 `H/J/K/L`，Queue 调序用 `[/]`，Login 使用 Navigation 或 `:login`。
+
+窗口 6 的 **Turntable** 是黑胶播放台：在 Navigation / Sound 用 `,/.` 切换，封面嵌入唱片，下面展示专辑、艺人和歌名；播放时唱片高光缓缓转动，暂停后平滑停止。Apple Music 自动获取当前曲目的封面；LOCAL 读取同目录的 `cover.jpg/jpeg/png`、`folder.jpg/png` 或 `front.jpg/png`（文件名不区分大小写）。没有封面时显示默认唱片。使用彩色半格字符绘制，不依赖图片程序或终端图像协议，在 Neovim 浮窗中同样可用。封面只在内存中缓存，切歌与隐藏视图会取消旧请求。
+
+顶部品牌、当前页面和来源统一放在边框内；Player 默认加高，分行显示曲目、艺人 / 专辑、进度、播放状态、系统音量和模式 / 音质。小终端自动收紧布局，仍可用 `H/J/K/L` 调整。
 
 拾取的内容会以 `◆` 和底部状态提示显示。从 Queue 拾取再放置是移动；从 Content 拾取后放置是复制加入。单曲插入一首，album / playlist 插入其全部歌曲，artist 会展开其专辑中的全部歌曲，包含分页，按来源顺序整体插入；空 Queue 直接插入。集合准备期间可继续导航，`Esc` 取消准备；提交放置后等待结果，重复按键不会重复插入。拾取状态只在当前前端保留，Queue 的滚动位置随 session 保存。若队列已经变化，放置会要求重新选择位置，避免使用旧索引修改错误的歌曲。
 

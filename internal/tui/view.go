@@ -62,7 +62,10 @@ func box(title string, rows []string, w, h int, active bool) string {
 	if active {
 		style = accent
 	}
-	top := "─ " + plain(title) + " "
+	top := ""
+	if title != "" {
+		top = "─ " + plain(title) + " "
+	}
 	top = ansi.Truncate(top, w-2, "")
 	lines := []string{style.Render("┌" + top + strings.Repeat("─", max(0, w-2-ansi.StringWidth(top))) + "┐")}
 	for n := 0; n < h-2; n++ {
@@ -279,15 +282,11 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		v := terminalView(lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, modal))
 		return v
 	}
-	backend := m.State.Source.Name
-	if backend == "" {
-		backend = "MUSIC"
-	}
 	title := m.UI.Location.Title
 	if override != nil {
 		title = override.Title
 	}
-	header := fit(accent.Bold(true).Render(" LazyMusic ☕️ ")+muted.Render(" / ")+text.Render(plain(title)), max(0, w-ansi.StringWidth(backend)-2)) + muted.Render(backend) + "  "
+	header := m.header(title, w)
 	bodyH := m.bodyHeight()
 	navW := m.navWidth()
 	queueW := m.queueWidth()
@@ -310,6 +309,12 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	sidebar := lipgloss.JoinVertical(lipgloss.Left,
 		box("1 Navigation", navRows, navW, navH, m.UI.Focus == 0),
 		box(m.soundTitle(), m.soundRows(navW-4, bodyH-navH-2), navW, bodyH-navH, m.UI.Focus == 5))
+	if bodyH < 6 {
+		sidebar = box("1 Navigation", navRows, navW, bodyH, m.UI.Focus == 0)
+		if m.UI.Focus == 5 {
+			sidebar = box(m.soundTitle(), m.soundRows(navW-4, bodyH-2), navW, bodyH, true)
+		}
+	}
 	mainTitle := "2 " + plain(title)
 	mainRows := m.mainRows(bodyH - 2)
 	if override != nil {
@@ -336,66 +341,7 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	if m.UI.ShowLogs {
 		body += "\n" + box("5 Log", m.logRows(m.logHeight()-2), w, m.logHeight(), m.UI.Focus == 4)
 	}
-	s := m.State.Playback
-	if s.Track == nil && !s.Loading && !s.Playing {
-		s.Status = "stopped"
-	}
-	track := "Nothing playing — choose a song and press Enter"
-	if s.Track != nil {
-		track = plain(s.Track.Title) + muted.Render("  ·  "+plain(s.Track.Artist)+"  ·  "+plain(s.Track.Album))
-	}
-	status := "PAUSED"
-	if s.Status == "stopped" {
-		status = "STOPPED"
-	}
-	if s.Status == "error" {
-		status = "ERROR"
-	}
-	if s.Playing {
-		status = "PLAYING"
-	}
-	if s.Loading {
-		status = "BUFFERING"
-	}
-	barW := max(8, w-48)
-	filled := 0
-	total := time.Duration(0)
-	if s.Track != nil {
-		total = s.Track.Duration
-		if total > 0 {
-			filled = int(float64(s.Position) / float64(total) * float64(barW))
-		}
-	}
-	filled = max(0, min(barW, filled))
-	bar := accent.Render(strings.Repeat("━", filled)) + muted.Render(strings.Repeat("─", barW-filled))
-	progress := good.Render(playbackIcon(s.Status, s.Playing, s.Loading)+" "+status) + "  " + bar + "  " + duration(s.Position) + " / " + duration(total) + muted.Render(fmt.Sprintf("  vol %.0f%%", s.Volume*100))
-	if !m.State.SystemVolume.Available {
-		progress = good.Render(playbackIcon(s.Status, s.Playing, s.Loading)+" "+status) + "  " + bar + "  " + duration(s.Position) + " / " + duration(total) + muted.Render("  system vol —")
-	}
-	quality := "Original"
-	if s.Track != nil && s.Track.MediaType == "live" {
-		progress = good.Render(playbackIcon(s.Status, s.Playing, s.Loading)+" "+status) + accent.Render("  ● LIVE") + "  " + duration(s.Position)
-		if m.State.SystemVolume.Available {
-			progress += muted.Render(fmt.Sprintf("  vol %.0f%%", s.Volume*100))
-		} else {
-			progress += muted.Render("  system vol —")
-		}
-	}
-	if m.State.PreferredQuality != "" {
-		for _, q := range m.State.Source.Qualities {
-			if q.ID == m.State.PreferredQuality {
-				quality = q.Name + " preferred"
-			}
-		}
-	}
-	playerTitle := "4 Now playing"
-	if s.Track != nil && s.Track.MediaType == "episode" {
-		playerTitle += " · Radio episode"
-	}
-	if s.Continuous != nil {
-		playerTitle += " · Station: " + plain(s.Continuous.Term)
-	}
-	playerBox := box(playerTitle+" · "+playbackMode(s.RepeatMode, s.ShuffleMode)+" · "+quality, []string{track, progress}, w, m.playerHeight(), m.UI.Focus == 3)
+	playerBox := m.playerBox(w)
 	label := strings.ToUpper(m.UI.NavPage)
 	if label == "" {
 		label = strings.ToUpper(m.UI.Location.Page)
@@ -418,6 +364,9 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	}
 	if m.UI.Focus == 5 {
 		footer = muted.Render(" SOUND  ,/. view · HJKL resize · Ctrl-= reset")
+		if m.UI.Visualizer == turntableView {
+			footer = muted.Render(" TURNTABLE  ,/. view · Space play/pause · HJKL resize · ? help")
+		}
 		if m.UI.Visualizer == 2 || m.UI.Zen {
 			footer = muted.Render(" EQUALIZER  h/l band · j/k ±1dB · e bypass · r flat · p preset · ? help")
 		}
@@ -446,7 +395,7 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	if m.toast != nil {
 		statusLine = accent.Bold(true).Render(" " + strings.ToUpper(m.toast.Level) + " · " + plain(m.toast.Message))
 	}
-	v := terminalView(strings.Join([]string{fit(header, w), body, playerBox, fit(footer, w), fit(statusLine, w)}, "\n"))
+	v := terminalView(strings.Join([]string{header, body, playerBox, fit(footer, w), fit(statusLine, w)}, "\n"))
 	return v
 }
 

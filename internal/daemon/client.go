@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"lazymusic/internal/artwork"
 	"lazymusic/internal/catalog"
 	"lazymusic/internal/session"
 )
@@ -109,6 +110,11 @@ func (c *Client) Inspect(ctx context.Context, subject catalog.Subject) (catalog.
 	var details catalog.Details
 	err := c.call(ctx, http.MethodPost, "/v1/inspect", subject, &details)
 	return details, err
+}
+func (c *Client) Artwork(ctx context.Context, subject catalog.Subject) (artwork.Image, error) {
+	var im artwork.Image
+	err := c.call(ctx, http.MethodPost, "/v1/artwork", subject, &im)
+	return im, err
 }
 func (c *Client) Actions(ctx context.Context, subject catalog.Subject) (catalog.Actions, error) {
 	var actions catalog.Actions

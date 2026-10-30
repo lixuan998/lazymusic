@@ -47,6 +47,9 @@ type resource struct {
 	ID         string `json:"id"`
 	Type       string `json:"type"`
 	Attributes struct {
+		Artwork struct {
+			URL string `json:"url"`
+		} `json:"artwork"`
 		CanEdit    bool     `json:"canEdit"`
 		Name       string   `json:"name"`
 		Artist     string   `json:"artistName"`

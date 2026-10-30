@@ -20,6 +20,7 @@
 - `internal/eventlog/`：有界历史、脱敏、持久化与轮转。
 - `internal/tui/`：`model.go` 接收异步状态，`actions.go` 分发按键，`browse.go` 管理查询/分类，`navigation.go` 管理层级与焦点，`panels.go` 管理布局/日志/动画，`sound.go` 管理尺寸、Zen 和均衡器，`edit.go` 管理添加/创建与歌单选择流程，`view.go` 渲染，`keys.go` 定义 Global/面板绑定，`help.go` 从同一注册表生成上下文帮助，`keyboard.go` 区分修饰键与文本。
 - `internal/tui/animation.go`：独立前端 30 FPS 时钟、播放/暂停与样式过渡、旧帧取消；`rhythm.go`：Pulse/Wave 的纯字符网格渲染。动画状态不持久化，不调用 IPC 或 dirty；隐藏、弹窗遮盖及暂停收束后停帧。不能以轮询进度驱动逐帧时间；没有 PCM 数据时不得称为实时频谱。
+- `internal/artwork/`：有界 JPEG/PNG 解码和 96×96 RGB 缩略图；`catalog.ArtworkProvider` 为可选来源合约，通过 daemon 的 artwork IPC 返回像素，不向 TUI 暴露 URL 或任意文件路径。Apple 图片请求仅允许 HTTPS mzstatic.com CDN，不发送 API 授权头 / cookie；LOCAL 封面必须在音乐根目录内且为普通文件。封面不写 session / 磁盘缓存。`tui/artwork.go` 管理异步加载、取消和 generation；`turntable.go` 用彩色半格字符绘制唱片及元数据，复用前端动画时钟。`player_view.go` 负责顶部边框和自适应播放条；改变高度时必须校验 Queue 的实际可见行数。
 - `internal/vibez/`：固定版本的第三方原生播放子集。保留来源与许可证；变更需同步 `third_party/vibez-session.patch`、摘要或 local_additions。
 - `scripts/`：仅保留依赖准备和第三方代码导入等维护工具。不要加入一次性实测脚本、账号探针、构建产物或测试报告。
 - `lua/lazymusic/`：Neovim 浮动终端插件，可通过 lazy.nvim 加载；`docs/lazymusic.txt` 为帮助，安装时部署到插件的 doc/；`tests/nvim_spec.lua` 为独立 headless 回归测试。插件只启动/复用 TUI，不另建播放或授权逻辑。
@@ -43,6 +44,7 @@
 - 登录组件 stdout/stderr 共用有界过滤器，兼容 ANSI、CR 和无末尾换行；原始输出不能写日志。只向 UI 返回白名单错误类别、严格格式的库名/ABI/HTTP 状态。不得用统一的 try again 吞掉具体原因。手动 URL 必须在最小 60×16 窗口也完整可见，Login 的 y 按当前绑定复制完整 URL；不以剪贴板请求等同于已确认复制成功。
 - 普通字符按终端生成的文本处理，保留基本键位消歧和备用字符码；不要在缺少关联文本时强制所有字符用 CSI-u 上报，否则 Shift+/ 等符号会退化成原键。所有页面与弹窗共用同一键盘协议配置。
 - h/l 在面板内进退，Ctrl-h/j/k/l 切焦点。`,.` 必须按当前焦点分发：Navigation 动画、Content 分类、Player 播放模式；Sound 提供 Pulse/Wave/真实 EQ。Queue/Log 不得隐式操作旧 Content。
+- Sound 的第四种视图是 Turntable，和 Pulse/Wave/EQ 一样用 ,/. 切换并保存选择。只加载当前播放曲目的封面，切歌、切来源、隐藏视图、退出取消请求，旧响应不能污染新曲目；装饰资源失败不抢焦点或阻断播放。新增来源可实现 catalog.ArtworkProvider，缺图时返回空图片使用占位唱片。不得以封面视图代替 Zen 中同时存在的律动和真实 EQ。
 - 布局切换后焦点必须落在可见面板，Player 始终可见；日志可在所有布局用 @ 打开。页脚显示实际页面或当前焦点，不写死 NORMAL。
 - q 首次提示，第二次 q 后台，Q 退出当前来源服务；退出/切换前保存 UI，冷恢复暂停。不可让迟到请求覆盖新 revision/epoch。
 - H/J/K/L 调当前面板尺寸，Ctrl+= 恢复默认布局；Ctrl++/Ctrl+- 开关 Zen，Zen 必须同时显示律动、真实 EQ 和播放条。尺寸、音效与 Zen 状态持久化。EQ 操作按当前焦点路由，不能冒用播放音量或显示假频谱。

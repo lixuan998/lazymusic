@@ -194,7 +194,7 @@ func (m *Model) normal(key string) tea.Cmd {
 			if action == "category_previous" {
 				step = -1
 			}
-			m.UI.Visualizer = (m.UI.Visualizer + step + 3) % 3
+			m.UI.Visualizer = (m.UI.Visualizer + step + soundViews) % soundViews
 			return m.dirty()
 		}
 		if m.UI.Focus == 3 {

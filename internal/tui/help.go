@@ -63,7 +63,7 @@ func (m *Model) helpDescription(d keyDefinition) string {
 	case "category_next", "category_previous":
 		noun := "category"
 		if m.UI.Focus == 0 || m.UI.Focus == 5 {
-			noun = "visualization"
+			noun = "sound view (Pulse / Wave / EQ / Turntable)"
 		}
 		if m.UI.Focus == 3 {
 			noun = "playback mode"

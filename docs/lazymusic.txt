@@ -52,6 +52,15 @@ Search: i query, s scope. Queue: Enter play, d remove, D clear,
 Near the queue ends, the view clamps to the first/last page. Queue scrolling
 is saved with the session. Global: </> previous/next, Ctrl+< / Ctrl+> seek 10s, x stop,
 m playback mode. Queue/Player: r repeat, s shuffle. Player: b quality.
+Sound: ,/. cycles Pulse / Wave / Equalizer / Turntable. The turntable embeds
+the current album cover in a vinyl player, with album, artist and song below.
+Apple Music loads cover art automatically. LOCAL reads adjacent cover.jpg,
+cover.jpeg/png, folder.jpg/png or front.jpg/png (case-insensitive). Missing
+covers use a default record. Color half-block rendering also works in Nvim;
+no external image viewer or terminal graphics protocol is required.
+Cover requests are cancellable and cached in memory, never in the session.
+The header is framed; Player expands vertically with separate metadata,
+progress and status rows. Small terminals use a compact layout.
 Sound EQ: h/l band, j/k gain, e bypass, r flat, p preset.
 Content p/P picks a song or collection. Queue p/P picks a song when nothing is
 held; then p places after the cursor song, P places before it. Esc cancels.

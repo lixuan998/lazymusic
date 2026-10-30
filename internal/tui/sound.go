@@ -12,7 +12,7 @@ import (
 func (m *Model) navWidth() int {
 	w := m.UI.NavWidth
 	if w == 0 {
-		w = 22
+		w = max(22, min(32, m.width/5))
 	}
 	reserve := 24
 	if m.width >= 100 {
@@ -31,10 +31,16 @@ func (m *Model) navHeight() int {
 	h := m.UI.NavHeight
 	if h == 0 {
 		h = max(len(m.navItems())+2, m.bodyHeight()/3)
+		if m.UI.Visualizer == turntableView {
+			h = min(h, max(3, m.bodyHeight()-12))
+		}
 	}
 	return min(max(3, h), max(3, m.bodyHeight()-3))
 }
 func (m *Model) soundTitle() string {
+	if m.UI.Visualizer == turntableView {
+		return "6 Turntable"
+	}
 	if m.UI.Visualizer == 2 {
 		return "6 Equalizer"
 	}
@@ -44,6 +50,9 @@ func (m *Model) soundTitle() string {
 	return "6 Pulse"
 }
 func (m *Model) soundRows(w, h int) []string {
+	if m.UI.Visualizer == turntableView {
+		return m.turntableRows(w, h)
+	}
 	if m.UI.Visualizer == 2 {
 		return m.equalizerRows(w, h)
 	}
@@ -149,7 +158,7 @@ func (m *Model) zenBody(w, h int) string {
 	}
 	eqW = min(max(20, eqW), w-20)
 	kind := m.UI.Visualizer
-	if kind == 2 {
+	if kind >= 2 {
 		kind = 0
 	}
 	rhythm := m.rhythmRows(kind, w-eqW-4, h-2)

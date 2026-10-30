@@ -27,8 +27,11 @@ type rhythmAnimation struct {
 }
 
 func (m *Model) rhythmVisible() bool {
+	if m.UI.Visualizer == turntableView && !m.UI.Zen {
+		return m.turntableVisible()
+	}
 	return !m.exiting && m.ctx.Err() == nil && m.width >= 60 && m.height >= 16 && !m.HasModal() &&
-		(m.UI.Zen || m.UI.Layout == "full" && m.UI.Visualizer != 2)
+		(m.UI.Zen || m.UI.Layout == "full" && m.UI.Visualizer != 2 && (m.bodyHeight() >= 6 || m.UI.Focus == 5))
 }
 
 func (m *Model) rhythmPlaying() bool {

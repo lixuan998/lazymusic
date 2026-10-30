@@ -27,16 +27,16 @@ func TestQueueFocusCentersCurrentOccurrenceAndClampsAtEnds(t *testing.T) {
 		count, index, height, player, offset, row int
 		logs, paused                              bool
 	}{
-		{"middle", 100, 50, 26, 0, 43, 7, false, false},
-		{"paused", 100, 50, 26, 0, 43, 7, false, true},
-		{"even-height", 100, 50, 27, 0, 42, 8, false, false},
+		{"middle", 100, 50, 26, 0, 45, 5, false, false},
+		{"paused", 100, 50, 26, 0, 45, 5, false, true},
+		{"even-height", 100, 50, 27, 0, 44, 6, false, false},
 		{"near-start", 100, 2, 26, 0, 0, 2, false, false},
-		{"near-end", 100, 98, 26, 0, 85, 13, false, false},
-		{"last", 100, 99, 26, 0, 85, 14, false, false},
+		{"near-end", 100, 98, 26, 0, 89, 9, false, false},
+		{"last", 100, 99, 26, 0, 89, 10, false, false},
 		{"short", 7, 4, 26, 0, 0, 4, false, false},
 		{"single", 1, 0, 26, 0, 0, 0, false, false},
-		{"logs", 100, 50, 26, 0, 47, 3, true, false},
-		{"taller-player", 100, 50, 26, 8, 45, 5, false, false},
+		{"logs", 100, 50, 26, 0, 49, 1, true, false},
+		{"taller-player", 100, 50, 26, 8, 46, 4, false, false},
 	} {
 		for _, layout := range []string{"full", "queue"} {
 			t.Run(tc.name+"/"+layout, func(t *testing.T) {
@@ -71,28 +71,28 @@ func TestQueueFocusKeepsViewportWhileBrowsingAndPolling(t *testing.T) {
 	m.State.Queue, m.State.Index = queueFixture(100), 50
 	m.normal("f")
 	m.normal("j")
-	if m.UI.QueueCursor != 51 || m.UI.QueueOffset != 43 {
+	if m.UI.QueueCursor != 51 || m.UI.QueueOffset != 45 {
 		t.Fatal("ordinary movement discarded the centered viewport")
 	}
 	for i := 0; i < 7; i++ {
 		m.normal("j")
 	}
-	if m.UI.QueueCursor != 58 || m.UI.QueueOffset != 44 {
+	if m.UI.QueueCursor != 58 || m.UI.QueueOffset != 48 {
 		t.Fatal("cursor did not scroll into view at the lower edge")
 	}
 	next := m.State
 	next.Index, next.ObservedAt = 51, time.Now()
 	m.Update(stateMsg{s: next})
-	if m.UI.QueueCursor != 58 || m.UI.QueueOffset != 44 {
+	if m.UI.QueueCursor != 58 || m.UI.QueueOffset != 48 {
 		t.Fatal("playback polling stole the queue selection")
 	}
 	m.normal("f")
-	if m.UI.QueueCursor != 51 || m.UI.QueueOffset != 44 {
+	if m.UI.QueueCursor != 51 || m.UI.QueueOffset != 46 {
 		t.Fatal("focus did not use the latest playing index")
 	}
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 36})
 	m.normal("f")
-	if m.UI.QueueCursor != 51 || m.UI.QueueOffset != 39 {
+	if m.UI.QueueCursor != 51 || m.UI.QueueOffset != 42 {
 		t.Fatal("focus ignored the resized queue viewport")
 	}
 	next.Queue, next.ObservedAt = next.Queue[:3], time.Now()
@@ -146,7 +146,7 @@ func TestQueueCenteredViewportSurvivesSessionRestore(t *testing.T) {
 	restored := New(context.Background(), api, next, nil)
 	restored.SetSize(100, 26)
 	rows := restored.queueRows(restored.bodyHeight() - 2)
-	if restored.UI.QueueCursor != 50 || restored.UI.QueueOffset != 43 || !strings.Contains(ansi.Strip(rows[7]), "Song 050") {
+	if restored.UI.QueueCursor != 50 || restored.UI.QueueOffset != 45 || !strings.Contains(ansi.Strip(rows[5]), "Song 050") {
 		t.Fatal("session restore lost the centered queue view")
 	}
 }
