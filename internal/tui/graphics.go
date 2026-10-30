@@ -3,6 +3,7 @@ package tui
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"image"
 	"os"
 	"strings"
 	"time"
@@ -10,7 +11,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
+	"lazymusic/internal/artwork"
 	"lazymusic/internal/termimage"
+	"lazymusic/internal/turntable"
 )
 
 type graphicsState struct {
@@ -20,6 +23,7 @@ type graphicsState struct {
 	generation                                        uint64
 	target, prepared, sent, failed                    string
 	png                                               []byte
+	scene                                             image.Image
 	columns, rows                                     int
 }
 type graphicsTimeout struct{}
@@ -33,6 +37,7 @@ type graphicsPrepared struct {
 	generation uint64
 	key        string
 	png        []byte
+	scene      image.Image
 	err        error
 }
 type graphicsUploaded struct {
@@ -94,42 +99,51 @@ func (m *Model) syncGraphics() tea.Cmd {
 	if g.clearing {
 		return nil
 	}
-	visible := m.turntableVisible() && m.State.Playback.Track != nil && m.artwork.image.Valid()
+	visible := m.turntableVisible()
 	if !visible {
 		if g.active || g.pending || g.preparing {
 			return m.ClearGraphics()
 		}
 		return nil
 	}
-	if g.disabled {
-		return nil
-	}
-	if !g.queried {
-		g.queried = true
-		commands := []tea.Cmd{tea.Raw(g.wrap(termimage.Query(g.id))), tea.Tick(1500*time.Millisecond, func(time.Time) tea.Msg { return graphicsTimeout{} })}
-		if !g.relay && !g.known {
-			commands = append(commands, tea.Raw(ansi.RequestXTVersion))
-		}
-		return tea.Batch(commands...)
-	}
-	if !g.ready() {
-		return nil
-	}
-	key := m.artwork.key
+	key := m.turntableSceneKey()
 	if g.target != key {
 		cleanup := m.ClearGraphics()
 		g.target = key
-		return cleanup
+		if cleanup != nil {
+			return cleanup
+		}
+	}
+	var commands []tea.Cmd
+	if !g.disabled && !g.queried {
+		g.queried = true
+		commands = append(commands, tea.Raw(g.wrap(termimage.Query(g.id))), tea.Tick(1500*time.Millisecond, func(time.Time) tea.Msg { return graphicsTimeout{} }))
+		if !g.relay && !g.known {
+			commands = append(commands, tea.Raw(ansi.RequestXTVersion))
+		}
 	}
 	if g.failed == key || g.pending || g.preparing {
-		return nil
+		return tea.Batch(commands...)
 	}
 	if g.prepared != key {
 		g.preparing = true
 		generation, im := g.generation, m.artwork.image
-		return func() tea.Msg { data, err := im.PNG(); return graphicsPrepared{generation, key, data, err} }
+		if m.State.Playback.Track == nil {
+			im = artwork.Image{}
+		}
+		commands = append(commands, func() tea.Msg {
+			scene, err := turntable.Compose(im)
+			return graphicsPrepared{generation: generation, key: key, png: scene.PNG, scene: scene.Pixels, err: err}
+		})
 	}
-	_, _, columns, rows := recordCoverRect(m.navWidth()-4, m.turntableGraphicHeight(m.bodyHeight()-m.navHeight()-2, m.navWidth()-4))
+	if len(commands) > 0 {
+		return tea.Batch(commands...)
+	}
+	if !g.ready() || g.prepared != key {
+		return nil
+	}
+	w, h := m.turntableSize()
+	_, _, columns, rows := turntableImageRect(w, m.turntableGraphicHeight(h, w))
 	if g.active && g.sent == key && g.columns == columns && g.rows == rows {
 		return nil
 	}
@@ -176,6 +190,7 @@ func (m *Model) graphicsMessage(msg tea.Msg) {
 			return
 		}
 		g.prepared, g.png = msg.key, msg.png
+		g.scene = msg.scene
 	case graphicsUploaded:
 		if msg.generation != g.generation || msg.key != g.target || !g.pending {
 			return

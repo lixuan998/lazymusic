@@ -29,12 +29,20 @@ type artworkMsg struct {
 }
 
 func (m *Model) turntableVisible() bool {
-	available := m.bodyHeight() - m.navHeight() - 2
-	if m.bodyHeight() < 6 && m.UI.Focus == 5 {
-		available = m.bodyHeight() - 2
-	}
+	w, available := m.turntableSize()
 	return !m.exiting && m.ctx.Err() == nil && m.width >= 60 && m.height >= 16 && !m.HasModal() &&
-		!m.UI.Zen && m.UI.Layout == "full" && m.UI.Visualizer == turntableView && available >= 7
+		(m.UI.Zen || m.UI.Layout == "full") && m.UI.Visualizer == turntableView && available >= 7 && w >= 4
+}
+
+func (m *Model) turntableSize() (int, int) {
+	if m.UI.Zen {
+		eqW := min(max(20, m.zenEQWidth()), m.width-20)
+		return m.width - eqW - 4, m.bodyHeight() - 2
+	}
+	if m.bodyHeight() < 6 && m.UI.Focus == 5 {
+		return m.navWidth() - 4, m.bodyHeight() - 2
+	}
+	return m.navWidth() - 4, m.bodyHeight() - m.navHeight() - 2
 }
 
 func (m *Model) CancelArtwork() {

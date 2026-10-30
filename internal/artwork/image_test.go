@@ -35,7 +35,7 @@ func TestArtworkIsBoundedAndCenterCropped(t *testing.T) {
 	}
 }
 
-func TestNativePNGKeepsOriginalResolutionAndPNGBytes(t *testing.T) {
+func TestDecodedArtworkRetainsOriginalResolutionAndBytes(t *testing.T) {
 	for _, format := range []string{"png", "jpeg"} {
 		var data bytes.Buffer
 		im := image.NewRGBA(image.Rect(0, 0, 640, 480))
@@ -48,16 +48,12 @@ func TestNativePNGKeepsOriginalResolutionAndPNGBytes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		native, err := cover.PNG()
-		if err != nil {
-			t.Fatal(err)
-		}
-		cfg, _, err := image.DecodeConfig(bytes.NewReader(native))
+		cfg, _, err := image.DecodeConfig(bytes.NewReader(cover.Original))
 		if err != nil || cfg.Width != 640 || cfg.Height != 480 {
 			t.Fatal("native art was reduced to thumbnail resolution")
 		}
-		if format == "png" && !bytes.Equal(native, data.Bytes()) {
-			t.Fatal("original PNG was modified")
+		if !bytes.Equal(cover.Original, data.Bytes()) {
+			t.Fatal("original encoded image was modified")
 		}
 		if cover.Width != Size || cover.Height != Size {
 			t.Fatal("text fallback missing")

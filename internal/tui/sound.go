@@ -166,9 +166,29 @@ func (m *Model) zenBody(w, h int) string {
 	if kind == 1 {
 		name = "Wave"
 	}
+	left := box("Rhythm · "+name, rhythm, w-eqW, h, false)
+	if m.UI.Visualizer == turntableView {
+		left = box("Turntable", m.turntableRows(w-eqW-4, h-2), w-eqW, h, false)
+	}
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		box("Rhythm · "+name, rhythm, w-eqW, h, false),
+		left,
 		box("6 Equalizer", m.equalizerRows(eqW-4, h-2), eqW, h, m.UI.Focus == 5))
+}
+
+func (m *Model) cycleSoundView(step int) {
+	if !m.UI.Zen {
+		m.UI.Visualizer = (m.UI.Visualizer + step + soundViews) % soundViews
+		return
+	}
+	modes := []int{0, 1, turntableView}
+	current := 0
+	for i, v := range modes {
+		if v == m.UI.Visualizer {
+			current = i
+			break
+		}
+	}
+	m.UI.Visualizer = modes[(current+step+len(modes))%len(modes)]
 }
 func (m *Model) resize(action string) tea.Cmd {
 	delta := 1

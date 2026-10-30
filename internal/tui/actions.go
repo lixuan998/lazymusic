@@ -117,6 +117,9 @@ func (m *Model) normal(key string) tea.Cmd {
 	case "zen":
 		m.UI.Zen = !m.UI.Zen
 		if m.UI.Zen {
+			if m.UI.Visualizer == 2 {
+				m.UI.Visualizer = 0
+			}
 			m.UI.Focus = 5
 		} else if m.UI.Layout == "queue" {
 			m.UI.Focus = 2
@@ -194,7 +197,7 @@ func (m *Model) normal(key string) tea.Cmd {
 			if action == "category_previous" {
 				step = -1
 			}
-			m.UI.Visualizer = (m.UI.Visualizer + step + soundViews) % soundViews
+			m.cycleSoundView(step)
 			return m.dirty()
 		}
 		if m.UI.Focus == 3 {

@@ -108,11 +108,67 @@ func TestTurntableCoverMetadataAndResponsiveLayouts(t *testing.T) {
 	if m.UI.Visualizer != 0 {
 		t.Fatal("view cycle failed to wrap")
 	}
-	cover := artwork.Image{Width: 1, Height: 1, RGB: []byte{255, 0, 0}}
-	if strings.Join(recordPlayer(22, 10, cover, 0), "\n") == strings.Join(recordPlayer(22, 10, artwork.Image{}, 0), "\n") {
-		t.Fatal("album cover not drawn into the record")
+}
+
+func TestZenCyclesAllDistinctViewsAndKeepsEQControls(t *testing.T) {
+	m, api := testModel()
+	m.SetSize(140, 40)
+	m.State.Source.Capabilities.Equalizer = true
+	m.UI.Visualizer = 2
+	m.normal("ctrl+-")
+	if !m.UI.Zen || m.UI.Visualizer != 0 {
+		t.Fatal("entering Zen did not select a visual view")
 	}
-	if strings.Join(recordPlayer(22, 10, cover, 0), "\n") == strings.Join(recordPlayer(22, 10, cover, 1), "\n") {
-		t.Fatal("record does not animate")
+	for _, want := range []int{1, turntableView, 0, 1, turntableView} {
+		m.normal(".")
+		if m.UI.Visualizer != want {
+			t.Fatal("Zen repeats or omits a visualization")
+		}
+		v := ansi.Strip(m.View().Content)
+		if !strings.Contains(v, "6 Equalizer") {
+			t.Fatal("view change hid the equalizer")
+		}
+		if want == turntableView && !strings.Contains(v, "Turntable") {
+			t.Fatal("Zen did not render the turntable")
+		}
+	}
+	m.normal("l")
+	cmd := m.normal("k")
+	cmd()
+	if api.lastCommand.Op != "equalizer" || api.lastCommand.EQBand != 1 {
+		t.Fatal("turntable view consumed Zen EQ controls")
+	}
+	m.normal(",")
+	if m.UI.Visualizer != 1 {
+		t.Fatal("previous Zen view did not work")
+	}
+}
+
+func TestZenTurntableDimensionsStayInsideViewport(t *testing.T) {
+	for _, size := range [][2]int{{60, 16}, {100, 28}, {180, 50}} {
+		for _, logs := range []bool{false, true} {
+			m, _ := testModel()
+			m.SetSize(size[0], size[1])
+			m.UI.Zen, m.UI.Visualizer, m.UI.Focus, m.UI.ShowLogs = true, turntableView, 5, logs
+			for _, eqW := range []int{20, size[0] / 2, size[0] - 20} {
+				m.UI.ZenEQWidth = eqW
+				lines := strings.Split(m.View().Content, "\n")
+				if len(lines) != size[1] {
+					t.Fatal("Zen photo exceeds terminal height")
+				}
+				for _, line := range lines {
+					if ansi.StringWidth(line) > size[0] {
+						t.Fatal("Zen photo exceeds terminal width")
+					}
+				}
+				w, h := m.turntableSize()
+				if h >= 7 {
+					left, top, cols, rows := turntableImageRect(w, m.turntableGraphicHeight(h, w))
+					if left < 0 || top < 0 || cols > w || rows > h {
+						t.Fatal("photograph placement exceeds its panel")
+					}
+				}
+			}
+		}
 	}
 }

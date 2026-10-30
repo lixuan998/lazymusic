@@ -27,7 +27,7 @@ func nativeArtModel(t *testing.T) *Model {
 		t.Fatal(err)
 	}
 	m.artwork.image = im
-	m.graphics = graphicsState{id: termimage.MinID, known: true, queried: true, replied: true, target: "song"}
+	m.graphics = graphicsState{id: termimage.MinID, known: true, queried: true, replied: true, target: m.turntableSceneKey()}
 	return m
 }
 
@@ -82,18 +82,44 @@ func TestUnsupportedTerminalFallsBackAndLateUploadCannotRestoreImage(t *testing.
 	m := nativeArtModel(t)
 	m.graphics.replied = false
 	m.graphicsMessage(uv.KittyGraphicsEvent{Options: kitty.Options{ID: m.graphics.id}, Payload: []byte("ENOTSUP")})
-	if m.syncGraphics() != nil || m.graphics.ready() {
-		t.Fatal("unsupported terminal received artwork")
+	prepare := m.syncGraphics()
+	if prepare == nil || m.graphics.ready() {
+		t.Fatal("unsupported terminal did not prepare its photographic fallback")
 	}
+	m.graphicsMessage(prepare())
 	frame := strings.Join(m.turntableRows(24, 18), "\n")
 	if strings.ContainsRune(frame, kitty.Placeholder) || !strings.Contains(frame, "PIXEL") {
 		t.Fatal("text image fallback missing")
 	}
 	m.graphics.replied = true
-	m.graphicsMessage(m.syncGraphics()())
 	write := m.syncGraphics()()
 	m.ClearGraphics()
 	if _, _, ok := m.TerminalOutput(write); ok {
 		t.Fatal("stale image command survived cancellation")
+	}
+}
+
+func TestZenTurntableUsesItsOwnSizeAndReusesThePhotograph(t *testing.T) {
+	m := nativeArtModel(t)
+	m.graphicsMessage(m.syncGraphics()())
+	finishGraphicsWrite(t, m, m.syncGraphics()())
+	m.normal("ctrl+-")
+	if !m.turntableVisible() {
+		t.Fatal("native player is hidden in Zen")
+	}
+	write := m.syncGraphics()
+	if write == nil {
+		t.Fatal("Zen did not update the image dimensions")
+	}
+	data := finishGraphicsWrite(t, m, write())
+	if !strings.Contains(data, "a=p,U=1") || strings.Contains(data, "f=100") {
+		t.Fatal("Zen re-uploaded the same photograph")
+	}
+	view := m.View().Content
+	if !strings.ContainsRune(view, kitty.Placeholder) || !strings.Contains(view, "Equalizer") {
+		t.Fatal("Zen lost its image or EQ")
+	}
+	if m.rhythmVisible() {
+		t.Fatal("static photograph started the waveform animation clock")
 	}
 }

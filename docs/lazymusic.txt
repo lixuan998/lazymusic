@@ -56,11 +56,13 @@ Sound: ,/. cycles Pulse / Wave / Equalizer / Turntable. The turntable embeds
 the current album cover in a vinyl player, with album, artist and song below.
 Apple Music loads cover art automatically. LOCAL reads adjacent cover.jpg,
 cover.jpeg/png, folder.jpg/png or front.jpg/png (case-insensitive). Missing
-covers use a default record. Ghostty/Kitty display the original image through
-the Kitty graphics protocol. PNG bytes and source resolution are preserved;
-JPEG is converted to PNG without reducing resolution. Direct data transfer
-also works when the terminal is across SSH/WSL. Resize updates placement;
-animation frames do not re-upload the image.
+covers use a default record. Ghostty/Kitty display a high-resolution photograph
+of the entire player. Album artwork uses an antialiased circular center crop,
+centered on the platter in the same PNG. Cell rounding and font sizes cannot
+offset it from the chassis.
+The photographic asset is embedded in the binary. Direct image transfer also
+works across SSH/WSL. Resize and normal/Zen changes update placement without
+re-uploading the same work. Unsupported terminals approximate the whole image.
 Unsupported terminals fall back to color half-block images. Set
 LAZYMUSIC_IMAGE_DISABLE=1 to force this fallback. tmux/zellij default to it.
 Native images in the Nvim float require Nvim 0.12+, termguicolors, and the
@@ -102,6 +104,8 @@ bars, decaying peaks and reflections; Wave draws layered curves with braille
 sub-cell resolution. Pause/resume and view changes ease smoothly. Settled or
 hidden visualizations stop scheduling frames. These are decorative animations,
 not a live audio spectrum. Use ,/. in Navigation/Sound or Ctrl+- for Zen.
+In Zen, ,/. cycles Pulse / Wave / Turntable while Equalizer and Player remain
+visible. h/l and j/k still adjust the EQ. There is no duplicate EQ/wave slot.
 
 Apple Music: add songs/albums to the library, create playlists, and add songs
 to editable playlists. Cloud deletion is unavailable in Apple's public API;

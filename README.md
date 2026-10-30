@@ -204,7 +204,7 @@ Ubuntu 22.04 默认的 C++ 运行库可能无法启动官方授权组件（缺�
 | `Tab` / `Shift+Tab` | 下一个 / 上一个面板 |
 | `H/J/K/L`（`Shift+h/j/k/l`） | 向左 / 下 / 上 / 右调整当前面板尺寸 |
 | `+` / `_` | 轮换完整、Content + Player、Queue + Player 布局 |
-| `Ctrl++` / `Ctrl+-` | Zen：律动 + Equalizer + Player |
+| `Ctrl++` / `Ctrl+-` | Zen：Pulse / Wave / Turntable + Equalizer + Player |
 | `Ctrl+=` | 恢复默认布局 |
 | `Space`、`x` | 播放 / 暂停、停止，在所有面板可用 |
 | `<` / `>` | 上一曲 / 下一曲 |
@@ -249,9 +249,11 @@ Ubuntu 22.04 默认的 C++ 运行库可能无法启动官方授权组件（缺�
 
 同一个字母可以在不同面板复用，如 Content / Queue / Player 的 `a`、Content / Queue 的 `d`，以及 Content / Sound 的 `p`。全局 `m` 轮转播放模式；`r/s` 只在 Queue / Player 调整循环和随机。Content 刷新用 `r`，Search 范围用 `s`，EQ 归零用 `r`。尺寸调节统一用大写 `H/J/K/L`，Queue 调序用 `[/]`，Login 使用 Navigation 或 `:login`。
 
-窗口 6 的 **Turntable** 是黑胶播放台：在 Navigation / Sound 用 `,/.` 切换，封面嵌入唱片，下面展示专辑、艺人和歌名；播放时唱片高光缓缓转动，暂停后平滑停止。Apple Music 自动获取当前曲目的封面；LOCAL 读取同目录的 `cover.jpg/jpeg/png`、`folder.jpg/png` 或 `front.jpg/png`（文件名不区分大小写）。没有封面时显示默认唱片。封面只在内存中缓存，切歌与隐藏视图会取消旧请求。
+窗口 6 的 **Turntable** 是黑胶播放台：在 Navigation / Sound 用 `,/.` 切换，封面嵌入唱片，下面展示专辑、艺人和歌名。机身和封面统一以高清图片呈现，播放状态在下方显示。Apple Music 自动获取当前曲目的封面；LOCAL 读取同目录的 `cover.jpg/jpeg/png`、`folder.jpg/png` 或 `front.jpg/png`（文件名不区分大小写）。没有封面时显示默认唱片。封面只在内存中缓存，切歌与隐藏视图会取消旧请求。
 
-在 Ghostty / Kitty 中，使用 [Kitty 图像协议](https://sw.kovidgoyal.net/kitty/graphics-protocol/) 显示原图，保持图片分辨率和比例，PNG 原样传输；JPEG 只转换为 PNG，不缩成字符图。采用直接数据传输，支持终端在 SSH / WSL 的另一端。窗口缩放只更新图片位置和显示尺寸，动画帧不会重复上传原图。终端不支持协议时自动回退为彩色像素图；`LAZYMUSIC_IMAGE_DISABLE=1` 可强制回退。tmux / zellij 当前默认使用像素图。
+在 Ghostty / Kitty 中，整台留声机使用高清图片显示；封面等比取中、裁成带平滑边缘的圆形，与唱盘中心重合，合成为同一张 PNG 后整体缩放，避免封面与机身因字符格取整而错位。机身素材随二进制内嵌，不需要额外安装图片文件；素材和生成提示词位于 [`internal/turntable/assets`](internal/turntable/assets)。通过 [Kitty 图像协议](https://sw.kovidgoyal.net/kitty/graphics-protocol/) 直接传输，支持终端在 SSH / WSL 的另一端。窗口缩放及普通 / Zen 布局切换只更新图片位置和显示尺寸，不重复上传同一作品的图片。终端不支持协议时，整张播放台图片统一回退为彩色像素图；`LAZYMUSIC_IMAGE_DISABLE=1` 可强制回退。tmux / zellij 当前默认使用像素图。
+
+Zen 模式中，聚焦窗口 6 后用 `,/.` 在 **Pulse → Wave → Turntable** 之间循环，右侧 Equalizer 和底部 Player 始终保留；`h/l`、`j/k` 继续调节 EQ，`H/J/K/L` 调整尺寸。不会把 EQ 当作重复的波形视图插入循环。
 
 Neovim 浮窗通过随附插件转发图片协议；原图显示需要 **Neovim 0.12+** 和 `termguicolors`（使用 [nvim_ui_send](https://neovim.io/doc/user/api/#nvim_ui_send())）。旧版 Neovim 仍能运行 TUI，并使用像素图。更新时运行 `make install`，将二进制与插件一起更新。
 

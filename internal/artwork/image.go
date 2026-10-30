@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/jpeg"
-	"image/png"
+	_ "image/png"
 	"io"
 )
 
@@ -44,33 +44,6 @@ func Decode(r io.Reader) (Image, error) {
 	out := Thumbnail(im)
 	out.Original, out.Format = data, format
 	return out, nil
-}
-
-// PNG preserves the original resolution. JPEG needs a lossless format
-// conversion because the terminal graphics protocol accepts PNG, not JPEG.
-func (im Image) PNG() ([]byte, error) {
-	if len(im.Original) == 0 || len(im.Original) > MaxBytes {
-		return nil, fmt.Errorf("original album artwork is unavailable")
-	}
-	cfg, format, err := image.DecodeConfig(bytes.NewReader(im.Original))
-	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > 4096 || cfg.Height > 4096 || cfg.Width*cfg.Height > 16<<20 {
-		return nil, fmt.Errorf("invalid original album artwork")
-	}
-	if format == "png" {
-		return im.Original, nil
-	}
-	if format != "jpeg" {
-		return nil, fmt.Errorf("unsupported original album artwork format")
-	}
-	source, _, err := image.Decode(bytes.NewReader(im.Original))
-	if err != nil {
-		return nil, fmt.Errorf("original album artwork could not be decoded")
-	}
-	var out bytes.Buffer
-	if err := png.Encode(&out, source); err != nil {
-		return nil, fmt.Errorf("original album artwork could not be encoded")
-	}
-	return out.Bytes(), nil
 }
 
 // Thumbnail center-crops and averages the source into a square cover. Alpha is

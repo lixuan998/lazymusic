@@ -370,6 +370,9 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		if m.UI.Visualizer == 2 || m.UI.Zen {
 			footer = muted.Render(" EQUALIZER  h/l band · j/k ±1dB · e bypass · r flat · p preset · ? help")
 		}
+		if m.UI.Zen {
+			footer = muted.Render(" ZEN  ,/. Pulse/Wave/Turntable · h/l band · j/k gain · e bypass · ? help")
+		}
 	}
 	statusLine := m.notice
 	if m.picked != nil {

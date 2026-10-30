@@ -64,6 +64,9 @@ func (m *Model) helpDescription(d keyDefinition) string {
 		noun := "category"
 		if m.UI.Focus == 0 || m.UI.Focus == 5 {
 			noun = "sound view (Pulse / Wave / EQ / Turntable)"
+			if m.UI.Zen {
+				noun = "Zen view (Pulse / Wave / Turntable)"
+			}
 		}
 		if m.UI.Focus == 3 {
 			noun = "playback mode"
