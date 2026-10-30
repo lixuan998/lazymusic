@@ -194,7 +194,7 @@ func (c *Client) Browse(ctx context.Context, q Query) (Page, error) {
 	if section == "" {
 		section = "songs"
 	}
-	if section != "songs" && section != "albums" && section != "artists" && section != "playlists" {
+	if section != "songs" && section != "albums" && section != "artists" && section != "playlists" && !(section == "music-videos" && q.Page == "search" && q.Scope != "library") {
 		return Page{}, fmt.Errorf("unknown section %q", section)
 	}
 	var endpoint string
@@ -265,10 +265,14 @@ func convert(r collection) Page {
 		a := v.Attributes
 		i := Item{Source: music.Apple, ID: v.ID, Kind: v.Type, Title: provider.Clean(a.Name), Subtitle: provider.Clean(a.Artist)}
 		i.Writable = v.Type == "library-playlists" && a.CanEdit
-		if strings.HasSuffix(v.Type, "songs") {
+		if strings.HasSuffix(v.Type, "songs") || v.Type == "music-videos" {
 			t := session.CleanTrack(music.Track{Source: music.Apple, ID: v.ID, PlaybackID: a.PlayParams.CatalogID, Title: i.Title, Artist: i.Subtitle, Album: provider.Clean(a.Album), Duration: time.Duration(a.Duration) * time.Millisecond})
 			if !strings.HasPrefix(v.Type, "library-") {
 				t.PlaybackID = v.ID
+			}
+			if v.Type == "music-videos" {
+				t.Kind = v.Type
+				t.MediaType = "video"
 			}
 			i.Track = &t
 		} else if strings.HasSuffix(v.Type, "playlists") {

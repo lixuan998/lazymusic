@@ -45,13 +45,37 @@ TUI KEYS                                                   *lazymusic-keys*
 help, ? or Esc closes it. Global: H/J/K/L resize, Ctrl+h/j/k/l focus, Space
 play/pause, =/- system volume, @ log, +/_ layouts, Ctrl+= reset.
 
-Content: a add menu (a creates in Playlists), y queue, Ctrl+Enter play a song or
+Content: a add menu (a creates in Playlists), y queue, P plays a song or
 entire collection; Play next is in the add menu. r refresh, / filter.
 Search: i query, s scope. Queue: Enter play, d remove, D clear,
 [/] reorder, f focus the current song and center it when space permits.
 Near the queue ends, the view clamps to the first/last page. Queue scrolling
 is saved with the session. Global: </> previous/next, Ctrl+< / Ctrl+> seek 10s, x stop,
 m playback mode. Queue/Player: r repeat, s shuffle. Player: b quality.
+Apple catalog search also has a Videos tab. Enter/P plays a video in Content;
+v switches between video and browsing, h/Esc returns to browsing. Enter pauses
+or resumes the visible video. Global playback, seeking and queue controls are
+unchanged. Pausing retains the frame; stopping clears it. Background playback
+keeps the audio and resumes pictures at the current position on reattach.
+Video uses the licensed native CDM, with no browser or FFmpeg dependency, and
+requires native images (Ghostty/Kitty, or Nvim 0.12+ with the bundled relay).
+Unsupported terminals keep audio and display an explanation. The terminal
+picture keeps source detail up to 1280x720 at up to 30 FPS, subject to the
+software-authorized rendition. Low-resolution sources are never upscaled.
+Encrypted segment prefetch and binary PNG IPC reduce playback stalls; native
+frame editing reuses one image, and Nvim batches validated image chunks.
+Slow output cannot queue historical frames.
+Only software-authorized H.264 streams are used, with account/region limits.
+On HTTP 403 from the Apple video CDN, media requests automatically try an
+alternate CDN resolution (Google HTTPS DNS, then Cloudflare if resolution
+or those nodes fail); at most four different CDN nodes per request.
+Only the public CDN hostname is sent to DNS. The retry keeps the signed URL,
+Range, Host and TLS verification and connects to that CDN in this process;
+system DNS/proxy settings are unchanged. Failed/slow nodes are temporarily
+avoided; incomplete fragments are retried once before decoding.
+Audio and pictures share a short-lived
+in-memory route. @ logs shows recovery/failure without signed URLs or IPs.
+Authorization, licenses and library writes never use this fallback.
 Sound: ,/. cycles Pulse / Wave / Equalizer / Turntable. The turntable embeds
 a large circular album cover in the vinyl player, leaving a narrow black rim.
 It rotates clockwise while playing, freezes on pause and disappears on stop.
@@ -90,8 +114,8 @@ Cover requests are cancellable and cached in memory, never in the session.
 The header is framed; Player expands vertically with separate metadata,
 progress and status rows, using a solid half-height progress bar. Small terminals use a compact layout.
 Sound EQ: h/l band, j/k gain, e bypass, r flat, p preset.
-Content p/P picks a song or collection. Queue p/P picks a song when nothing is
-held; then p places after the cursor song, P places before it. Esc cancels.
+Content p picks a song or collection. Queue p picks a song when nothing is
+held; then p places after the cursor song. Esc cancels.
 Queue pickups move; Content pickups copy into Queue. Albums/playlists expand
 all track pages; artists expand all their albums and tracks in source order.
 The picked item is marked with a diamond and a status line. Collection reads

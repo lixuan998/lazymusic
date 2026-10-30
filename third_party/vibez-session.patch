@@ -1,31 +1,501 @@
---- a/internal/vibez/provider/provider.go
-+++ b/internal/vibez/provider/provider.go
-@@ -21,15 +21,16 @@
+--- a/internal/vibez/player/browserless/cdm/cdm.go
++++ b/internal/vibez/player/browserless/cdm/cdm.go
+@@ -12,6 +12,7 @@
+ import "C"
+ 
+ import (
++	"bytes"
+ 	"errors"
+ 	"fmt"
+ 	"sync"
+@@ -72,7 +73,7 @@
+ 	if c.ctx == nil {
+ 		return nil, "", errors.New("cdm context is closed")
+ 	}
+-	if len(kid) != 16 {
++	if len(kid) != 16 && (len(kid) < 32 || len(kid) > 65536 || !bytes.Equal(kid[4:8], []byte("pssh"))) {
+ 		return nil, "", fmt.Errorf("invalid KID length: %d (expected 16)", len(kid))
+ 	}
+ 
+@@ -137,6 +138,12 @@
+ 
+ // DecryptSubsamples decrypts an audio frame with a subsample table using AES-CTR (cenc).
+ func (c *CDM) DecryptSubsamples(keyID, iv, input []byte, subsamples []Subsample) ([]byte, error) {
++	return c.decryptSample(keyID, iv, input, subsamples, 0, 0, 0)
++}
++func (c *CDM) DecryptCBCS(keyID, iv, input []byte, subs []Subsample, crypt, skip int) ([]byte, error) {
++	return c.decryptSample(keyID, iv, input, subs, 1, crypt, skip)
++}
++func (c *CDM) decryptSample(keyID, iv, input []byte, subsamples []Subsample, cbcs, crypt, skip int) ([]byte, error) {
+ 	c.mu.Lock()
+ 	defer c.mu.Unlock()
+ 
+@@ -144,6 +151,9 @@
+ 		return nil, errors.New("cdm context is closed")
+ 	}
+ 
++	if len(keyID) != 16 || len(iv) == 0 || len(input) == 0 {
++		return nil, errors.New("invalid encrypted sample")
++	}
+ 	decrypted := make([]byte, len(input))
+ 	var outSize C.uint32_t
+ 
+@@ -173,7 +183,7 @@
+ 		cipherPtr,
+ 		numSubs,
+ 		(*C.uint8_t)(unsafe.Pointer(&decrypted[0])),
+-		&outSize,
++		&outSize, C.int(cbcs), C.uint32_t(crypt), C.uint32_t(skip),
+ 	)
+ 	if ret != 0 {
+ 		return nil, fmt.Errorf("decryption failed with status %d", ret)
+@@ -193,3 +203,62 @@
+ 	}
+ 	return nil
+ }
++
++// Video decoding stays inside the licensed CDM. A video key may permit
++// DecryptAndDecodeFrame while deliberately rejecting raw Decrypt.
++type VideoFrame struct {
++	RGBA          []byte
++	Width, Height int
++	Timestamp     int64
++}
++
++func (c *CDM) ConfigureVideo(extra []byte, width, height int) error {
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	if c.ctx == nil || len(extra) == 0 {
++		return fmt.Errorf("video decoder unavailable")
++	}
++	status := C.cdm_configure_video(c.ctx, (*C.uint8_t)(unsafe.Pointer(&extra[0])), C.uint32_t(len(extra)), C.int(width), C.int(height))
++	if status != 0 {
++		return fmt.Errorf("CDM video decoder initialization status %d", int(status))
++	}
++	return nil
++}
++func (c *CDM) ResetVideo() {
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	if c.ctx != nil {
++		C.cdm_reset_video(c.ctx)
++	}
++}
++func (c *CDM) DecodeVideo(key, iv, data []byte, subs []Subsample, crypt, skip int, timestamp, earliest int64) (VideoFrame, error) {
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	if c.ctx == nil || len(key) != 16 || len(iv) != 16 || len(data) == 0 {
++		return VideoFrame{}, fmt.Errorf("invalid video sample")
++	}
++	clear := make([]C.uint16_t, len(subs))
++	cipher := make([]C.uint32_t, len(subs))
++	for i, sub := range subs {
++		clear[i] = C.uint16_t(sub.ClearBytes)
++		cipher[i] = C.uint32_t(sub.CipherBytes)
++	}
++	var cp *C.uint16_t
++	var ep *C.uint32_t
++	if len(subs) > 0 {
++		cp = &clear[0]
++		ep = &cipher[0]
++	}
++	var pixels *C.uint8_t
++	var width, height C.int
++	var pts C.int64_t
++	status := C.cdm_decode_video(c.ctx, (*C.uint8_t)(unsafe.Pointer(&key[0])), (*C.uint8_t)(unsafe.Pointer(&iv[0])), C.uint32_t(len(iv)), (*C.uint8_t)(unsafe.Pointer(&data[0])), C.uint32_t(len(data)), cp, ep, C.uint32_t(len(subs)), C.uint32_t(crypt), C.uint32_t(skip), C.int64_t(timestamp), C.int64_t(earliest), &pixels, &width, &height, &pts)
++	if status == 1 {
++		return VideoFrame{}, nil
++	}
++	if status != 0 {
++		return VideoFrame{}, fmt.Errorf("CDM video decoding status %d", int(status))
++	}
++	defer C.free(unsafe.Pointer(pixels))
++	return VideoFrame{RGBA: C.GoBytes(unsafe.Pointer(pixels), width*height*4), Width: int(width), Height: int(height), Timestamp: int64(pts)}, nil
++}
+--- a/internal/vibez/player/browserless/cdm/cdm_bridge.cpp
++++ b/internal/vibez/player/browserless/cdm/cdm_bridge.cpp
+@@ -2,6 +2,8 @@
+ #include "content_decryption_module.h"
+ 
+ #include <iostream>
++#include <atomic>
++#include <algorithm>
+ #include <vector>
+ #include <chrono>
+ #include <cstring>
+@@ -80,8 +82,39 @@
+     }
+ };
+ 
++class VideoFrameImpl : public cdm::VideoFrame {
++   public:
++    cdm::VideoFormat format = cdm::kUnknownVideoFormat;
++    cdm::Size size{};
++    cdm::Buffer* buffer = nullptr;
++    uint32_t offsets[3]{}, strides[3]{};
++    int64_t timestamp = 0;
++    ~VideoFrameImpl() {
++        if (buffer) buffer->Destroy();
++    }
++    void SetFormat(cdm::VideoFormat f) override { format = f; }
++    cdm::VideoFormat Format() const override { return format; }
++    void SetSize(cdm::Size s) override { size = s; }
++    cdm::Size Size() const override { return size; }
++    void SetFrameBuffer(cdm::Buffer* b) override {
++        if (buffer) buffer->Destroy();
++        buffer = b;
++    }
++    cdm::Buffer* FrameBuffer() override { return buffer; }
++    void SetPlaneOffset(cdm::VideoPlane p, uint32_t n) override {
++        if (p < 3) offsets[p] = n;
++    }
++    uint32_t PlaneOffset(cdm::VideoPlane p) override { return p < 3 ? offsets[p] : 0; }
++    void SetStride(cdm::VideoPlane p, uint32_t n) override {
++        if (p < 3) strides[p] = n;
++    }
++    uint32_t Stride(cdm::VideoPlane p) override { return p < 3 ? strides[p] : 0; }
++    void SetTimestamp(int64_t t) override { timestamp = t; }
++    int64_t Timestamp() const override { return timestamp; }
++};
++
+ class Host11Impl : public cdm::Host_11 {
+-public:
++   public:
+     std::mutex cv_m;
+     std::condition_variable msg_cv;
+     std::condition_variable update_cv;
+@@ -96,16 +129,24 @@
+     bool certResolved = false;
+     bool certFailed = false;
+     int usableKeys = 0;
+-
+-    cdm::Buffer* Allocate(uint32_t capacity) override {
+-        return new BufferImpl(capacity);
+-    }
+-
+-    void SetTimer(int64_t delay_ms, void* context) override {}
+-
+-    cdm::Time GetCurrentWallTime() override {
+-        return static_cast<cdm::Time>(wall_time_seconds());
+-    }
++    std::atomic<bool> outputQueryPending{false};
++    struct Timer {
++        std::chrono::steady_clock::time_point at;
++        void* context;
++    };
++    std::vector<Timer> timers;
++
++    cdm::Buffer* Allocate(uint32_t capacity) override { return new BufferImpl(capacity); }
++
++    void SetTimer(int64_t delay_ms, void* context) override {
++        std::lock_guard<std::mutex> lock(cv_m);
++        if (timers.size() < 128)
++            timers.push_back({std::chrono::steady_clock::now() +
++                                  std::chrono::milliseconds(std::max<int64_t>(0, delay_ms)),
++                              context});
++    }
++
++    cdm::Time GetCurrentWallTime() override { return static_cast<cdm::Time>(wall_time_seconds()); }
+ 
+     void OnInitialized(bool success) override {
+         std::lock_guard<std::mutex> lk(cv_m);
+@@ -166,7 +207,7 @@
+ 
+     void EnableOutputProtection(uint32_t desired_protection_mask) override {}
+ 
+-    void QueryOutputProtectionStatus() override {}
++    void QueryOutputProtectionStatus() override { outputQueryPending = true; }
+ 
+     void OnDeferredInitializationDone(cdm::StreamType stream_type, cdm::Status decoder_status) override {}
+ 
+@@ -193,6 +234,32 @@
+     cdm::ContentDecryptionModule_11* cdm11 = nullptr;
+     Host11Impl host;
+ };
++
++// Go serializes entry points. Pump callbacks on that same CDM execution path,
++// without detached threads that could outlive the CDM or race a decryption.
++static void pump_host(cdm_context_t* ctx) {
++    if (ctx->host.outputQueryPending.exchange(false))
++        ctx->cdm11->OnQueryOutputProtectionStatus(cdm::kQuerySucceeded, cdm::kLinkTypeUnknown,
++                                                  cdm::kProtectionNone);
++    for (int n = 0; n < 32; n++) {
++        void* context = nullptr;
++        bool found = false;
++        {
++            std::lock_guard<std::mutex> lock(ctx->host.cv_m);
++            auto now = std::chrono::steady_clock::now();
++            for (auto it = ctx->host.timers.begin(); it != ctx->host.timers.end(); ++it) {
++                if (it->at <= now) {
++                    context = it->context;
++                    ctx->host.timers.erase(it);
++                    found = true;
++                    break;
++                }
++            }
++        }
++        if (!found) break;
++        ctx->cdm11->TimerExpired(context);
++    }
++}
+ 
+ extern "C" {
+ 
+@@ -236,6 +303,7 @@
+ 
+     ctx->cdm11 = static_cast<cdm::ContentDecryptionModule_11*>(raw);
+     ctx->cdm11->Initialize(true, false, false);
++    pump_host(ctx);
+ 
+     return ctx;
+ }
+@@ -268,7 +336,7 @@
+     uint32_t* out_challenge_size,
+     char** out_session_id
+ ) {
+-    if (!ctx || !ctx->cdm11 || !kid || kid_size != 16) return -1;
++    if (!ctx || !ctx->cdm11 || !kid || (kid_size != 16 && (kid_size < 32 || kid_size > 65536 || std::memcmp(kid + 4, "pssh", 4) != 0))) return -1;
+ 
+     // Reset host session state
+     {
+@@ -295,7 +363,8 @@
+         0x00, 0x00, 0x00, 0x14,
+         0x08, 0x01, 0x12, 0x10
+     };
+-    pssh.insert(pssh.end(), kid, kid + kid_size);
++    if (kid_size == 16) pssh.insert(pssh.end(), kid, kid + kid_size);
++    else pssh.assign(kid, kid + kid_size);
+ 
+     ctx->cdm11->CreateSessionAndGenerateRequest(
+         2,
+@@ -387,14 +456,17 @@
+     const uint32_t* cipher_bytes,
+     uint32_t num_subsamples,
+     uint8_t* out_decrypted,
+-    uint32_t* out_size
++    uint32_t* out_size,
++    int cbcs, uint32_t crypt_blocks, uint32_t skip_blocks
+ ) {
+     if (!ctx || !ctx->cdm11 || !in_data || in_size == 0) return -1;
+ 
++    pump_host(ctx);
+     cdm::InputBuffer_2 input = {};
+     input.data = in_data;
+     input.data_size = in_size;
+-    input.encryption_scheme = cdm::EncryptionScheme::kCenc;
++    input.encryption_scheme = cbcs ? cdm::EncryptionScheme::kCbcs : cdm::EncryptionScheme::kCenc;
++    input.pattern = {crypt_blocks, skip_blocks};
+     input.key_id = key_id;
+     input.key_id_size = key_id_size;
+     input.iv = iv;
+@@ -448,4 +520,99 @@
+     delete ctx;
  }
  
- type Track struct {
--	ID         string
--	CatalogID  string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
--	Title      string
--	Artist     string
--	Album      string
--	Duration   time.Duration
--	ArtworkURL string
--	PreviewURL string
--	Genres     []string
-+	Kind, MediaType string
-+	ID              string
-+	CatalogID       string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
-+	Title           string
-+	Artist          string
-+	Album           string
-+	Duration        time.Duration
-+	ArtworkURL      string
-+	PreviewURL      string
-+	Genres          []string
- 	// DiscNumber and TrackNumber give the track's position on its album.
- 	// Zero means unknown.
- 	DiscNumber  int
+-} // extern "C"
++}  // extern "C"
++extern "C" int cdm_configure_video(cdm_context_t* ctx,uint8_t* extra,uint32_t length,int width,int height){
++    if (!ctx || !ctx->cdm11 || width < 1 || height < 1 || width > 1920 || height > 1080) return -1;
++    ctx->cdm11->DeinitializeDecoder(cdm::kStreamTypeVideo);
++    cdm::VideoDecoderConfig_2 config{};
++    config.codec = cdm::kCodecH264;
++    if (length < 2) return -1;
++    switch (extra[1]) {
++        case 66:
++            config.profile = cdm::kH264ProfileBaseline;
++            break;
++        case 77:
++            config.profile = cdm::kH264ProfileMain;
++            break;
++        case 100:
++            config.profile = cdm::kH264ProfileHigh;
++            break;
++        default:
++            return -1;
++    }
++    config.format = cdm::kI420;
++    config.coded_size = {(width + 15) & ~15, (height + 15) & ~15};
++    config.extra_data = extra;
++    config.extra_data_size = length;
++    config.encryption_scheme = cdm::EncryptionScheme::kCbcs;
++    return ctx->cdm11->InitializeVideoDecoder(config);
++}
++extern "C" void cdm_reset_video(cdm_context_t* ctx) {
++    if (ctx && ctx->cdm11) ctx->cdm11->DeinitializeDecoder(cdm::kStreamTypeVideo);
++}
++extern "C" int cdm_decode_video(cdm_context_t* ctx, const uint8_t* key, const uint8_t* iv,
++                                uint32_t iv_size, const uint8_t* data, uint32_t length,
++                                const uint16_t* clear, const uint32_t* cipher, uint32_t count,
++                                uint32_t crypt, uint32_t skip, int64_t timestamp, int64_t earliest,
++                                uint8_t** rgb, int* width, int* height, int64_t* pts) {
++    if (!ctx || !ctx->cdm11 || !data || !length) return -1;
++    pump_host(ctx);
++    cdm::InputBuffer_2 input{};
++    input.data = data;
++    input.data_size = length;
++    input.encryption_scheme = cdm::EncryptionScheme::kCbcs;
++    input.pattern = {crypt, skip};
++    input.key_id = key;
++    input.key_id_size = 16;
++    input.iv = iv;
++    input.iv_size = iv_size;
++    input.timestamp = timestamp;
++    std::vector<cdm::SubsampleEntry> subs;
++    for (uint32_t i = 0; i < count; i++) subs.push_back({clear[i], cipher[i]});
++    cdm::SubsampleEntry whole{0, length};
++    input.subsamples = count ? subs.data() : &whole;
++    input.num_subsamples = count ? count : 1;
++    VideoFrameImpl frame;
++    auto status = ctx->cdm11->DecryptAndDecodeFrame(input, &frame);
++    if (status != cdm::kSuccess) return static_cast<int>(status);
++    if (!frame.buffer || frame.format != cdm::kI420 || frame.size.width < 1 ||
++        frame.size.height < 1 || frame.size.width > 1920 || frame.size.height > 1080)
++        return -2;
++    // Late pictures still pass through the licensed decoder for dependencies,
++    // but avoid a full RGB conversion/copy when catching up or seeking.
++    if (frame.timestamp < earliest) return static_cast<int>(cdm::kNeedMoreData);
++    auto source = frame.buffer->Data();
++    auto size = frame.buffer->Size();
++    for (int plane = 0; plane < 3; plane++) {
++        uint32_t rows = plane ? (frame.size.height + 1) / 2 : frame.size.height;
++        uint32_t columns = plane ? (frame.size.width + 1) / 2 : frame.size.width;
++        uint64_t end = static_cast<uint64_t>(frame.offsets[plane]) +
++                       static_cast<uint64_t>(rows - 1) * frame.strides[plane] + columns;
++        if (frame.strides[plane] < columns || end > size) return -3;
++    }
++    int w = frame.size.width, h = frame.size.height;
++    double scale = std::min(1.0, std::min(1280.0 / w, 720.0 / h));
++    *width = std::max(1, static_cast<int>(w * scale));
++    *height = std::max(1, static_cast<int>(h * scale));
++    *rgb = static_cast<uint8_t*>(std::malloc(static_cast<size_t>(*width) * (*height) * 4));
++    if (!*rgb) return -4;
++    auto clamp = [](int n) -> uint8_t {
++        return static_cast<uint8_t>(std::max(0, std::min(255, n)));
++    };
++    for (int y = 0; y < *height; y++) {
++        int sy = h == *height ? y : y * h / (*height);
++        for (int x = 0; x < *width; x++) {
++            int sx = w == *width ? x : x * w / (*width);
++            int Y = source[frame.offsets[0] + sy * frame.strides[0] + sx] - 16;
++            int U = source[frame.offsets[1] + (sy / 2) * frame.strides[1] + sx / 2] - 128;
++            int V = source[frame.offsets[2] + (sy / 2) * frame.strides[2] + sx / 2] - 128;
++            auto pixel = *rgb + (static_cast<size_t>(y) * (*width) + x) * 4;
++            pixel[0] = clamp((298 * Y + 409 * V + 128) >> 8);
++            pixel[1] = clamp((298 * Y - 100 * U - 208 * V + 128) >> 8);
++            pixel[2] = clamp((298 * Y + 516 * U + 128) >> 8);
++            pixel[3] = 255;
++        }
++    }
++    *pts = frame.timestamp;
++    return 0;
++}
+--- a/internal/vibez/player/browserless/cdm/cdm_bridge.h
++++ b/internal/vibez/player/browserless/cdm/cdm_bridge.h
+@@ -56,14 +56,23 @@
+     const uint32_t* cipher_bytes,
+     uint32_t num_subsamples,
+     uint8_t* out_decrypted,
+-    uint32_t* out_size
++    uint32_t* out_size,
++    int cbcs, uint32_t crypt_blocks, uint32_t skip_blocks
+ );
+ 
+ // cdm_context_destroy destroys the CDM instance and unloads the shared library.
+ void cdm_context_destroy(cdm_context_t* ctx);
+ 
++int cdm_configure_video(cdm_context_t* ctx, uint8_t* extra, uint32_t length, int width, int height);
++void cdm_reset_video(cdm_context_t* ctx);
++int cdm_decode_video(cdm_context_t* ctx, const uint8_t* key, const uint8_t* iv, uint32_t iv_size,
++                     const uint8_t* data, uint32_t length, const uint16_t* clear,
++                     const uint32_t* cipher, uint32_t count, uint32_t crypt, uint32_t skip,
++                     int64_t timestamp, int64_t earliest, uint8_t** rgb, int* width, int* height,
++                     int64_t* pts);
++
+ #ifdef __cplusplus
+ }
+ #endif
+ 
+-#endif // CDM_BRIDGE_H_
++#endif  // CDM_BRIDGE_H_
+--- a/internal/vibez/player/browserless/cdm/cdm_nocgo.go
++++ b/internal/vibez/player/browserless/cdm/cdm_nocgo.go
+@@ -42,3 +42,19 @@
+ func (c *CDM) Close() error {
+ 	return nil
+ }
++
++func (c *CDM) DecryptCBCS(_, _, _ []byte, _ []Subsample, _, _ int) ([]byte, error) {
++	return nil, errNoCgo
++}
++
++type VideoFrame struct {
++	RGBA          []byte
++	Width, Height int
++	Timestamp     int64
++}
++
++func (c *CDM) ConfigureVideo([]byte, int, int) error { return errNoCgo }
++func (c *CDM) ResetVideo()                           {}
++func (c *CDM) DecodeVideo([]byte, []byte, []byte, []Subsample, int, int, int64, int64) (VideoFrame, error) {
++	return VideoFrame{}, errNoCgo
++}
+--- a/internal/vibez/player/browserless/license/client.go
++++ b/internal/vibez/player/browserless/license/client.go
+@@ -45,7 +45,8 @@
+ 	return &Client{
+ 		cfg: cfg,
+ 		httpClient: &http.Client{
+-			Timeout: 15 * time.Second,
++			Timeout:   15 * time.Second,
++			Transport: http.DefaultTransport,
+ 		},
+ 	}
+ }
+--- a/internal/vibez/player/browserless/mp4/decryptor.go
++++ b/internal/vibez/player/browserless/mp4/decryptor.go
+@@ -165,6 +165,7 @@
+ 	kid []byte,
+ 	cfg AudioConfig,
+ 	decryptFn DecryptFunc,
++	encryption ...Encryption,
+ ) ([]byte, error) {
+ 	// Find moof box
+ 	moofIdx := bytes.Index(segData, []byte("moof"))
+@@ -201,14 +202,21 @@
+ 
+ 	// Sanity-bound sampleCount against remaining senc buffer to prevent OOM
+ 	remainingSencBytes := sencEnd - (sencStart + 16)
+-	if remainingSencBytes < 0 || int64(sampleCount) > int64(remainingSencBytes)/8 || sampleCount > 65536 {
++	ivSize := 8
++	if len(encryption) > 0 {
++		ivSize = encryption[0].IVSize
++	}
++	minEntry := ivSize
++	if hasSubsamples {
++		minEntry += 2
++	}
++	if remainingSencBytes < 0 || (minEntry > 0 && int64(sampleCount) > int64(remainingSencBytes)/int64(minEntry)) || sampleCount > 65536 {
+ 		return nil, fmt.Errorf("invalid or excessive sample count %d in senc (available bytes: %d)", sampleCount, remainingSencBytes)
+ 	}
+ 
+ 	samplesEnc := make([]SampleEncInfo, sampleCount)
+ 	offset := sencStart + 16
+-	ivSize := 8
+-	if !hasSubsamples && sampleCount > 0 && remainingSencBytes == int(sampleCount)*16 {
++	if len(encryption) == 0 && !hasSubsamples && sampleCount > 0 && remainingSencBytes == int(sampleCount)*16 {
+ 		ivSize = 16
+ 	}
+ 	for i := range sampleCount {
+@@ -217,6 +225,9 @@
+ 		}
+ 		iv := make([]byte, ivSize)
+ 		copy(iv, moofData[offset:offset+ivSize])
++		if ivSize == 0 && len(encryption) > 0 {
++			iv = append([]byte(nil), encryption[0].ConstantIV...)
++		}
+ 		offset += ivSize
+ 
+ 		var subsamples []Subsample
 --- a/internal/vibez/player/browserless/player.go
 +++ b/internal/vibez/player/browserless/player.go
 @@ -73,6 +73,8 @@
@@ -37,6 +507,15 @@
  	sessionExpiredOnce sync.Once
  	doneCh             chan struct{}
  	closeOnce          sync.Once
+@@ -339,7 +341,7 @@
+ 				nextTrack = meta
+ 			}
+ 		}
+-		streamURL, duration, err := p.streamer.PrepareTrack(ctx, catalogID, prefer256k)
++		streamURL, duration, err := p.streamer.PrepareMedia(ctx, catalogID, nextTrack.MediaType, prefer256k)
+ 		if err != nil || ctx.Err() != nil {
+ 			return
+ 		}
 @@ -368,6 +370,11 @@
  
  func (p *Player) playTrack(t provider.Track) {
@@ -49,6 +528,15 @@
  	if p.playCtx != nil {
  		p.playCtx()
  	}
+@@ -437,7 +444,7 @@
+ 		if p.streamer == nil {
+ 			return
+ 		}
+-		streamURL, duration, err := p.streamer.PrepareTrack(ctx, catalogID, prefer256k)
++		streamURL, duration, err := p.streamer.PrepareMedia(ctx, catalogID, t.MediaType, prefer256k)
+ 		if err != nil {
+ 			select {
+ 			case <-ctx.Done():
 @@ -490,11 +497,24 @@
  		default:
  		}
@@ -143,7 +631,7 @@
  	if err != nil {
 --- a/internal/vibez/player/browserless/streamer.go
 +++ b/internal/vibez/player/browserless/streamer.go
-@@ -23,20 +23,30 @@
+@@ -23,20 +23,33 @@
  )
  
  type segmentRef struct {
@@ -167,6 +655,9 @@
 -	segments  []segmentRef
 -	totalDur  time.Duration
 -	createdAt time.Time
++	fragmentConfig     *mp4.TrackConfig
++	video              bool
++	videoStream        string
 +	stationProtections *stationProtectionStore
 +	stationInfo        *license.PlaybackInfo
 +	encryption         *mp4.Encryption
@@ -185,7 +676,41 @@
  
  	// raw marks an unencrypted library upload: segments are byte ranges of
  	// the file itself and pass through without decryption.
-@@ -121,6 +131,9 @@
+@@ -49,12 +62,19 @@
+ 
+ // StreamServer manages local HTTP streaming for decrypted Apple Music tracks.
+ type StreamServer struct {
+-	cdmEngine *cdm.CDM
+-	licClient *license.Client
+-	listener  net.Listener
+-	server    *http.Server
+-	port      int
+-	authToken string
++	mediaOnce    sync.Once
++	mediaHTTP    *http.Client
++	videoMu      sync.Mutex
++	videoState   nativeVideoState
++	videoClosed  bool
++	videoContext context.Context
++	videoCancel  context.CancelFunc
++	cdmEngine    *cdm.CDM
++	licClient    *license.Client
++	listener     net.Listener
++	server       *http.Server
++	port         int
++	authToken    string
+ 
+ 	mu         sync.RWMutex
+ 	streams    map[string]*trackStream
+@@ -101,6 +121,7 @@
+ 		streams:   make(map[string]*trackStream),
+ 	}
+ 
++	s.videoContext, s.videoCancel = context.WithCancel(context.Background())
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/stream/", s.handleStream)
+ 
+@@ -121,6 +142,9 @@
  // PrepareTrack resolves Apple Music playback metadata, acquires the Widevine license,
  // parses the HLS manifest, and returns a local HTTP streaming URL and total duration.
  func (s *StreamServer) PrepareTrack(ctx context.Context, trackID string, prefer256k bool) (string, time.Duration, error) {
@@ -195,19 +720,32 @@
  	// A library ID reaches here only when it has no catalog song.
  	if strings.HasPrefix(trackID, "i.") {
  		return s.prepareRawTrack(ctx, trackID)
-@@ -501,6 +514,11 @@
- 		return
- 	}
+@@ -410,7 +434,7 @@
+ 	// Warm segment 0 asynchronously so both initial playback and
+ 	// seek-to-start (0:00) can write the first ~10s immediately
+ 	// without waiting for an upstream CDN round-trip.
+-	if len(st.segments) > 0 && (st.raw || s.cdmEngine != nil) {
++	if !st.video && st.videoStream == "" && len(st.segments) > 0 && (st.raw || s.cdmEngine != nil) {
+ 		go func() {
+ 			warmCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+ 			defer cancel()
+@@ -498,6 +522,15 @@
  
-+	if st.live {
-+		s.serveLive(w, r, streamID, st)
+ 	if !ok {
+ 		http.NotFound(w, r)
 +		return
 +	}
 +
- 	// Support start_seg parameter for instant seeking
- 	startSeg := 0
- 	if qSeg := r.URL.Query().Get("start_seg"); qSeg != "" {
-@@ -520,6 +538,12 @@
++	if st.video {
++		http.NotFound(w, r)
++		return
++	}
++	if st.live {
++		s.serveLive(w, r, streamID, st)
+ 		return
+ 	}
+ 
+@@ -520,6 +553,12 @@
  		}
  	}
  
@@ -220,7 +758,7 @@
  	contentType := "audio/aac"
  	if st.raw {
  		contentType = st.rawFormat.contentType
-@@ -571,6 +595,14 @@
+@@ -571,6 +610,14 @@
  			}
  		}
  
@@ -235,7 +773,7 @@
  		// Write to HTTP client (GStreamer). A failed write means the client
  		// has gone, so there is nobody left to abort for; log it only.
  		if _, err := w.Write(aacData); err != nil {
-@@ -600,6 +632,13 @@
+@@ -600,19 +647,34 @@
  }
  
  func (s *StreamServer) fetchAndDecryptSegment(ctx context.Context, client *http.Client, st *trackStream, seg segmentRef) ([]byte, string, error) {
@@ -249,7 +787,30 @@
  	segURL := seg.uri
  	if !strings.HasPrefix(segURL, "http://") && !strings.HasPrefix(segURL, "https://") {
  		segURL = st.baseURI + seg.uri
-@@ -620,8 +659,11 @@
+ 	}
+ 
+-	segData, stage, err := fetchSegmentWithRetry(ctx, client, segURL, seg.offset, seg.length)
++	var segData []byte
++	var stage string
++	var err error
++	if st.fragmentConfig != nil {
++		segData, err = s.mediaBytes(ctx, segURL, seg.offset, seg.length, 32<<20)
++		stage = "fetch video audio"
++	} else {
++		segData, stage, err = fetchSegmentWithRetry(ctx, client, segURL, seg.offset, seg.length)
++	}
+ 	if err != nil {
+ 		return nil, stage, err
+ 	}
+ 	if st.raw {
+ 		return segData, "", nil
+ 	}
+-	aacData, err := mp4.DecryptSegment(segData, st.kid, st.audioCfg, func(kid, iv, input []byte, subs []mp4.Subsample) ([]byte, error) {
++	decrypt := func(kid, iv, input []byte, subs []mp4.Subsample) ([]byte, error) {
+ 		cdmSubs := make([]cdm.Subsample, len(subs))
+ 		for si, sb := range subs {
+ 			cdmSubs[si] = cdm.Subsample{
+@@ -620,8 +682,17 @@
  				CipherBytes: sb.CipherBytes,
  			}
  		}
@@ -258,9 +819,30 @@
 +		}
  		return s.cdmEngine.DecryptSubsamples(kid, iv, input, cdmSubs)
 -	})
-+	}, encryptionOptions(st)...)
++	}
++	var aacData []byte
++	if st.fragmentConfig != nil && st.encryption != nil {
++		aacData, err = mp4.DecryptAudioFragment(segData, st.kid, *st.fragmentConfig, st.audioCfg, *st.encryption, decrypt)
++	} else {
++		aacData, err = mp4.DecryptSegment(segData, st.kid, st.audioCfg, decrypt, encryptionOptions(st)...)
++	}
  	if err != nil {
  		return nil, "decrypt", err
+ 	}
+@@ -701,6 +772,14 @@
+ 
+ // Close terminates the local HTTP stream server.
+ func (s *StreamServer) Close() error {
++	s.closeMedia()
++	if s.videoCancel != nil {
++		s.videoCancel()
++	}
++	s.videoMu.Lock()
++	s.videoClosed = true
++	s.resetVideoLocked()
++	s.videoMu.Unlock()
+ 	if s.server != nil {
+ 		return s.server.Close()
  	}
 --- a/internal/vibez/player/browserless/streamer_test.go
 +++ b/internal/vibez/player/browserless/streamer_test.go
@@ -275,173 +857,31 @@
  	}
  }
  
---- a/internal/vibez/player/browserless/cdm/cdm.go
-+++ b/internal/vibez/player/browserless/cdm/cdm.go
-@@ -12,6 +12,7 @@
- import "C"
- 
- import (
-+	"bytes"
- 	"errors"
- 	"fmt"
- 	"sync"
-@@ -72,7 +73,7 @@
- 	if c.ctx == nil {
- 		return nil, "", errors.New("cdm context is closed")
- 	}
--	if len(kid) != 16 {
-+	if len(kid) != 16 && (len(kid) < 32 || len(kid) > 65536 || !bytes.Equal(kid[4:8], []byte("pssh"))) {
- 		return nil, "", fmt.Errorf("invalid KID length: %d (expected 16)", len(kid))
- 	}
- 
-@@ -137,6 +138,12 @@
- 
- // DecryptSubsamples decrypts an audio frame with a subsample table using AES-CTR (cenc).
- func (c *CDM) DecryptSubsamples(keyID, iv, input []byte, subsamples []Subsample) ([]byte, error) {
-+	return c.decryptSample(keyID, iv, input, subsamples, 0, 0, 0)
-+}
-+func (c *CDM) DecryptCBCS(keyID, iv, input []byte, subs []Subsample, crypt, skip int) ([]byte, error) {
-+	return c.decryptSample(keyID, iv, input, subs, 1, crypt, skip)
-+}
-+func (c *CDM) decryptSample(keyID, iv, input []byte, subsamples []Subsample, cbcs, crypt, skip int) ([]byte, error) {
- 	c.mu.Lock()
- 	defer c.mu.Unlock()
- 
-@@ -144,6 +151,9 @@
- 		return nil, errors.New("cdm context is closed")
- 	}
- 
-+	if len(keyID) != 16 || len(iv) == 0 || len(input) == 0 {
-+		return nil, errors.New("invalid encrypted sample")
-+	}
- 	decrypted := make([]byte, len(input))
- 	var outSize C.uint32_t
- 
-@@ -173,7 +183,7 @@
- 		cipherPtr,
- 		numSubs,
- 		(*C.uint8_t)(unsafe.Pointer(&decrypted[0])),
--		&outSize,
-+		&outSize, C.int(cbcs), C.uint32_t(crypt), C.uint32_t(skip),
- 	)
- 	if ret != 0 {
- 		return nil, fmt.Errorf("decryption failed with status %d", ret)
---- a/internal/vibez/player/browserless/cdm/cdm_bridge.cpp
-+++ b/internal/vibez/player/browserless/cdm/cdm_bridge.cpp
-@@ -268,7 +268,7 @@
-     uint32_t* out_challenge_size,
-     char** out_session_id
- ) {
--    if (!ctx || !ctx->cdm11 || !kid || kid_size != 16) return -1;
-+    if (!ctx || !ctx->cdm11 || !kid || (kid_size != 16 && (kid_size < 32 || kid_size > 65536 || std::memcmp(kid + 4, "pssh", 4) != 0))) return -1;
- 
-     // Reset host session state
-     {
-@@ -295,7 +295,8 @@
-         0x00, 0x00, 0x00, 0x14,
-         0x08, 0x01, 0x12, 0x10
-     };
--    pssh.insert(pssh.end(), kid, kid + kid_size);
-+    if (kid_size == 16) pssh.insert(pssh.end(), kid, kid + kid_size);
-+    else pssh.assign(kid, kid + kid_size);
- 
-     ctx->cdm11->CreateSessionAndGenerateRequest(
-         2,
-@@ -387,14 +388,16 @@
-     const uint32_t* cipher_bytes,
-     uint32_t num_subsamples,
-     uint8_t* out_decrypted,
--    uint32_t* out_size
-+    uint32_t* out_size,
-+    int cbcs, uint32_t crypt_blocks, uint32_t skip_blocks
- ) {
-     if (!ctx || !ctx->cdm11 || !in_data || in_size == 0) return -1;
- 
-     cdm::InputBuffer_2 input = {};
-     input.data = in_data;
-     input.data_size = in_size;
--    input.encryption_scheme = cdm::EncryptionScheme::kCenc;
-+    input.encryption_scheme = cbcs ? cdm::EncryptionScheme::kCbcs : cdm::EncryptionScheme::kCenc;
-+    input.pattern = {crypt_blocks, skip_blocks};
-     input.key_id = key_id;
-     input.key_id_size = key_id_size;
-     input.iv = iv;
---- a/internal/vibez/player/browserless/cdm/cdm_bridge.h
-+++ b/internal/vibez/player/browserless/cdm/cdm_bridge.h
-@@ -56,7 +56,8 @@
-     const uint32_t* cipher_bytes,
-     uint32_t num_subsamples,
-     uint8_t* out_decrypted,
--    uint32_t* out_size
-+    uint32_t* out_size,
-+    int cbcs, uint32_t crypt_blocks, uint32_t skip_blocks
- );
- 
- // cdm_context_destroy destroys the CDM instance and unloads the shared library.
---- a/internal/vibez/player/browserless/cdm/cdm_nocgo.go
-+++ b/internal/vibez/player/browserless/cdm/cdm_nocgo.go
-@@ -42,3 +42,7 @@
- func (c *CDM) Close() error {
- 	return nil
+--- a/internal/vibez/provider/provider.go
++++ b/internal/vibez/provider/provider.go
+@@ -21,15 +21,16 @@
  }
-+
-+func (c *CDM) DecryptCBCS(_, _, _ []byte, _ []Subsample, _, _ int) ([]byte, error) {
-+	return nil, errNoCgo
-+}
---- a/internal/vibez/player/browserless/license/client.go
-+++ b/internal/vibez/player/browserless/license/client.go
-@@ -45,7 +45,8 @@
- 	return &Client{
- 		cfg: cfg,
- 		httpClient: &http.Client{
--			Timeout: 15 * time.Second,
-+			Timeout:   15 * time.Second,
-+			Transport: http.DefaultTransport,
- 		},
- 	}
- }
---- a/internal/vibez/player/browserless/mp4/decryptor.go
-+++ b/internal/vibez/player/browserless/mp4/decryptor.go
-@@ -165,6 +165,7 @@
- 	kid []byte,
- 	cfg AudioConfig,
- 	decryptFn DecryptFunc,
-+	encryption ...Encryption,
- ) ([]byte, error) {
- 	// Find moof box
- 	moofIdx := bytes.Index(segData, []byte("moof"))
-@@ -201,14 +202,21 @@
  
- 	// Sanity-bound sampleCount against remaining senc buffer to prevent OOM
- 	remainingSencBytes := sencEnd - (sencStart + 16)
--	if remainingSencBytes < 0 || int64(sampleCount) > int64(remainingSencBytes)/8 || sampleCount > 65536 {
-+	ivSize := 8
-+	if len(encryption) > 0 {
-+		ivSize = encryption[0].IVSize
-+	}
-+	minEntry := ivSize
-+	if hasSubsamples {
-+		minEntry += 2
-+	}
-+	if remainingSencBytes < 0 || (minEntry > 0 && int64(sampleCount) > int64(remainingSencBytes)/int64(minEntry)) || sampleCount > 65536 {
- 		return nil, fmt.Errorf("invalid or excessive sample count %d in senc (available bytes: %d)", sampleCount, remainingSencBytes)
- 	}
- 
- 	samplesEnc := make([]SampleEncInfo, sampleCount)
- 	offset := sencStart + 16
--	ivSize := 8
--	if !hasSubsamples && sampleCount > 0 && remainingSencBytes == int(sampleCount)*16 {
-+	if len(encryption) == 0 && !hasSubsamples && sampleCount > 0 && remainingSencBytes == int(sampleCount)*16 {
- 		ivSize = 16
- 	}
- 	for i := range sampleCount {
-@@ -217,6 +225,9 @@
- 		}
- 		iv := make([]byte, ivSize)
- 		copy(iv, moofData[offset:offset+ivSize])
-+		if ivSize == 0 && len(encryption) > 0 {
-+			iv = append([]byte(nil), encryption[0].ConstantIV...)
-+		}
- 		offset += ivSize
- 
- 		var subsamples []Subsample
+ type Track struct {
+-	ID         string
+-	CatalogID  string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
+-	Title      string
+-	Artist     string
+-	Album      string
+-	Duration   time.Duration
+-	ArtworkURL string
+-	PreviewURL string
+-	Genres     []string
++	Kind, MediaType string
++	ID              string
++	CatalogID       string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
++	Title           string
++	Artist          string
++	Album           string
++	Duration        time.Duration
++	ArtworkURL      string
++	PreviewURL      string
++	Genres          []string
+ 	// DiscNumber and TrackNumber give the track's position on its album.
+ 	// Zero means unknown.
+ 	DiscNumber  int

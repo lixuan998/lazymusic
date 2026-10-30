@@ -57,7 +57,11 @@ func (m *Model) syncRecord(now time.Time) tea.Cmd {
 		a.last = now
 	}
 	generation := a.generation
-	return tea.Tick(recordFrameInterval, func(at time.Time) tea.Msg { return recordFrame{generation, at} })
+	interval := recordFrameInterval
+	if m.videoVisible() {
+		interval = time.Second / 8
+	}
+	return tea.Tick(interval, func(at time.Time) tea.Msg { return recordFrame{generation, at} })
 }
 
 func (m *Model) advanceRecord(msg recordFrame) {

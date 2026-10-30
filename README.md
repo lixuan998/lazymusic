@@ -1,94 +1,68 @@
 # lazymusic
 
-**把音乐留在终端。** 一个支持 Apple Music 和本地音乐库的音乐 TUI，默认使用 Vim 键位。
+**把音乐留在终端。** 支持 macOS 和 Linux 的音乐 TUI，连接 Apple Music 或本地音乐库，默认使用 Vim 键位。
 
-在同一界面浏览推荐、搜索收藏、管理队列和调整音效。关闭 TUI 后继续播放，下次打开接着听。
+浏览推荐、搜索音乐、整理队列，再切到黑胶播放台看同步歌词。关闭界面后音乐继续播放，重新打开恢复原来的页面和播放状态。
 
-[界面演示](#界面演示) · [安装](#安装) · [快速上手](#快速上手) · [键位](#键位) · [Neovim](#neovim) · [配置](#配置) · [常见问题](#常见问题) · [参与开发](#参与开发)
-
-## 界面演示
-
-以下动图来自真实 lazymusic 终端会话，底部附有按键提示。Apple Music 使用实际目录数据；LOCAL 播放演示使用临时静音 WAV 文件。
-
-**Pulse / Wave**：渐变柱形、峰值余辉与多层细曲线；前端以独立的 30 FPS 时钟更新，暂停时平滑收束。使用 `,.` 切换，`Ctrl+-` 进入 Zen。
-
-![真实操作：Pulse、Wave、Zen 和暂停恢复过渡](docs/media/rhythm.gif)
-
-**布局与音效**：`+` / `_` 切换布局，`H/J/K/L` 调节窗口，`Ctrl+-` 进入 Zen，调整均衡器后用 `Ctrl+=` 恢复默认布局；`@` 查看运行日志。
-
-![真实操作：布局切换、窗口调节、律动、均衡器与 Zen](docs/media/layouts-equalizer.gif)
-
-<details>
-<summary>展开查看 Apple Music 搜索、队列播放和后台恢复</summary>
-
-**Apple Music 搜索与作品信息**：输入搜索词，按 `o` 跳转到歌曲所在专辑，`h` 返回，按 `c` 查看可用 credits，再用 `.` 切换搜索类型。
-
-![真实操作：Apple Music 搜索、专辑跳转与 credits](docs/media/apple-music-catalog.gif)
-
-**队列与播放控制**：`y` 加入队列，`3` 聚焦队列后按 `Enter` 播放；在任意面板用 `m` 轮转播放模式，`Ctrl+>` 快进，`Space` 暂停或继续，`>` 切到下一首。
-
-![真实操作：加入队列、播放模式、快进、暂停与切歌](docs/media/queue-playback.gif)
-
-**后台运行与 session 恢复**：按 `q q` 关闭 TUI 并继续播放，重新运行 lazymusic 回到原来的队列、界面和播放位置；`q Q` 完全退出。
-
-![真实操作：后台播放、重新进入并恢复 session](docs/media/background-session.gif)
-
-</details>
+[界面演示](#界面演示) · [安装](#安装) · [快速上手](#快速上手) · [键位](#键位) · [使用指南](#使用指南) · [Neovim](#neovim) · [配置与命令行](#配置与命令行) · [常见问题](#常见问题)
 
 ## 功能
 
-- **两种音乐来源**：Apple Music 个性化推荐、New、Radio、收藏、歌单和搜索；LOCAL 浏览并播放自己的音乐目录。
-- **键盘优先**：Vim 导航、面板焦点切换、可调分栏，以及 Content / Queue 精简布局。
-- **持续播放**：独立后台服务保存队列、位置和界面，重新运行即可恢复 session。
-- **播放控制**：播放、暂停、停止、切歌、快进退、随机和循环；直接调整系统默认输出音量。
-- **音效与 Zen**：十段均衡器、预设及旁路；Zen 同屏显示律动、均衡器和播放条。
-- **运行日志**：`@` 查看日志；运行错误显示 3 秒提示，不抢走当前焦点。
+- **Apple Music / LOCAL**：按音源能力显示页面；Apple Music 提供 Home 个性化推荐、New、Radio、Library、Playlists，以及 catalog / library 双范围搜索。
+- **原生播放**：macOS 和 Linux 播放时均不依赖浏览器；支持歌曲、动态电台、电台节目，以及 Content 内的 Apple Music 视频。
+- **队列整理**：加入队列、下一首播放、拾取与放置、整组插入、撤销与重做，以及定位当前播放歌曲。
+- **后台与 session**：界面退出后继续播放；保存页面、分类、光标、队列、播放位置、布局与音效设置。
+- **黑胶播放台与歌词**：高清机身、圆形旋转封面、随播放状态变化的唱针与指示灯，歌词自动滚动并高亮当前句。
+- **音效与布局**：十段均衡器、Pulse / Wave 律动、Zen 模式、可调分栏和精简布局；音量键直接控制系统默认输出。
+- **终端与 Neovim**：独立 TUI 和浮动终端共用交互；`?` 查看当前面板与 Global 命令，`@` 查看运行日志。
 
-### 音乐来源
+## 界面演示
 
-| 来源 | 浏览与搜索 | 播放与音质 |
-| --- | --- | --- |
-| APPLE MUSIC | 按平台分类的 Home 推荐、New、Radio、个人收藏、歌单、catalog / library 双范围搜索 | 原生歌曲、动态电台及电台节目播放，提供 AAC 64 / 256 kbps 偏好；需要有效订阅 |
-| LOCAL | 默认 `~/Music`，支持自定义目录、目录浏览和文件名搜索 | 直接播放原文件，格式支持取决于系统解码器 |
+以下 GIF 来自真实终端会话。Apple Music 使用实际目录数据；LOCAL 播放演示使用临时静音 WAV。录制后的键位调整以[当前键位](#键位)及界面内 `?` 为准。
 
-Apple Music **仅授权时临时使用浏览器，播放不依赖浏览器**。当前授权使用固定版本、校验摘要的 Vibez 官方组件，Apple 授权页中的应用身份为 **Vibez**，依赖其授权服务。首次使用会下载授权组件和播放所需的 CDM；凭据保存在本机私有目录。
+**律动与 Zen**：Pulse 渐变柱形、峰值余辉和 Wave 曲线，播放 / 暂停平滑过渡。
 
-当前 Apple 后端尚未验证出真正的无损 / Hi-Res，因此音质菜单只展示可兑现的 AAC 选项。LOCAL 不转码，也不读取 Apple 下载的 DRM 文件；暂不解析音乐文件的嵌入标签。
+![真实操作：Pulse、Wave、Zen 和暂停恢复](docs/media/rhythm.gif)
 
-Home 保留推荐接口返回的全部分类和资源，包括专属电台、视频及暂不支持播放的类型；分类内容支持分页。具体分类由 Apple 按账号、地区和时间返回，不保证与官方 App 首页完全相同，也不会自行补造未返回的分类。
+**布局与音效**：切换完整 / 精简布局、调整面板大小、设置 EQ 和查看日志。
 
-**New / Radio 只在 APPLE MUSIC 下显示**，读取账号地区对应的 Apple 官方公开页面结构化内容，按原分类展示；有完整分类入口时可用 **View all** 打开。这个读取过程不需要运行浏览器，也不会向公开页面发送账号授权。公开页面结构变化或地区重定向会明确报错。视频及尚未接入播放的类型仍会展示，选择时说明限制。
+![真实操作：布局、窗口调节、均衡器与日志](docs/media/layouts-equalizer.gif)
 
-### 电台
+<details>
+<summary>更多演示：Apple Music 搜索、队列播放和后台恢复</summary>
 
-在 Home / New / Radio 选中个人、发现、艺人或风格电台，按 `Enter` / `Ctrl+Enter` 开始播放。macOS 和 Linux 均通过原生 AAC 播放器播放 Apple 实际返回的歌曲，并在缓冲队列变短时自动获取下一批；不依赖浏览器。播放条显示电台名称和当前曲目，播放、暂停、切歌、快进退、系统音量与 EQ 使用原有键位。
+**搜索与作品信息**：搜索目录，跳转专辑，查看可用 credits，再切换搜索类型。
 
-`q q` 后电台继续播；重新进入保留电台和队列。服务完全退出后，恢复电台、已取得的曲目和位置并保持暂停，继续播放后恢复续播。普通歌曲 / 专辑替换队列或清空 Queue 会结束电台模式。动态电台是无限来源，`y` / `p` 会说明需要直接播放；要添加当前歌曲，可从 Queue / Player 操作。
+![真实操作：Apple Music 搜索、专辑跳转与 credits](docs/media/apple-music-catalog.gif)
 
-**电台节目（Radio episodes）** 按单个有限时长作品处理，可以直接播放、用 `y` 加入队列或用 `p/P` 拾取放置，支持跳转进度和恢复。原生后端从 Apple 的 station assets 取得媒体，并通过授权 CDM 处理 CBCS 音频；节目不会被当作歌曲 ID 请求，也不会无限循环取同一集。
+**队列与播放**：加入歌曲，调整播放模式，快进、暂停和切歌。
 
-动态电台及 CBCS 电台节目都已在 macOS、Linux 实测播放。Apple Music 1 等直播台的原生流刷新路径另有实现及回归测试；当前中国区目录没有提供这些直播台，现有账号的直播媒体请求返回 404，因此尚未完成真实直播验证，不声明完整直播兼容性。不同地区的可用内容以 Apple 实际返回为准。
+![真实操作：队列、播放模式、快进、暂停与切歌](docs/media/queue-playback.gif)
+
+**后台恢复**：退出界面保持播放，再次进入恢复 session。
+
+![真实操作：后台播放与 session 恢复](docs/media/background-session.gif)
+
+</details>
 
 ## 安装
 
-目前从源码安装。需要 **Go 1.25+**、CGO 和 C/C++ 工具链；先按系统准备依赖，再执行下方安装命令。
-
-Apple Music 的授权和 CDM 组件目前支持 **macOS Apple Silicon / Intel、Linux x86_64**。LOCAL 的格式支持由对应平台的音频栈决定。
+目前从源码安装，需要 **Go 1.25+、CGO 和 C/C++ 工具链**。Apple Music 授权组件和 CDM 支持 macOS Apple Silicon / Intel、Linux x86_64；首次使用按需下载。
 
 ### macOS
 
-安装 Xcode Command Line Tools，并按 [Go 官方说明](https://go.dev/doc/install) 安装 Go：
+安装 Xcode Command Line Tools 和 [Go](https://go.dev/doc/install)：
 
 ```sh
 xcode-select --install
 go version
 ```
 
-使用系统 Core Audio / AVFoundation，无需额外安装 GStreamer。
+音频使用系统 Core Audio / AVFoundation，无需安装 GStreamer。
 
-### Ubuntu
+### Ubuntu / WSL
 
-安装编译工具、GStreamer 开发包、解码与音频输出插件：
+安装编译、解码和音频输出依赖：
 
 ```sh
 sudo apt update
@@ -100,17 +74,17 @@ sudo apt install -y \
   pulseaudio-utils
 ```
 
-随后按 [Go 官方说明](https://go.dev/doc/install) 安装 **Go 1.25 或更新版本**。Ubuntu 仓库里的 `golang-go` 可能低于此要求，请先检查 `go version`。
+另行安装 [Go 1.25 或更新版本](https://go.dev/doc/install)，用 `go version` 确认；系统仓库中的 `golang-go` 可能低于要求。
 
 | 依赖 | 用途 |
 | --- | --- |
-| `build-essential`、`pkg-config`、`libgstreamer1.0-dev` | CGO / C++ 编译与 GStreamer 链接 |
-| `gstreamer1.0-plugins-base`、`gstreamer1.0-plugins-good` | 播放管线、常用格式和音频输出 |
+| `build-essential`、`pkg-config`、`libgstreamer1.0-dev` | CGO / C++ 编译和 GStreamer 链接 |
+| `gstreamer1.0-plugins-base`、`gstreamer1.0-plugins-good` | 播放管线、常用格式及均衡器 |
 | `gstreamer1.0-libav` | AAC 等音频解码 |
-| `gstreamer1.0-pulseaudio` | 通过 PulseAudio 或 PipeWire 的 PulseAudio 兼容服务输出音频 |
-| `pulseaudio-utils` | 提供 `pactl`，用于系统音量；已有 `wpctl` 时优先使用它 |
+| `gstreamer1.0-pulseaudio` | 连接 PulseAudio 或 PipeWire 的兼容服务 |
+| `pulseaudio-utils` | 提供系统音量工具 `pactl`；已有 `wpctl` 时优先使用它 |
 
-在普通用户的桌面音频会话中运行。仅有 SSH 或无音频服务的服务器，需要先配置可用的输出设备和用户音频服务。相关包说明见 [GStreamer 官方安装文档](https://gstreamer.freedesktop.org/documentation/installing/on-linux.html)、[Ubuntu 解码插件](https://packages.ubuntu.com/noble/gstreamer1.0-libav)和[音量工具](https://packages.ubuntu.com/noble/pulseaudio-utils)。
+运行时需要当前用户可访问的音频设备和音频服务。WSL 需要可用的音频转发；只有 SSH、没有音频输出的服务器需先配置输出环境。使用普通用户运行 lazymusic。
 
 ### 编译与安装
 
@@ -120,33 +94,39 @@ cd lazymusic
 make install
 ```
 
-默认安装到 `~/.local/bin/lazymusic`，不需要 `sudo`。同时会安装 Lua 插件到 `~/.local/share/lazymusic/nvim`，并创建或更新 `~/.config/nvim/lua/plugins/lazymusic.lua`（设置 `XDG_CONFIG_HOME` 时使用相应目录）。配置指向已安装的插件与 binary，重启使用 lazy.nvim / LazyVim 的 Neovim 后即可用 `<leader>mm` 打开。
+默认安装以下内容，无需 `sudo`：
 
-已有配置内容不同时，会先保存同目录下的 `lazymusic.lua.bak-*` 备份；重复安装相同内容不会产生多余备份。如果 binary 目录尚未加入 `PATH`：
+| 路径 | 内容 |
+| --- | --- |
+| `~/.local/bin/lazymusic` | 可执行文件 |
+| `~/.local/share/lazymusic/nvim` | Neovim 插件和帮助 |
+| `~/.config/nvim/lua/plugins/lazymusic.lua` | 自动创建 / 更新的 lazy.nvim 配置；遵循 `XDG_CONFIG_HOME` |
+
+已有 Neovim 配置内容不同时，先保存同目录下的 `lazymusic.lua.bak-*`；相同内容重复安装不会生成新备份。使用 lazy.nvim / LazyVim 时，重启 Neovim 后可用 `<leader>mm` 打开。
+
+若安装目录尚未加入 `PATH`，将下面的 `export` 加入 `~/.zshrc` 或 `~/.bashrc`：
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
 lazymusic
 ```
 
-将这行 `export` 加入 `~/.zshrc` 或 `~/.bashrc`，即可在新终端中直接运行。
-
-也可以只编译，或指定安装位置：
+其他安装方式：
 
 ```sh
-make build                              # 产物：bin/lazymusic
+make build                                     # 只构建 bin/lazymusic
 ./bin/lazymusic
-make install PREFIX="$HOME/Applications/lazymusic"  # 安装到 PREFIX/bin
-make install BINDIR="$HOME/bin"          # 直接指定 binary 目录
-make install NVIM_CONFIG_DIR="$HOME/.config/nvim-work" # 指定 Neovim 配置目录
-make install INSTALL_NVIM=0              # 仅安装 binary
+make install INSTALL_NVIM=0                     # 仅安装 binary
+make install PREFIX="$HOME/Applications/lazymusic"
+make install BINDIR="$HOME/bin"
+make install NVIM_CONFIG_DIR="$HOME/.config/nvim-work"
 ```
 
-`make install` 会先编译；支持 `GO`、`INSTALL`、`PREFIX`、`BINDIR`、`NVIM_CONFIG_DIR`、`NVIM_PLUGIN_DIR` 和用于打包的 `DESTDIR` 覆盖。`DESTDIR` 同时用于 binary、插件与配置文件的 staging；生成的配置仅引用最终安装路径。
+`make install` 自动先编译，支持 `GO`、`INSTALL`、`PREFIX`、`BINDIR`、`NVIM_CONFIG_DIR`、`NVIM_PLUGIN_DIR` 和 `DESTDIR`。`DESTDIR` 用于打包暂存，生成的 Neovim 配置引用最终安装路径。
 
 ### 更新与卸载
 
-退出正在运行的 TUI，并停止相应来源的后台服务后更新：
+退出 TUI、停止后台服务后更新：
 
 ```sh
 lazymusic quit
@@ -155,146 +135,216 @@ make install
 lazymusic
 ```
 
-如曾使用多个来源，可通过 `--source apple` / `--source local` 分别停止其服务；使用自定义状态目录时需同时传入相同的 `--state-dir`。
+如两个来源都曾启动服务，可分别运行 `lazymusic quit --source apple` 和 `lazymusic quit --source local`。使用自定义状态目录时传入相同的 `--state-dir`。更新插件后重启 Neovim，加载新的 Lua 模块。
 
 ```sh
 make uninstall
-# 自定义安装位置时，传入与安装时相同的 PREFIX 或 BINDIR
+# 自定义安装位置时使用相同参数，例如：
 make uninstall BINDIR="$HOME/bin"
 ```
 
-卸载只删除 binary；Neovim 配置与 Lua 插件、登录信息和 session 会保留。卸载前可用 `lazymusic logout` 清除当前来源的登录与 session。
+卸载仅移除 binary，保留插件、配置、登录和 session。需要清除当前来源的授权与 session 时，可在卸载前运行 `lazymusic logout`；LOCAL 的音乐文件不会被删除。
 
 ## 快速上手
 
-1. 运行 `lazymusic`，在 Content 的 Login 页面选择 **APPLE MUSIC** 或 **LOCAL**，按 `Enter` / `l` 确认。
-2. Apple Music 按官方页面提示完成授权；LOCAL 默认使用 `~/Music`，也可在 Login 中修改目录。
-3. 按 `1` 进入 Navigation，使用 `j/k` 选择页面，按 `l` / `Enter` 进入内容。APPLE MUSIC 提供 Home、New、Radio、Library、Playlists、Search；LOCAL 按实际能力显示页面。在 Content 使用 `,/.` 切换平台提供的分类。
-4. 歌曲按 `Enter` 播放；专辑、歌单或艺人按 `Ctrl+Enter` 播放全部，按 `y` 加入队列。也可用 `p/P` 拾取，再到 Queue 指定位置放置。
-5. 按 `q` 打开离开提示，再按 `q` 后台播放；下次运行 `lazymusic` 恢复。在离开提示中按 `Q` 则完全退出当前来源的服务。
+1. 运行 `lazymusic`，首次进入 Content 中的 **Login** 页面，用 `j/k` 选择 **APPLE MUSIC** 或 **LOCAL**，`Enter` / `l` 确认。
+2. Apple Music 按提示完成网页授权；LOCAL 默认使用 `~/Music`，也可在 Login 中修改目录。
+3. `1` 聚焦 Navigation，用 `j/k` 选择页面，`Enter` / `l` 进入 Content。移动到 Login 不会自动发起授权。
+4. Content 用 `,/.` 切分类、`h/l` 进退层级；歌曲 `Enter` 播放，集合 `Enter` 打开、`P` 播放全部，`y` 加入队列。
+5. `Space` 暂停 / 继续，`<` / `>` 上下曲，`m` 轮转播放模式。`3` 进入 Queue，`f` 找到当前歌曲。
+6. `q` 打开离开提示，再按 `q` 后台播放、`Q` 完全退出当前来源服务；`Esc` 取消离开。
 
-直接指定本地音乐目录：
+已有 session 时，启动会直接恢复。后台服务仍在运行则保持播放；服务已退出或系统重启后的冷恢复保留队列及位置，初始为暂停。
+
+也可直接选择本地目录：
 
 ```sh
 lazymusic --source local --music-dir "$HOME/Music"
 ```
 
-切换来源会暂停之前的来源，各自保留队列和界面。后台恢复会连接仍在播放的服务；服务已退出时，恢复队列及位置并保持暂停。
-
-### WSL 或无法自动打开浏览器
-
-选择 **APPLE MUSIC** 后按 `Enter` / `l` 开始登录。首次运行可能先下载授权组件，页面会显示当前准备阶段。授权服务启动后，官方组件约需 4 秒输出链接；Login 面板顶部会显示完整的手动链接（包括本次授权的 `state` 参数），并尝试自动打开浏览器。按 `y` 通过终端剪贴板协议复制链接，或直接选择、点击显示的地址。保持 lazymusic 运行，在 Apple 官方页面完成授权。
-
-在 WSL 中，可将该链接打开在 Windows 浏览器中；这依赖 Windows 到 WSL 的 localhost 转发，参见 [Microsoft WSL 网络说明](https://learn.microsoft.com/en-us/windows/wsl/networking)。手动链接仅在当前登录过程中显示，取消、完成或超时后失效，不写入日志或 session。通过 SSH 在其他机器上登录时，需要先将相同的 localhost 端口转发到浏览器所在机器。
-
-Ubuntu 22.04 默认的 C++ 运行库可能无法启动官方授权组件（缺少 `GLIBCXX_3.4.32`）。lazymusic 会在检测到这种兼容性问题时，自动下载并校验固定版本的 [conda-forge GCC 运行库](https://github.com/conda-forge/ctng-compilers-feedstock)，保存在当前来源的 `helpers/runtime/` 下，只由授权子进程加载；无需安装 Conda、添加软件源或升级系统运行库。首次准备需要能访问 `conda.anaconda.org`。新版系统通过检查后不会下载兼容库。
-
-如果授权组件在生成链接前失败，Login 会保留具体原因，`@` 可查看日志：缺少 GStreamer 动态库时安装上方 Ubuntu 依赖；DNS、代理或证书失败时按提示检查网络。复制功能需要终端支持 OSC 52，Neovim 浮窗使用编辑器配置的 clipboard provider；不支持时仍可手动复制屏幕上的链接。
+更换 LOCAL 根目录会清空旧队列。切换来源会暂停之前的来源，各自保存队列和界面；之后从 Navigation → Login 或 `:login` 切换。
 
 ## 键位
 
-按 `?` 只查看 **当前面板 + Global** 的命令，`j/k`、`Ctrl+u/d` 滚动帮助，`?` / `Esc` 关闭。最低终端尺寸为 **60 × 16**。输入搜索词、目录或歌单名称时，字母就是文本，`Esc` / `Ctrl+c` 取消。
+按 `?` 查看 **当前面板 + Global** 的实际绑定；`j/k`、`Ctrl+u/d` 滚动帮助，`?` / `Esc` 关闭。以下是默认值，可通过 [`keys.json`](#配置与命令行) 修改。
+
+普通导航键立即响应，长按只在当前面板连续移动；没有连按切窗。输入搜索词、目录和歌单名称时，普通字符保持文本含义，`Esc` / `Ctrl+c` 取消输入。最低 TUI 尺寸为 **60 × 16**。
 
 ### Global
 
 | 按键 | 操作 |
 | --- | --- |
 | `Ctrl+h/j/k/l` | 焦点移向左 / 下 / 上 / 右面板 |
-| `1`–`6` | Navigation / Content / Queue / Player / Log / Sound |
+| `1` / `2` / `3` / `4` / `5` / `6` | Navigation / Content / Queue / Player / Log / Sound |
 | `Tab` / `Shift+Tab` | 下一个 / 上一个面板 |
-| `H/J/K/L`（`Shift+h/j/k/l`） | 向左 / 下 / 上 / 右调整当前面板尺寸 |
-| `+` / `_` | 轮换完整、Content + Player、Queue + Player 布局 |
-| `Ctrl++` / `Ctrl+-` | Zen：Pulse / Wave / Turntable + Equalizer + Player |
-| `Ctrl+=` | 恢复默认布局 |
-| `Space`、`x` | 播放 / 暂停、停止，在所有面板可用 |
+| `H/J/K/L` | 向左 / 下 / 上 / 右调整当前面板尺寸 |
+| `+` / `_` | 下一个 / 上一个布局：完整、Content + Player、Queue + Player |
+| `Ctrl++` / `Ctrl+-` | 开关 Zen：律动或播放台 + Equalizer + Player |
+| `Ctrl+=` | 恢复默认布局和面板尺寸 |
+| `Space` / `x` | 播放或暂停 / 停止 |
 | `<` / `>` | 上一曲 / 下一曲 |
-| `Ctrl+<` / `Ctrl+>` | 后退 / 前进 10 秒（通常是 `Ctrl+Shift+,` / `Ctrl+Shift+.`） |
-| `m` | 轮转播放模式，在所有面板可用 |
-| `=` / `-` | 系统默认输出音量 ±5% |
+| `Ctrl+<` / `Ctrl+>` | 后退 / 前进 10 秒，通常按 `Ctrl+Shift+,` / `Ctrl+Shift+.` |
+| `m` | 轮转播放模式 |
+| `=` / `-` | 系统默认输出音量增加 / 减少 5% |
 | `@` | 打开 / 关闭运行日志 |
-| `?` | 当前面板帮助 |
-| `:` | 命令行，如 `:login`、`:seek 30`、`:vol 50` |
-| `q` → `q` / `Q` | 后台运行 / 完全退出当前来源服务 |
+| `?` | 查看当前面板和 Global 帮助 |
+| `:` | 输入命令，如 `:login`、`:seek 30`、`:vol 50` |
+| `q` → `q` / `Q` | 确认后台运行 / 完全退出当前来源服务 |
 
-尺寸调节使用普通大写字符，不再依赖 `Ctrl+Shift+j`。Ghostty 等终端的屏幕快照粘贴快捷键会在应用收到按键前执行；`H/J/K/L` 避开这类修饰键冲突。需要终端上报修饰键的操作仍使用增强键盘协议。
+尺寸调节使用普通大写字母，即 `Shift+h/j/k/l`。修饰键操作需要终端正确上报按键；若被终端自己的快捷键拦截，应调整终端绑定。
 
 ### 面板内命令
 
-列表通用：`j/k` 上下，`gg/G` 首尾，`Ctrl+u/d` 半页；`h/l` 返回上级 / 打开下级，`Enter` 确认或播放。这些命令只作用于当前面板。
+列表导航：`j/k` 上下，`gg/G` 首尾，`Ctrl+u/d` 半页。Content 的 `h/l` 返回上级 / 打开下级；`Enter` 打开集合或播放歌曲。
 
 | 面板 | 按键 | 操作 |
 | --- | --- | --- |
-| 1 Navigation | `j/k`、`l` / `Enter` | 选择页面、进入 Content；选中 Login 后确认进入 |
-| 1 Navigation | `,/.` | 切换下方 Pulse / Wave / Equalizer / Turntable |
-| 2 Content | `,/.`、`r`、`/` | 分类 / 搜索类型、刷新、过滤已加载内容 |
+| 1 Navigation | `j/k`、`Enter` / `l` | 选择页面、进入 Content |
+| 1 Navigation | `,/.` | 切换下方 Sound 视图 |
+| 2 Content | `,/.` | 切换推荐分类、Library 分类或搜索类型 |
+| 2 Content | `r`、`/` | 刷新、过滤已加载的内容 |
 | 2 Content · Search | `i`、`s` | 编辑搜索词、切换 catalog / library 范围 |
-| 2 Content | `Ctrl+Enter`、`y` | 播放歌曲或整个集合、直接加入队列；添加菜单中 **Play next** 安排为下一首 |
-| 2 Content | `p` / `P` | 拾取单曲或完整集合，切到 Queue 后选择插入位置 |
-| 2 Content | `a`、`d` | 当前作品添加菜单、移除收藏入口；Playlists 列表中 `a` 新建歌单 |
-| 2 / 3 / 4 | `o`、`c` | 专辑 / 艺人跳转、credits |
-| 3 Queue | `Enter` | 播放选中的歌曲 |
-| 3 Queue | `p` / `P`、`Esc` | 未拾取时任一键拾取歌曲；拾取后 `p` 放到光标歌曲后、`P` 放到前，`Esc` 取消 |
-| 2 Content / 3 Queue | `u` | 撤销最近一次 pick & place，再按重做 |
-| 3 Queue | `f` | 定位当前播放曲目，并尽量居中显示；靠近队列首尾时按边界显示 |
-| 3 Queue | `r` / `s` | 调整循环 / 随机，仅 Queue / Player 可用 |
-| 3 Queue | `a`、`d`、`D` | 添加到收藏 / 歌单、移除队列项、清空队列 |
-| 3 Queue | `[` / `]` | 将选中的歌曲向上 / 下移动 |
-| 4 Player | `,/.`、`b` | 轮换组合播放模式、音质偏好；`r/s` 分别调循环和随机 |
-| 4 Player | `a` | 将正在播放的歌曲加入收藏 / 歌单 |
-| 5 Log | `j/k`、`gg/G` | 滚动、首条 / 最新日志 |
-| 6 Sound | `,/.` | 切换 Pulse / Wave / Equalizer / Turntable |
+| 2 Content | `v` | 在正在播放的视频与浏览页面之间切换 |
+| 2 Content · Video | `Enter`、`h` / `Esc` | 播放 / 暂停、返回浏览；全局播放键继续生效 |
+| 2 Content | `P`、`y` | 播放当前歌曲 / 整个集合、加入队列 |
+| 2 Content | `p` | 拾取单曲或集合，之后在 Queue 放置 |
+| 2 Content | `a`、`d` | 添加菜单、移除入口；Playlists 列表中 `a` 新建歌单，删除受来源能力限制 |
+| 2 Content / 3 Queue | `u` | 撤销最近一次放置，再按重做 |
+| 2 Content / 3 Queue / 4 Player | `o`、`c` | 跳转专辑 / 艺人、查看 credits |
+| 3 Queue | `Enter`、`f` | 播放选中歌曲、定位当前播放项并尽量居中 |
+| 3 Queue | `p`、`Esc` | 拾取；再次 `p` 放到光标歌曲之后；`Esc` 取消拾取 |
+| 3 Queue | `[` / `]` | 将选中歌曲上移 / 下移 |
+| 3 Queue | `a`、`d`、`D` | 添加菜单、移除队列项、清空队列 |
+| 3 Queue / 4 Player | `r`、`s` | 轮转循环模式、开关随机 |
+| 4 Player | `Enter`、`,/.` | 播放 / 暂停、前后轮转播放模式 |
+| 4 Player | `b`、`a` | 选择音质偏好、为当前歌曲打开添加菜单 |
+| 5 Log | `j/k`、`gg/G`、`Ctrl+u/d` | 滚动、首条 / 最新日志、半页滚动 |
+| 6 Sound | `,/.` | Pulse / Wave / Equalizer / Turntable |
 | 6 Sound · EQ | `h/l`、`j/k` | 选择频段、降低 / 提高 1 dB |
-| 6 Sound · EQ | `e`、`r`、`p` | 旁路、归零、轮换 Flat / Bass / Vocal / Treble 预设 |
-| 2 Login | `j/k`、`l` / `Enter`、`h`、`y` | 选择来源、进入 / 确认、返回；账户选项中 `r` 重新授权，授权过程中 `y` 复制完整链接 |
+| 6 Sound · EQ | `e`、`r`、`p` | 旁路、归零、轮换预设 |
+| 2 Login | `j/k`、`Enter` / `l`、`h` | 选择来源、确认、返回 |
+| 2 Login | `r`、`y` | 账户选项中重新授权、授权期间复制手动登录链接 |
 
-同一个字母可以在不同面板复用，如 Content / Queue / Player 的 `a`、Content / Queue 的 `d`，以及 Content / Sound 的 `p`。全局 `m` 轮转播放模式；`r/s` 只在 Queue / Player 调整循环和随机。Content 刷新用 `r`，Search 范围用 `s`，EQ 归零用 `r`。尺寸调节统一用大写 `H/J/K/L`，Queue 调序用 `[/]`，Login 使用 Navigation 或 `:login`。
+同一字符按当前面板解释：Content 的 `r` 刷新，Queue / Player 的 `r` 调循环，Sound EQ 的 `r` 归零。`P` 只在 Content 用于播放整组；Queue 的默认放置方向为光标之后。
 
-窗口 6 的 **Turntable** 是黑胶播放台：在 Navigation / Sound 用 `,/.` 切换，圆形封面铺满唱片，仅留窄黑边；播放时顺时针旋转，暂停时定格，停止时隐藏封面并恢复默认唱片。播放 / 暂停时唱针落在唱片上，停止时移回右侧停靠位；指示灯只在播放时亮起。机身保持静止。下方显示同步歌词，当前句居中高亮，前后句随进度滚动，快进 / 回退自动重新定位。无同步歌词时显示 `No Lyrics Available`。Apple Music 自动获取当前曲目的封面；LOCAL 读取同目录的 `cover.jpg/jpeg/png`、`folder.jpg/png` 或 `front.jpg/png`（文件名不区分大小写）。没有封面时显示默认唱片。封面只在内存中缓存，切歌与隐藏视图会取消旧请求。
+## 使用指南
 
-在 Ghostty / Kitty 中，整台留声机使用高清图片显示；封面等比取中、裁成带平滑边缘的圆形，与唱盘中心重合，合成为同一张 PNG 后整体缩放，避免封面与机身因字符格取整而错位。机身素材随二进制内嵌，不需要额外安装图片文件；素材和生成提示词位于 [`internal/turntable/assets`](internal/turntable/assets)。通过 [Kitty 图像协议](https://sw.kovidgoyal.net/kitty/graphics-protocol/) 直接传输，支持终端在 SSH / WSL 的另一端。窗口缩放及普通 / Zen 布局切换复用当前图片。旋转优先使用终端的局部帧更新，只传输唱片区域；旧终端不支持帧更新时使用完整图片刷新。前端独立计时且同一时间只生成 / 发送一帧，慢连接不会堆积历史帧。暂停、隐藏视图后停止动画。终端不支持协议时，整张播放台图片统一回退为彩色像素图；`LAZYMUSIC_IMAGE_DISABLE=1` 可强制回退。tmux / zellij 当前默认使用像素图。
+### 音乐来源与音质
 
-歌词来源：Apple Music 优先使用公开的 [LRCLIB](https://lrclib.net/docs) 按曲名、艺人、专辑和时长匹配同步歌词；该服务超时或没有结果时，转用 [网易云音乐](https://music.163.com) 的公开歌词，严格校验曲名、全部艺人和时长，避免匹配到翻唱或 Remix。只发送歌曲元数据，不发送 Apple 授权信息；当前 MusicKit 授权不包含歌词正文接口。LOCAL 读取音乐文件同目录、同名的 UTF-8 `.lrc`（如 `song.flac` 对应 `song.lrc`，扩展名不区分大小写）。缺失、无时间轴、版本不匹配或服务不可用时显示缺省提示，不猜测歌词时间。歌词只缓存在内存中，切歌、切换来源和隐藏播放台会取消旧请求。
+| 来源 | 页面与浏览 | 播放 |
+| --- | --- | --- |
+| APPLE MUSIC | Home、New、Radio、Library、Playlists、Search、Login；歌曲、专辑、艺人、歌单和视频搜索 | 需要有效订阅；AAC 64 / 256 kbps 偏好，支持歌曲、电台及音乐视频 |
+| LOCAL | Library、Folders、Search、Login；按文件和目录组织、文件名搜索 | 直接读取原文件，解码能力取决于系统音频栈，无云端授权 |
 
-Zen 模式中，聚焦窗口 6 后用 `,/.` 在 **Pulse → Wave → Turntable** 之间循环，右侧 Equalizer 和底部 Player 始终保留；`h/l`、`j/k` 继续调节 EQ，`H/J/K/L` 调整尺寸。不会把 EQ 当作重复的波形视图插入循环。
+Apple Music **仅登录授权时临时使用浏览器，播放不依赖浏览器**。当前使用固定版本、校验摘要的 Vibez 官方授权组件，Apple 授权页中的应用身份仍为 **Vibez**，依赖其授权服务。首次使用下载授权组件和 CDM，凭据保存在本机私有目录。
 
-Neovim 浮窗通过随附插件转发图片协议；原图显示需要 **Neovim 0.12+** 和 `termguicolors`（使用 [nvim_ui_send](https://neovim.io/doc/user/api/#nvim_ui_send())）。旧版 Neovim 仍能运行 TUI，并使用像素图。更新时运行 `make install`，将二进制与插件一起更新。
+Player 中按 `b` 选择后端支持的音质。Apple 的 AAC 64 / 256 kbps 是请求偏好，实际流以服务返回为准；当前 macOS 和 Linux 都没有已验证的 ALAC 无损 / Hi-Res 播放路径，因此不提供这些选项。曲目的音质标签不等于正在播放的格式。
 
-同一 Neovim 宿主终端一旦确认支持图片，后台退出后重新打开会复用该结果；封面缓存命中、切歌、视图清理和动画错误不会再把图片支持降级为像素图。探测请求丢包时会有限重试，迟到的成功回包也可恢复原图。安装新版本后请重新启动 Neovim，让已加载的 Lua 插件更新。
+LOCAL 识别 MP3、M4A、AAC、WAV、AIFF、FLAC、OGG、Opus 扩展名，能否解码取决于系统与已安装插件。不转码，暂不读取嵌入式音乐标签，也不播放 Apple 下载的 DRM 文件。
 
-顶部品牌、当前页面和来源统一放在边框内；Player 使用半行高度的实心进度条，默认加高，分行显示曲目、艺人 / 专辑、进度、播放状态、系统音量和模式 / 音质。小终端自动收紧布局，仍可用 `H/J/K/L` 调整。
+### 推荐与电台
 
-拾取的内容会以 `◆` 和底部状态提示显示。从 Queue 拾取再放置是移动；从 Content 拾取后放置是复制加入。单曲插入一首，album / playlist 插入其全部歌曲，artist 会展开其专辑中的全部歌曲，包含分页，按来源顺序整体插入；空 Queue 直接插入。集合准备期间可继续导航，`Esc` 取消准备；提交放置后等待结果，重复按键不会重复插入。拾取状态只在当前前端保留，Queue 的滚动位置随 session 保存。若队列已经变化，放置会要求重新选择位置，避免使用旧索引修改错误的歌曲。
+Home 按 Apple 返回的分类标题组织顶部标签，用 `,/.` 切换，分类内容支持分页。保留接口返回的全部分类和资源，包含专属电台及暂不支持播放的类型。分类随账号、地区和时间变化，接口未返回的模块可能与官方 App 不同，例如某些账号看不到特定的推荐分组。
 
-在 Content 或 Queue 按 `u` 撤销最近一次成功放置，再按 `u` 重做，可反复切换，直到下一次成功放置更新记录。整组插入会一起撤销；取消、失败或没有改变位置的放置不覆盖记录。记录随 session 保存。撤销不回滚播放进度；如果移除的恰好是当前播放的插入曲目，会停止它并选中相邻曲目，重做也保持暂停。队尾追加（含电台续播）可保留记录；其他删除、重排或替换队列会使旧记录失效，以免操作错误的歌曲。
+New / Radio 只对 APPLE MUSIC 显示，读取账号地区对应的 Apple 官方公开页面结构化内容；有入口的分类可用 **View all** 展开。不需要运行浏览器，也不向公开页面发送账号授权。页面结构变化或地区重定向会报告错误；视频等未支持播放的内容仍然可见。
 
-`h/j/k/l` 单击立即生效，长按在当前窗口连续移动；没有连按切窗或输入等待。切窗仅用 `Ctrl+h/j/k/l`。输入搜索、目录和歌单名称时，普通字母保持文本含义。
+| 类型 | 操作与行为 |
+| --- | --- |
+| 个人、发现、艺人、风格等动态电台 | `Enter` 或 `P` 调台，后台自动补充下一批歌曲；`y/p` 不将无限电台展开为固定队列，可在 Queue / Player 操作当前歌曲 |
+| 有限时长的电台节目 | `Enter` / `P` 播放，`y` 加入队列，`p` 拾取；支持定位进度和 session 恢复 |
+| 直播台 | 已实现媒体窗口刷新，但当前账号 / 地区尚未完成真实直播播放验证，不保证可用 |
 
-均衡器支持 **32 Hz–16 kHz 十段、±12 dB**，应用于实际输出并随 session 保存。
+动态电台和 CBCS 电台节目已在 macOS、Linux 验证原生播放。Player 显示电台与当前歌曲，沿用全局播放控制、系统音量和 EQ。`q q` 后继续播；冷恢复暂停，继续播放后恢复电台续播。用普通作品替换队列或清空队列会结束电台模式。
 
-Pulse 用带间距的渐变柱形、缓降峰值和淡色倒影；Wave 用每个字符 2×4 点的细曲线叠加，适配左侧小面板和 Zen 大视图。两者使用独立的前端 30 FPS 时钟，播放进度轮询和跳转不会带着画面跳动。暂停、恢复与切换样式都有渐变过渡；暂停回落后、精简布局或弹窗遮住律动时停止动画刷新，不增加后台轮询和 session 写入。它们是装饰律动，未进行实时音频频谱分析。
+### 拾取、放置与撤销
 
-### Apple Music 收藏与歌单
+1. 在 Content 选中歌曲或集合，按 `p` 拾取；或在 Queue 按 `p` 拾取已有歌曲。界面以 `◆` 和状态提示标记已拾取内容。
+2. 切到 Queue，将光标移到目标歌曲，按 `p` 放到它后面；空队列直接插入。`Esc` 取消尚未提交的拾取。
+3. 在 Content / Queue 按 `u` 撤销最近一次成功放置，再按 `u` 重做；下一次成功放置更新记录。
 
-- 在 Search / Home 选中歌曲或专辑，按 `a` 选择 **Music library**，添加歌曲或整张专辑。Library / 资料库搜索返回的项目不会再显示重复收藏入口。
-- 在 Playlists 列表按 `a`，输入名称、`Enter` 新建歌单；空列表也可创建。
-- 在 Content / Queue / Player 的歌曲上按 `a` → **Choose playlist**，从可编辑歌单中选择目标。只读推荐歌单不会混入目标列表，提交前会再次检查编辑权限。
-- `y` 直接加入播放队列，添加菜单的 **Play next** 安排为下一首；收藏和云端歌单写入不会打断正在播放的音乐。
+Queue 内拾取是移动；Content 拾取是复制加入。专辑 / 歌单展开全部歌曲，艺人展开其专辑及歌曲，包含分页，按来源顺序整体插入。集合准备期间可继续导航，失败不会部分插入；提交后需等待结果。
 
-Apple 返回 **202 Accepted** 时会提示已受理；同步可能稍有延迟，可在 Content 按 `r` 刷新。写入请求不会自动重试，遇到连接错误应先检查 Apple Music 中的实际结果，再决定是否重试。
+放置保留当前播放歌曲与进度，`f` 可随时定位当前项。靠近队列首尾时居中位置按边界调整，普通浏览不会随自动切歌抢走光标。
 
-**当前限制：Apple 公开 API 不提供删除收藏歌曲、专辑或歌单的接口。** `d` 会展示后端的限制说明，实际删除请使用 Apple Music 官方客户端；不会在本地假装删除。此限制适用于 macOS 和 Linux。参见 [Apple API 总览](https://developer.apple.com/documentation/applemusicapi/)、[添加收藏](https://developer.apple.com/documentation/applemusicapi/add-a-resource-to-a-library)及 [Apple 对删除接口的说明](https://developer.apple.com/forums/thread/107807)。LOCAL 不提供文件删除操作。
+撤销记录随 session 保存，整组插入一起撤销。若撤销移除了当前正在播放的插入项，会停止它并选择相邻项；重做不自动播放。队尾追加保留撤销记录，其他删除、重排或替换队列会使其失效。尚未放置的拾取内容只在当前前端保留。
 
-### 作品信息
+### 收藏、歌单与作品信息
 
-在 Content 选中作品、Queue 选中歌曲或聚焦 Player 时，按 `o` 打开跳转菜单。专辑和每位艺人分别列为一项，使用 `j/k` 选择，`Enter` / `l` 在 Content 中打开，`h` 返回原页面，不改变播放队列。
+- 歌曲 / 专辑按 `a` → **Music library** 添加收藏；Library 项目不再显示重复收藏入口。
+- Playlists 列表按 `a`，输入名称并 `Enter` 新建歌单；空列表也可创建。
+- Content / Queue / Player 的歌曲按 `a` → **Choose playlist**，选择可编辑歌单添加。
+- `y` 直接加入播放队列；添加菜单中的 **Play next** 安排为下一首。
+- `o` 列出专辑与每位艺人的跳转入口，`j/k` 选择、`Enter` / `l` 打开，Content 中 `h` 返回。
+- `c` 查看来源实际提供的贡献者、作曲及发行信息；`j/k`、`Ctrl+u/d` 滚动，`Esc` 关闭。缺少完整 credits 时会注明。
 
-按 `c` 查看音源实际提供的贡献者、角色、作曲及发行信息；没有完整名单时会明确注明。用 `j/k` 或 `Ctrl+u/d` 滚动，`Esc` 关闭。LOCAL 当前按文件与目录组织，尚不读取嵌入式 credits。
+Apple 返回 **202 Accepted** 表示已受理，列表同步可能稍有延迟，可在 Content 按 `r` 刷新。写入不会自动重试；连接失败时应先检查实际结果，再决定是否重试。
+
+**当前 Apple 后端不支持删除云端收藏歌曲、专辑或歌单。** `d` 会解释限制，请使用 Apple Music 官方客户端完成删除。Queue 的 `d` 只移除播放队列项；LOCAL 不提供文件删除。LOCAL 按文件 / 目录组织，尚不读取嵌入式 credits。
+
+### 音乐视频
+
+Apple Music 的 Search → **Videos** 分类可搜索音乐视频；Home、New 或歌单返回的视频也可直接播放和加入队列。Videos 只提供 catalog 搜索，切到 library 搜索时回到 Songs。
+
+选中视频按 `Enter` / `P` 播放，Content 自动显示画面。`v` 在视频与原来的浏览页面间切换，视频页 `h` / `Esc` 返回浏览。`Space`、`x`、`<` / `>`、`Ctrl+<` / `Ctrl+>` 仍分别控制暂停、停止、切歌和跳转。暂停保留画面，停止清除画面；后台运行继续播放音轨，重新进入后按当前进度恢复视频。
+
+视频通过现有授权 CDM 的原生 H.264 解码器播放，macOS 和 Linux 均不依赖浏览器或 FFmpeg。仅使用服务明确允许软件播放的流；优先保留可用软件流的原始分辨率，输出上限为 **1280 × 720、30 FPS**。实际清晰度与帧率受 Apple 提供的授权版本、终端和网络吞吐限制；不会将低分辨率作品上采样成假 HD。慢连接只处理当前画面，不堆积旧帧。视频画面不写磁盘或 session，音轨沿用原生音频输出。后台预取一个加密视频片段；图片通过本地 socket 直接传输 PNG，并在支持的终端中更新同一张图片。Neovim 中继会合并一张图片的分块输出，减少逐帧开销。
+
+画面需要 Kitty 图片协议，例如 Ghostty、Kitty，或 Neovim 0.12+ 配合更新后的内置图片中继。其他终端显示说明并继续音轨，不把视频转成字符画。原有 Turntable 在不支持图片协议时仍使用半格回退图。
+
+实际可播放作品取决于订阅、地区和 Apple 返回的授权。视频 CDN `mvod.itunes.apple.com` 返回 **403** 时，程序会自动通过 [Google Public DNS](https://developers.google.com/speed/public-dns/docs/doh/json) 查询备用节点；解析不可用或返回的节点仍失败时，再尝试 [Cloudflare](https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/)，最多尝试四个不同节点。清单、画面片段和配套音轨共用这一回退。
+
+备用解析只发送 CDN 域名，不发送账号凭据或媒体 URL。备用请求在进程内直连选出的 CDN IP，保留原签名 URL、Range 和 HTTPS 主机名校验；不会改系统 DNS、代理设置或其他网络请求。成功节点只在当前来源服务的内存中短暂保存，最长 5 分钟且不超过 DNS TTL，失败时重新选择。备用节点连接或读取超时会暂时避开；未完整读取的片段最多重读一次，完整拿到数据后才交给解码器。`@` 日志记录自动切换和恢复结果，不记录签名地址或节点 IP。
+
+如果原路径和备用节点都拒绝请求，仍显示真实错误；不会重试登录、许可证或内容编辑请求，也不会无限重试。可用同一作品在官方客户端核对订阅与地区限制。
+
+### Turntable 与同步歌词
+
+聚焦 Navigation 或 Sound，用 `,/.` 切到 **Turntable**。留声机使用内嵌高清机身与当前歌曲封面，圆形封面铺满唱片，仅留窄黑边。
+
+| 播放状态 | 封面 | 唱针 | 指示灯 |
+| --- | --- | --- | --- |
+| 播放 | 顺时针旋转 | 唱片上 | 亮 |
+| 暂停 | 保留当前角度 | 唱片上 | 灭 |
+| 停止 | 隐藏封面，显示默认唱片 | 移回停靠位 | 灭 |
+
+下方显示同步歌词，当前句居中高亮，前后句随进度滚动；快进 / 回退重新定位。无可用时间轴时显示 `No Lyrics Available`。
+
+| 来源 | 封面 | 歌词 |
+| --- | --- | --- |
+| APPLE MUSIC | 自动读取当前歌曲封面 | LRCLIB 精确元数据查询，超时或无同步结果时回退网易云音乐公开歌词；严格比对曲名、艺人和时长 |
+| LOCAL | 同目录的 `cover.jpg/jpeg/png`、`folder.jpg/png`、`front.jpg/png`，文件名不区分大小写 | 同目录、同名的 UTF-8 `.lrc`，如 `song.flac` 对应 `song.lrc`，文件名不区分大小写 |
+
+公共歌词查询仅发送曲名、艺人、专辑和时长，不发送 Apple 凭据或音频。无歌词、版本不匹配或服务不可用时显示缺省提示。缺少封面时使用默认唱片；歌词与封面只缓存在内存中，切歌、切换来源及隐藏播放台时取消旧请求。
+
+原图显示条件见 [Neovim 图片与终端兼容](#图片与终端兼容)。机身与封面统一合成为图片后缩放；支持时只更新唱片区域，慢连接不会堆积历史动画帧。无法使用图片协议时，整台播放台回退为彩色像素图。
+
+### 布局、律动与均衡器
+
+完整布局将左侧分为 Navigation 和 Sound，中间 Content、右侧 Queue，底部 Player；Log 按需打开。`+` / `_` 轮换完整、Content + Player、Queue + Player；`H/J/K/L` 调整当前面板，`Ctrl+=` 恢复默认布局。
+
+`Ctrl++` / `Ctrl+-` 开关 **Zen**：左侧 Pulse / Wave / Turntable、右侧 Equalizer、底部 Player。聚焦 Sound 后 `,/.` 切左侧视图，`h/l`、`j/k` 调 EQ。普通 Sound 则在 Pulse / Wave / Equalizer / Turntable 四种视图间切换。
+
+- **Pulse / Wave**：渐变柱形、缓降峰值与多层细曲线，前端独立 30 FPS 更新；暂停平滑收束，隐藏时停止动画。它们是装饰律动，没有实时分析音频频谱。
+- **Equalizer**：32 Hz–16 kHz 十段，±12 dB，调整实际音频输出；提供 Flat / Bass / Vocal / Treble 预设和旁路，设置随 session 保存。
+- **Player**：分行显示曲目、艺人 / 专辑、加粗进度条、状态图标、系统音量及模式 / 音质；小终端自动收紧。
 
 ## Neovim
 
-仓库内包含 Neovim 0.10+ 插件，用 `<leader>mm` 在浮动终端打开 lazymusic。`make install` 会自动部署本地插件并生成 lazy.nvim 配置，无需手动复制，也不需要插件管理器另外下载仓库。
+随附插件支持 **Neovim 0.10+**，用 `<leader>mm` 打开浮动终端。`make install` 自动部署插件并生成 lazy.nvim 配置，从任何工作目录均可使用，无需在工程根目录启动 Neovim。
 
-如果安装时使用 `INSTALL_NVIM=0` 跳过自动接入，也可以将以下配置加入 `lazy.nvim` 插件列表；LazyVim 可保存为 `lua/plugins/lazymusic.lua`，通过 Git 管理插件版本：
+| 操作 | 行为 |
+| --- | --- |
+| `<leader>mm` / `:LazyMusic` | 打开或聚焦现有终端 |
+| `:LazyMusicHide` | 只隐藏浮窗，保留同一 TUI 进程 |
+| TUI 内 `q q` | 退出前端并关闭浮窗，后台继续播放；再次打开恢复 session |
+| TUI 内 `q Q` | 完全退出当前来源服务 |
+| `Ctrl+反斜杠`，再 `Ctrl+n` | 返回 Neovim 普通模式 |
+
+插件透传焦点、布局、跳转进度等按键，只作用于音乐终端 buffer。音乐命令与独立 TUI 相同，`?` 反映同一套实际绑定。帮助入口为 `:help lazymusic`。
+
+### 手动接入 lazy.nvim
+
+如使用 `make install INSTALL_NVIM=0` 跳过自动配置，可将以下内容加入插件列表；LazyVim 可保存为 `lua/plugins/lazymusic.lua`：
 
 ```lua
 return {
@@ -306,9 +356,9 @@ return {
       { "<leader>mm", function() require("lazymusic").open() end, desc = "Open lazymusic" },
     },
     opts = {
-      cmd = "lazymusic", -- 默认查找 PATH，再查找 ~/.local/bin/lazymusic
+      cmd = "lazymusic", -- 先查 PATH，再查 ~/.local/bin/lazymusic
       args = {},        -- 例如 { "--source", "local" }
-      width = 0.84,
+      width = 0.84,     -- 可用空间比例，也可使用字符格数
       height = 0.82,
       border = "rounded",
     },
@@ -316,25 +366,34 @@ return {
 }
 ```
 
-本地开发可将仓库地址替换为 `dir = "/absolute/path/to/code/lazy-music"`。插件不代替 binary 安装；可用 `opts.cmd` 指定可执行文件的完整路径，参数通过 `opts.args` 逐项传入，不经过 shell。
+插件仍需要已安装的 binary；`opts.cmd` 可指定完整路径，`opts.args` 逐项传参，不经过 shell。使用本地 checkout 时，将仓库声明替换为 `dir = "/absolute/path/to/lazymusic"`。`opts.keymap = false` 可关闭插件自身设置的普通模式快捷键；完整选项见[插件帮助](docs/lazymusic.txt)。
 
-重复打开会复用已有终端；`:LazyMusicHide` 只隐藏浮窗。TUI 内 `q q` 会关闭浮窗并保持后台播放，`q Q` 停止当前来源服务；再次 `<leader>mm` 恢复 session。`Esc`、`Ctrl+h/j/k/l`、`Ctrl+u/d`、`H/J/K/L` 和布局修饰键使用当前 buffer 的透传映射，不影响其他终端。插件将按键交给 TUI；`?` 与直接运行一致，只显示当前面板及 Global。
+### 图片与终端兼容
 
-需要临时回到 Neovim 普通模式时，先按 `Ctrl+反斜杠`，再按 `Ctrl+n`。自动安装后可使用 `:help lazymusic`，也可阅读 [插件帮助](docs/lazymusic.txt)。
+| 运行环境 | Turntable 显示 |
+| --- | --- |
+| 直接运行于 Ghostty / Kitty | 探测成功后通过 Kitty 图片协议显示原图 |
+| Neovim 0.12+ TUI，开启 `termguicolors`，外层终端支持图片 | 随附插件中继原图，需要同时更新 binary 与插件 |
+| Neovim 0.10 / 0.11、无 TTY 的 GUI、tmux / zellij 或不支持协议的终端 | 彩色像素图回退 |
 
-## 配置
+图片可通过 SSH / WSL 传输，不要求图片文件位于外层终端所在机器。同一 Neovim 宿主终端已确认的支持能力会在后台退出、重新打开时复用；缓存命中的封面、动画错误或视图切换不会撤销已确认的支持。探测丢包会有限重试，迟到的成功响应也能恢复原图。
+
+更新后运行 `make install` 并**重启 Neovim**，避免旧 Lua 模块继续运行；确认 `:set termguicolors?` 已开启。需强制像素图时使用 `LAZYMUSIC_IMAGE_DISABLE=1`。
+
+## 配置与命令行
 
 | 位置或选项 | 含义 |
 | --- | --- |
-| macOS：`~/Library/Application Support/lazymusic` | 默认配置和私有运行目录 |
-| Linux：`$XDG_CONFIG_HOME/lazymusic`，未设置时为 `~/.config/lazymusic` | 默认配置和私有运行目录 |
-| `--state-dir PATH` / `LAZYMUSIC_STATE_DIR` | 使用指定的精确状态目录 |
-| `--music-dir PATH` | 设置 LOCAL 音乐根目录，需同时选择 `--source local` |
-| `keys.json` | 当前来源状态目录中的自定义按键 |
+| macOS：`~/Library/Application Support/lazymusic` | 默认私有状态目录 |
+| Linux：`$XDG_CONFIG_HOME/lazymusic`，未设置时为 `~/.config/lazymusic` | 默认私有状态目录 |
+| `--state-dir PATH` / `LAZYMUSIC_STATE_DIR` | 指定精确状态目录 |
+| `--source apple` / `--source local` | 选择来源；未指定时沿用已选来源 |
+| `--music-dir PATH` | 配置 LOCAL 根目录，与 `--source local` 一起使用 |
+| `keys.json` | 当前来源状态目录内的自定义键位 |
 
-默认情况下，Apple Music 使用主状态目录，LOCAL 使用其下的 `profiles/local`；队列、授权和 session 按来源隔离。
+默认 Apple 使用主状态目录，LOCAL 使用其下的 `profiles/local`，授权、队列及 session 按来源隔离。显式状态目录按指定路径使用，不自动追加 profile；不同来源应使用不同目录。
 
-`keys.json` 以动作名覆盖对应的默认绑定，例如为帮助添加 `F1`：
+`keys.json` 以动作名覆盖默认绑定，例如为帮助增加 `F1`：
 
 ```json
 {
@@ -342,23 +401,38 @@ return {
 }
 ```
 
-动作名与默认值见 [keys.go](internal/tui/keys.go)。同一按键可分配给不同面板的动作；同一面板内、以及面板与 Global 之间不能冲突。启动时会校验。旧版 keys.json 的动作名仍可覆盖，新动作及默认值以注册表为准。
+动作名与默认值以 [`keys.go`](internal/tui/keys.go) 为准。不同面板可复用按键，同一面板内以及与 Global 之间不能冲突，启动时会校验。不要沿用已经删除的动作名。
 
-也可通过 CLI 查看或控制当前来源：
+常用 CLI：
 
 ```sh
 lazymusic sources
 lazymusic status
 lazymusic ctl --op pause
+lazymusic ctl --op seek --delta 10s
 lazymusic ctl --op quality --quality high
 lazymusic quit
 ```
 
+以上控制当前来源；指定其他来源时添加 `--source apple|local`，指定自定义 session 时添加相同的 `--state-dir`。`status` 输出 JSON，`ctl` 连接或启动对应后台服务。`lazymusic help` 查看入口说明；TUI 内可用 `:login`、`:play`、`:pause`、`:stop`、`:next`、`:previous`、`:seek 30`、`:vol 50`、`:detach` 等命令。
+
 ## 常见问题
 
-### Ubuntu 编译或播放缺少插件
+### WSL 登录时无法自动打开浏览器怎么办？
 
-先确认 Go 版本与上述依赖已安装，检查 GStreamer：
+在 Login 中选择 APPLE MUSIC 并确认。首次运行可能先下载组件，界面显示准备阶段；授权服务就绪后显示完整手动链接，并尝试自动打开浏览器。用 `y` 请求复制，或手动选择屏幕上的完整地址，保持 lazymusic 运行并在浏览器中完成授权。
+
+WSL 可在 Windows 浏览器中打开链接，需要 localhost 转发可用。通过 SSH 登录远程主机时，需要把链接中的同一 localhost 端口转发到浏览器所在机器。链接只对本次授权有效，取消、完成或超时后清除，不保存到日志或 session。
+
+终端复制需要 OSC 52；Neovim 使用其配置的 clipboard provider。不支持自动复制时仍可手动复制显示的地址。
+
+### Ubuntu 22.04 还没显示链接就登录失败？
+
+官方授权组件可能因旧 C++ 运行库缺少 `GLIBCXX_3.4.32` 而启动失败。lazymusic 检测到此问题时，会自动下载并校验固定版本的 conda-forge GCC 兼容库，保存在当前来源的 `helpers/runtime/`，只供授权子进程使用；不升级系统库、不需要安装 Conda。首次下载需要访问 `conda.anaconda.org`。
+
+若仍失败，Login 会保留具体原因；`@` 查看日志。缺少 GStreamer 库时检查 Ubuntu 依赖，网络或证书错误按提示处理。
+
+### Ubuntu 无声音或无法调整音量？
 
 ```sh
 go version
@@ -368,39 +442,54 @@ gst-inspect-1.0 avdec_aac
 pactl info
 ```
 
-缺少 `playbin3` 时检查 `gstreamer1.0-plugins-base`；缺少 `avdec_aac` 时检查 `gstreamer1.0-libav`。若 `apt` 找不到这些包，检查是否启用了 Ubuntu 的 Universe 仓库。无声音或无法调整音量时，检查当前用户的 PipeWire / PulseAudio 会话和默认输出设备，使用普通用户运行 `lazymusic`。
+缺少 `playbin3` 检查 base 插件，缺少 `avdec_aac` 检查 libav。确认当前用户的 PipeWire / PulseAudio 服务及默认输出设备可用；系统音量使用 `wpctl`，找不到时使用 `pactl`。音量操作作用于运行后台服务的机器。
 
-### 在哪里看错误？
+### 有歌词的歌曲为什么仍显示 No Lyrics Available？
 
-按 `@` 查看运行日志。warning / error 提示会在 3 秒后自动消失，不改变焦点，日志仍保留；切换页面时的正常请求取消不会作为错误上报。私有状态目录中的 `runtime.log` 保留轮转日志，`service.log` 用于服务启动诊断。提交 issue 前请检查日志中没有个人信息或凭据。
+Apple Music 歌词来自独立公共服务，覆盖范围和版本可能与官方客户端不同；官方有歌词不代表公共服务有匹配的同步版本。确认歌曲版本一致且歌词服务可访问。LOCAL 则检查 `.lrc` 与音频同目录、同名、UTF-8 编码并包含时间戳。当前不显示没有时间轴的纯文本歌词。
 
-Apple 多设备播放冲突如果由服务返回明确错误，会显示脱敏后的原因；没有明确原因时，不把普通暂停猜测为多端冲突。
+### 在哪里查看运行错误？
 
-### 为什么没有 Apple Music Hi-Res 选项？
+`@` 打开日志。warning / error 提示 3 秒自动消失，不转移焦点；日志继续保留。状态目录下的 `runtime.log` 为轮转运行日志，`service.log` 用于启动诊断。正常取消页面请求不会报错。
 
-当前音源链路提供 AAC，曲目的无损标签不等于实际播放格式。macOS 原生 MusicKit 的实测也尚未得到 ALAC 解码证据。现阶段不显示未验证的音质选项；入口仍为 Player 中的 `b`，未来由后端能力扩展。
+Apple 多设备播放冲突只有在服务返回明确原因时显示，普通暂停不会被推断为冲突。提交 issue 前检查日志，避免包含个人信息或凭据。
 
-### 更新后无法连接服务？
+### 为什么没有无损 / Hi-Res 选项？
 
-旧后台进程可能仍在运行旧协议。先退出 TUI，运行 `lazymusic quit`，再重新进入；自定义来源或状态目录应传入相同参数。同一来源同时只允许一个 TUI 持有界面写入权。
+当前 Apple 播放路径提供 AAC，macOS 原生 MusicKit 探索尚未得到实际 ALAC 解码证据。两个系统都只展示已支持的音质偏好，不能用目录标签代替播放格式验证。LOCAL 直接播放原文件，解码支持取决于系统。
+
+### 更新后连接失败，或提示已有界面连接？
+
+旧后台进程可能使用旧协议：退出 TUI 后执行 `lazymusic quit`，再重新进入。来源和 `--state-dir` 应与原服务一致。同一来源的状态目录同时只允许一个前端连接；`:LazyMusicHide` 仅隐藏界面，不释放该连接，需用 `q q` 退出前端。
 
 ## 参与开发
 
 ```sh
 make build
 make test
-make test-nvim  # 修改 Neovim 插件时运行，需要 nvim
+make test-nvim  # 需要 Neovim 0.10+；包括终端生命周期和图片中继回归
 make vet
 make help
 ```
 
-代码分为平台无关的浏览与播放合约、来源实现、后台服务和 TUI；新增平台从 backend registry 接入。工程结构、session / 安全约定及新来源接入步骤见 [AGENTS.md](AGENTS.md)。
+| 目录 | 职责 |
+| --- | --- |
+| `cmd/lazymusic`、`internal/app` | CLI、应用生命周期、内嵌 Login 与来源切换 |
+| `internal/music`、`internal/catalog`、`internal/backend` | 平台无关的数据、浏览 / 编辑合约与后端注册 |
+| `internal/sources`、`internal/engine` | 来源浏览与原生播放实现 |
+| `internal/daemon`、`internal/session`、`internal/eventlog` | 后台 IPC、持久化与日志 |
+| `internal/tui` | 面板、交互、布局与动画 |
+| `internal/artwork`、`internal/turntable`、`internal/termimage`、`internal/lyrics` | 封面、播放台合成、终端图片与同步歌词 |
+| `lua/lazymusic`、`tests` | Neovim 插件与回归测试 |
 
-欢迎通过 [Issues](https://github.com/lixuan998/lazymusic/issues) 报告问题或讨论新来源。请附上系统、架构、终端、Go 版本和复现步骤。提交改动前运行检查；不要提交登录凭据、CDM、辅助 binary、一次性探针或构建产物。
+新增来源从 backend registry 接入，UI 按能力显示功能。目录边界、接入步骤、session 和凭据处理约定见 [AGENTS.md](AGENTS.md)。
 
-## 致谢
+欢迎通过 [Issues](https://github.com/lixuan998/lazymusic/issues) 反馈问题或讨论功能，请附系统、架构、终端、运行方式（直接 / Neovim / tmux）、版本及复现步骤。提交前运行适用检查；不要提交授权信息、CDM、辅助 binary、一次性探针或构建产物。
+
+## 致谢与第三方组件
 
 - [Bubble Tea](https://github.com/charmbracelet/bubbletea) 与 [Lip Gloss](https://github.com/charmbracelet/lipgloss)：终端交互与绘制。
-- [Vibez](https://github.com/simonepelosi/vibez)：当前 Apple 授权组件与固定版本的原生播放代码子集。来源清单见 [vibez-source.json](third_party/vibez-source.json)，保留其 [MIT 许可证](third_party/VIBEZ-LICENSE)。
-- [conda-forge GCC runtimes](https://github.com/conda-forge/ctng-compilers-feedstock)：旧版 Linux 的授权组件兼容运行库，按需下载，不随 binary 分发；采用 [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) 及 [GCC Runtime Library Exception 3.1](https://www.gnu.org/licenses/gcc-exception-3.1.html)。
-- Chromium CDM 接口头文件遵循 [BSD 3-Clause](third_party/CHROMIUM-CDM-BSD-3-Clause.txt)。下载的 CDM 组件不随源码分发。
+- [Vibez](https://github.com/simonepelosi/vibez)：当前 Apple 授权组件与固定版本的原生播放代码子集；[来源清单](third_party/vibez-source.json)与 [MIT 许可证](third_party/VIBEZ-LICENSE)。
+- [LRCLIB](https://lrclib.net/docs)、[网易云音乐](https://music.163.com)：公开歌词查询。
+- [conda-forge GCC runtimes](https://github.com/conda-forge/ctng-compilers-feedstock)：旧版 Linux 授权兼容库，按需下载、不随 binary 分发；[GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) 及 [GCC Runtime Library Exception 3.1](https://www.gnu.org/licenses/gcc-exception-3.1.html)。
+- Chromium CDM 接口头文件采用 [BSD 3-Clause](third_party/CHROMIUM-CDM-BSD-3-Clause.txt)；下载的 CDM 不随源码分发。

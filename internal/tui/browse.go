@@ -64,6 +64,7 @@ func categoryKey(q catalog.Query) string {
 }
 
 func (m *Model) navigate(l session.Location, push bool) tea.Cmd {
+	m.UI.Video = false
 	m.remember()
 	if push {
 		m.UI.History = append(m.UI.History, m.UI.Location)
@@ -84,6 +85,7 @@ func (m *Model) navigate(l session.Location, push bool) tea.Cmd {
 	return tea.Batch(m.fetch(true, false), m.dirty())
 }
 func (m *Model) activateNav() tea.Cmd {
+	m.UI.Video = false
 	if m.UI.NavIndex == m.findNav("login") {
 		return m.OpenLogin()
 	}
@@ -143,8 +145,8 @@ func (m *Model) category(next bool) tea.Cmd {
 		return nil
 	}
 	sections := []string{"songs", "albums", "artists"}
-	if l.Page == "search" && m.State.Source.Capabilities.Playlists {
-		sections = append(sections, "playlists")
+	if l.Page == "search" {
+		sections = m.searchSections()
 	}
 	i := 0
 	for n, s := range sections {
@@ -208,4 +210,28 @@ func (m *Model) selectItem(op string) tea.Cmd {
 	}
 	q := *item.Play
 	return m.command(daemon.Command{Op: actual, Query: &q})
+}
+
+func (m *Model) searchSections() []string {
+	if m.UI.SearchScope != "library" && len(m.State.Source.SearchSections) > 0 {
+		var ids []string
+		for _, section := range m.State.Source.SearchSections {
+			ids = append(ids, section.ID)
+		}
+		return ids
+	}
+	sections := []string{"songs", "albums", "artists"}
+	if m.State.Source.Capabilities.Playlists {
+		sections = append(sections, "playlists")
+	}
+	return sections
+}
+
+func (m *Model) sectionTitle(id string) string {
+	for _, section := range m.State.Source.SearchSections {
+		if section.ID == id {
+			return section.Title
+		}
+	}
+	return titleCase(id)
 }

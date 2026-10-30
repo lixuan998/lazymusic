@@ -99,12 +99,12 @@ func (m *Model) mainRows(h int) []string {
 		rows = append(rows, m.homeTabBar())
 	} else if l.Page == "library" || l.Page == "search" {
 		sections := []string{"songs", "albums", "artists"}
-		if l.Page == "search" && m.State.Source.Capabilities.Playlists {
-			sections = append(sections, "playlists")
+		if l.Page == "search" {
+			sections = m.searchSections()
 		}
 		tabs := []string{}
 		for _, s := range sections {
-			label := titleCase(s)
+			label := m.sectionTitle(s)
 			if s == l.Section {
 				tabs = append(tabs, accent.Bold(true).Render(label))
 			} else {
@@ -113,7 +113,7 @@ func (m *Model) mainRows(h int) []string {
 		}
 		rows = append(rows, strings.Join(tabs, "  "))
 	} else {
-		rows = append(rows, muted.Render("Enter open/play   p/P pick   Ctrl+Enter play   y queue"))
+		rows = append(rows, muted.Render("Enter open/play   p pick   P play   y queue"))
 	}
 	if l.Page == "search" {
 		scope := m.State.Source.Name + " catalog"
@@ -317,6 +317,10 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	}
 	mainTitle := "2 " + plain(title)
 	mainRows := m.mainRows(bodyH - 2)
+	if m.showingVideo() {
+		mainTitle = "2 " + m.videoTitle()
+		mainRows = m.videoRows(bodyH - 2)
+	}
 	if override != nil {
 		mainRows = override.Rows
 	}
@@ -351,12 +355,15 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 	}
 	footer := muted.Render(" " + label + "  h/l navigate · +/_ layout · @ logs · ? help · q leave")
 	if m.UI.Focus == 1 {
-		footer = muted.Render(" " + label + "  h/l open/back · p/P pick · Ctrl+Enter play · y queue · a add · ? help")
+		footer = muted.Render(" " + label + "  h/l open/back · p pick · P play · y queue · a add · ? help")
+	}
+	if m.UI.Focus == 1 && m.showingVideo() {
+		footer = muted.Render(" VIDEO  h/v browse · Space play/pause · </> track · Ctrl+</> seek · ? help")
 	}
 	if m.UI.Focus == 2 {
-		footer = muted.Render(" QUEUE  p/P pick · f current · Enter play · [/] move · d remove · ? help")
+		footer = muted.Render(" QUEUE  p pick · f current · Enter play · [/] move · d remove · ? help")
 		if m.picked != nil {
-			footer = muted.Render(" QUEUE  p after · P before · Esc cancel · f current · Enter play · ? help")
+			footer = muted.Render(" QUEUE  p after · Esc cancel · f current · Enter play · ? help")
 			if m.picked.placing {
 				footer = muted.Render(" QUEUE  Placing selection… · f current · ? help")
 			}

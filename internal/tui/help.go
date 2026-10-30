@@ -14,6 +14,8 @@ func (m *Model) actionEnabled(action string) bool {
 		return false
 	}
 	switch action {
+	case "video":
+		return m.videoKey() != "" || m.State.Source.Capabilities.Video
 	case "query":
 		return m.UI.Location.Page == "search"
 	case "scope":

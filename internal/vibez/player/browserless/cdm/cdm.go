@@ -203,3 +203,62 @@ func (c *CDM) Close() error {
 	}
 	return nil
 }
+
+// Video decoding stays inside the licensed CDM. A video key may permit
+// DecryptAndDecodeFrame while deliberately rejecting raw Decrypt.
+type VideoFrame struct {
+	RGBA          []byte
+	Width, Height int
+	Timestamp     int64
+}
+
+func (c *CDM) ConfigureVideo(extra []byte, width, height int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.ctx == nil || len(extra) == 0 {
+		return fmt.Errorf("video decoder unavailable")
+	}
+	status := C.cdm_configure_video(c.ctx, (*C.uint8_t)(unsafe.Pointer(&extra[0])), C.uint32_t(len(extra)), C.int(width), C.int(height))
+	if status != 0 {
+		return fmt.Errorf("CDM video decoder initialization status %d", int(status))
+	}
+	return nil
+}
+func (c *CDM) ResetVideo() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.ctx != nil {
+		C.cdm_reset_video(c.ctx)
+	}
+}
+func (c *CDM) DecodeVideo(key, iv, data []byte, subs []Subsample, crypt, skip int, timestamp, earliest int64) (VideoFrame, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.ctx == nil || len(key) != 16 || len(iv) != 16 || len(data) == 0 {
+		return VideoFrame{}, fmt.Errorf("invalid video sample")
+	}
+	clear := make([]C.uint16_t, len(subs))
+	cipher := make([]C.uint32_t, len(subs))
+	for i, sub := range subs {
+		clear[i] = C.uint16_t(sub.ClearBytes)
+		cipher[i] = C.uint32_t(sub.CipherBytes)
+	}
+	var cp *C.uint16_t
+	var ep *C.uint32_t
+	if len(subs) > 0 {
+		cp = &clear[0]
+		ep = &cipher[0]
+	}
+	var pixels *C.uint8_t
+	var width, height C.int
+	var pts C.int64_t
+	status := C.cdm_decode_video(c.ctx, (*C.uint8_t)(unsafe.Pointer(&key[0])), (*C.uint8_t)(unsafe.Pointer(&iv[0])), C.uint32_t(len(iv)), (*C.uint8_t)(unsafe.Pointer(&data[0])), C.uint32_t(len(data)), cp, ep, C.uint32_t(len(subs)), C.uint32_t(crypt), C.uint32_t(skip), C.int64_t(timestamp), C.int64_t(earliest), &pixels, &width, &height, &pts)
+	if status == 1 {
+		return VideoFrame{}, nil
+	}
+	if status != 0 {
+		return VideoFrame{}, fmt.Errorf("CDM video decoding status %d", int(status))
+	}
+	defer C.free(unsafe.Pointer(pixels))
+	return VideoFrame{RGBA: C.GoBytes(unsafe.Pointer(pixels), width*height*4), Width: int(width), Height: int(height), Timestamp: int64(pts)}, nil
+}

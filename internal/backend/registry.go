@@ -22,10 +22,11 @@ type Entry struct {
 
 var entries = []Entry{
 	{Source: music.Source{
-		ID: music.Apple, Name: "APPLE MUSIC", RequiresLogin: true,
+		SearchSections: []music.SourceSection{{ID: "songs", Title: "Songs"}, {ID: "albums", Title: "Albums"}, {ID: "artists", Title: "Artists"}, {ID: "playlists", Title: "Playlists"}, {ID: "music-videos", Title: "Videos"}},
+		ID:             music.Apple, Name: "APPLE MUSIC", RequiresLogin: true,
 		QualityNote:    "This native backend receives AAC streams. Lossless / Hi-Res requires a different playback and authorization path.",
 		DefaultQuality: "high", Qualities: []music.Quality{{ID: "standard", Name: "AAC 64 kbps", Bitrate: 64}, {ID: "high", Name: "AAC 256 kbps", Bitrate: 256}},
-		Capabilities: music.Capabilities{Equalizer: true, Home: true, CatalogSearch: true, Library: true, Playlists: true, PlaylistCreate: true},
+		Capabilities: music.Capabilities{Video: true, Equalizer: true, Home: true, CatalogSearch: true, Library: true, Playlists: true, PlaylistCreate: true},
 		Pages: []music.SourcePage{
 			{ID: "new", Title: "New", Query: music.Query{Source: music.Apple, Page: "new", Section: "songs"}},
 			{ID: "radio", Title: "Radio", Query: music.Query{Source: music.Apple, Page: "radio", Section: "songs"}},

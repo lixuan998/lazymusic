@@ -9,6 +9,7 @@ import (
 	"lazymusic/internal/eventlog"
 	"lazymusic/internal/music"
 	"lazymusic/internal/session"
+	"lazymusic/internal/video"
 )
 
 // Continuous owns an endless source above the ordinary native song engine.
@@ -302,4 +303,11 @@ func (c *Continuous) SetVolume(v float64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.Engine.SetVolume(v)
+}
+
+func (c *Continuous) VideoFrame(ctx context.Context, id string) (video.Frame, error) {
+	if provider, ok := c.Engine.(video.Provider); ok {
+		return provider.VideoFrame(ctx, id)
+	}
+	return video.Frame{}, nil
 }

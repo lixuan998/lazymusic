@@ -27,7 +27,7 @@ func (c *Client) Artwork(ctx context.Context, subject catalog.Subject) (artwork.
 		kind, id = "songs", subject.PlaybackID
 	}
 	switch kind {
-	case "songs", "library-songs", "albums", "library-albums", "stations":
+	case "songs", "library-songs", "albums", "library-albums", "stations", "music-videos":
 	default:
 		return artwork.Image{}, nil
 	}

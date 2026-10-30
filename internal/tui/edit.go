@@ -67,7 +67,9 @@ func (m *Model) openEdit(mode string) tea.Cmd {
 	d := &editDialog{phase: mode, operation: mode, title: title, subject: subject, origin: m.query().Key(), loading: true}
 	if mode == "add" {
 		var track *music.Track
-		if m.UI.Focus == 1 {
+		if m.UI.Focus == 1 && m.showingVideo() {
+			track = m.State.Playback.Track
+		} else if m.UI.Focus == 1 {
 			items := m.visible()
 			item := items[m.cursor]
 			track = item.Track

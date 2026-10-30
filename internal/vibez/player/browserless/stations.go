@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -35,51 +34,24 @@ func hlsAttributes(line string) map[string]string {
 func mediaURL(base, reference string) (string, error) {
 	u, err := url.Parse(base)
 	if err != nil {
-		return "", fmt.Errorf("invalid station media base")
+		return "", fmt.Errorf("invalid media base")
 	}
 	r, err := url.Parse(reference)
 	if err != nil {
-		return "", fmt.Errorf("invalid station media reference")
+		return "", fmt.Errorf("invalid media reference")
 	}
 	u = u.ResolveReference(r)
 	if u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost")) {
-		return "", fmt.Errorf("station media requires HTTPS")
+		return "", fmt.Errorf("media requires HTTPS")
 	}
 	if u.User != nil {
-		return "", fmt.Errorf("invalid station media credentials")
+		return "", fmt.Errorf("invalid media credentials")
 	}
 	return u.String(), nil
 }
-func mediaBytes(ctx context.Context, uri string, offset, length int64, limit int64) ([]byte, error) {
-	if _, err := mediaURL(uri, ""); err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
-	if err != nil {
-		return nil, err
-	}
-	if length > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", offset, offset+length-1))
-	}
-	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, fmt.Errorf("station media network request failed")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 && resp.StatusCode != 206 {
-		return nil, fmt.Errorf("station media HTTP %d", resp.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("station media exceeds size limit")
-	}
-	return data, nil
+func (s *StreamServer) mediaBytes(ctx context.Context, uri string, offset, length, limit int64) ([]byte, error) {
+	data, _, err := s.readMedia(ctx, uri, offset, length, limit)
+	return data, err
 }
 func selectStationVariant(master []byte, base string, prefer256 bool) (string, error) {
 	target := 256000
@@ -192,7 +164,7 @@ func (s *StreamServer) prepareStation(ctx context.Context, id string, prefer256 
 	if err != nil {
 		return "", 0, err
 	}
-	master, err := mediaBytes(ctx, info.HLSPlaylistURL, 0, 0, 4<<20)
+	master, err := s.mediaBytes(ctx, info.HLSPlaylistURL, 0, 0, 4<<20)
 	if err != nil {
 		return "", 0, err
 	}
@@ -202,7 +174,7 @@ func (s *StreamServer) prepareStation(ctx context.Context, id string, prefer256 
 	}
 	data := master
 	if uri != info.HLSPlaylistURL {
-		data, err = mediaBytes(ctx, uri, 0, 0, 4<<20)
+		data, err = s.mediaBytes(ctx, uri, 0, 0, 4<<20)
 		if err != nil {
 			return "", 0, err
 		}
@@ -302,7 +274,7 @@ func (s *StreamServer) serveLive(w http.ResponseWriter, r *http.Request, id stri
 			return
 		case <-timer.C:
 		}
-		data, err := mediaBytes(ctx, initial.stationURI, 0, 0, 4<<20)
+		data, err := s.mediaBytes(ctx, initial.stationURI, 0, 0, 4<<20)
 		if err != nil {
 			fail(err)
 			return
@@ -320,7 +292,7 @@ func (s *StreamServer) serveLive(w http.ResponseWriter, r *http.Request, id stri
 }
 
 func (s *StreamServer) stationProtection(ctx context.Context, m stationManifest, info *license.PlaybackInfo, id string) (*mp4.Encryption, mp4.AudioConfig, []byte, error) {
-	init, err := mediaBytes(ctx, m.init, m.initOffset, m.initLength, 4<<20)
+	init, err := s.mediaBytes(ctx, m.init, m.initOffset, m.initLength, 4<<20)
 	if err != nil {
 		return nil, mp4.AudioConfig{}, nil, err
 	}
@@ -392,5 +364,5 @@ func (s *StreamServer) stationSegmentProtection(ctx context.Context, st *trackSt
 		}
 		store.entries[key] = data
 	}
-	return &trackStream{raw: st.raw, baseURI: st.baseURI, audioCfg: data.cfg, encryption: data.encryption, kid: data.kid}, nil
+	return &trackStream{fragmentConfig: st.fragmentConfig, raw: st.raw, baseURI: st.baseURI, audioCfg: data.cfg, encryption: data.encryption, kid: data.kid}, nil
 }

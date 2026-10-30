@@ -26,7 +26,7 @@ end
 
 function M.attach(buf, job, hooks)
   hooks = hooks or {}
-  local s = { ids = {}, probes = {}, current = nil, job = job }
+  local s = { ids = {}, probes = {}, current = nil, job = job, chunks = {}, chunk_bytes = 0 }
   sessions[buf] = s
   local write = hooks.write or vim.api.nvim_ui_send
   local send = hooks.send or function(data) vim.api.nvim_chan_send(job, data) end
@@ -76,14 +76,36 @@ function M.attach(buf, job, hooks)
         if params.a ~= "q" and params.a ~= "T" then return end
         local count = 0
         for _ in pairs(s.ids) do count = count + 1 end
-        if count >= 2 then return end
+        if count >= 3 then return end
         s.ids[id] = true
       end
       if params.a == "q" then s.probes[id] = true end
+      local continuing = not params.a and s.current ~= nil
       if params.m == "1" then s.current = id else s.current = nil end
       -- Forward only our validated direct graphics commands, never arbitrary
       -- terminal requests, file names or escape sequences from a child process.
-      write("\27_G" .. body .. "\27\\")
+      local command = "\27_G" .. body .. "\27\\"
+      local image_chunk = params.a == "T" or (params.a == "f" and params.f ~= "32") or continuing
+      if image_chunk and (params.m == "1" or s.chunk_bytes > 0) then
+        -- Keep Kitty's small validated packets, but forward a whole image in
+        -- one host-UI call instead of hundreds of calls per video frame.
+        if params.a == "T" or (params.a == "f" and params.f == "100") then
+          s.chunks, s.chunk_bytes = {}, 0
+        end
+        s.chunk_bytes = s.chunk_bytes + #command
+        if s.chunk_bytes > 9 * 1024 * 1024 then
+          s.chunks, s.chunk_bytes, s.current = {}, 0, nil
+          return
+        end
+        s.chunks[#s.chunks + 1] = command
+        if params.m ~= "1" then
+          write(table.concat(s.chunks))
+          s.chunks, s.chunk_bytes = {}, 0
+        end
+      else
+        if s.chunk_bytes > 0 then s.chunks, s.chunk_bytes = {}, 0 end
+        write(command)
+      end
       if params.a == "d" then s.ids[id], s.probes[id] = nil, nil end
     end,
   })

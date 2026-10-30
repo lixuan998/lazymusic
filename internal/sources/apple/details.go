@@ -27,7 +27,7 @@ func (c *Client) Inspect(ctx context.Context, subject catalog.Subject) (catalog.
 	if strings.HasSuffix(kind, "songs") && subject.PlaybackID != "" {
 		kind, id = "songs", subject.PlaybackID
 	}
-	if kind != "songs" && kind != "library-songs" && kind != "albums" && kind != "library-albums" && kind != "artists" && kind != "library-artists" && kind != "playlists" && kind != "library-playlists" {
+	if kind != "music-videos" && kind != "songs" && kind != "library-songs" && kind != "albums" && kind != "library-albums" && kind != "artists" && kind != "library-artists" && kind != "playlists" && kind != "library-playlists" {
 		return catalog.Details{CreditsNote: "Apple Music does not provide credits for this type of work."}, nil
 	}
 	sf, err := c.sf(ctx)

@@ -39,6 +39,7 @@ type State struct {
 }
 
 type Capabilities struct {
+	Video          bool `json:"video"`
 	PlaylistCreate bool `json:"playlist_create"`
 	Equalizer      bool `json:"equalizer"`
 	Home           bool `json:"home"`
@@ -54,14 +55,15 @@ type Quality struct {
 	Bitrate int    `json:"bitrate,omitempty"`
 }
 type Source struct {
-	Pages          []SourcePage `json:"pages,omitempty"`
-	QualityNote    string       `json:"quality_note,omitempty"`
-	Qualities      []Quality    `json:"qualities,omitempty"`
-	DefaultQuality string       `json:"default_quality,omitempty"`
-	ID             string       `json:"id"`
-	Name           string       `json:"name"`
-	RequiresLogin  bool         `json:"requires_login"`
-	Capabilities   Capabilities `json:"capabilities"`
+	SearchSections []SourceSection `json:"search_sections,omitempty"`
+	Pages          []SourcePage    `json:"pages,omitempty"`
+	QualityNote    string          `json:"quality_note,omitempty"`
+	Qualities      []Quality       `json:"qualities,omitempty"`
+	DefaultQuality string          `json:"default_quality,omitempty"`
+	ID             string          `json:"id"`
+	Name           string          `json:"name"`
+	RequiresLogin  bool            `json:"requires_login"`
+	Capabilities   Capabilities    `json:"capabilities"`
 }
 
 // SourcePage adds a source-defined root without platform checks in the TUI.
@@ -69,4 +71,10 @@ type SourcePage struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	Query Query  `json:"query"`
+}
+
+// SourceSection provides an opaque category ID and its display label.
+type SourceSection struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }

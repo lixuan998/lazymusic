@@ -10,7 +10,7 @@ import (
 	"lazymusic/internal/volume"
 )
 
-const ProtocolVersion = 14
+const ProtocolVersion = 16
 
 type State struct {
 	Placement        *music.PlacementStatus `json:"placement,omitempty"`

@@ -341,7 +341,7 @@ func (p *Player) scheduleNextPrefetch() {
 				nextTrack = meta
 			}
 		}
-		streamURL, duration, err := p.streamer.PrepareTrack(ctx, catalogID, prefer256k)
+		streamURL, duration, err := p.streamer.PrepareMedia(ctx, catalogID, nextTrack.MediaType, prefer256k)
 		if err != nil || ctx.Err() != nil {
 			return
 		}
@@ -444,7 +444,7 @@ func (p *Player) playTrack(t provider.Track) {
 		if p.streamer == nil {
 			return
 		}
-		streamURL, duration, err := p.streamer.PrepareTrack(ctx, catalogID, prefer256k)
+		streamURL, duration, err := p.streamer.PrepareMedia(ctx, catalogID, t.MediaType, prefer256k)
 		if err != nil {
 			select {
 			case <-ctx.Done():

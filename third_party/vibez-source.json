@@ -90,7 +90,7 @@
     },
     "internal/player/browserless/player.go": {
       "upstream_sha256": "b6ceb4f99e55645683fb151a7a1daca9d83aa90c665e30d9fc88ca1b647b4bfe",
-      "imported_sha256": "964f82ddf0f69c08092dd4e8a9d6dff092826cf9170113a300b0ae1af02fbd3b"
+      "imported_sha256": "2a8fe49a4f318f30db988b827708a3298d074194129adf98c73d67f9236231f1"
     },
     "internal/player/browserless/player_test.go": {
       "upstream_sha256": "4cec56664feb5444fb6fd1943cc7964994f5c9d0abc5a89b969b1e1ee08f7eef",
@@ -126,7 +126,7 @@
     },
     "internal/player/browserless/streamer.go": {
       "upstream_sha256": "e8429468267112389ddc721ff952be9a9780b5f448a43602f940320eea0a2a8f",
-      "imported_sha256": "fce0221bc53f9918d9f7d2d1ff4bba6fbb0b2ea2ab2ce6a3db8ca52078a18d99"
+      "imported_sha256": "a9b61639e0277211cc6c95c54154fc6b0424316286f27a3fb03998663dea39c4"
     },
     "internal/player/browserless/streamer_test.go": {
       "upstream_sha256": "5c2c004580a4737ebbac4a80393122477ff564241b576acd283a0b2a62573804",
@@ -134,19 +134,19 @@
     },
     "internal/player/browserless/cdm/cdm.go": {
       "upstream_sha256": "34668351c5373526d3c7a0a248cd6e3f36eab86b92ab8bd7acd764ee42e91479",
-      "imported_sha256": "e0d483860964900333757cb7ab26ca5f907fa7e821becf1f353d83c0a9901d90"
+      "imported_sha256": "8f1efb671c449fa642f1cb80733831c54e87da4c6f18f7fa559b9ef4519fe199"
     },
     "internal/player/browserless/cdm/cdm_bridge.cpp": {
       "upstream_sha256": "d986f136e7f3b02bb202b82c0435da617d12b089febfca0a4670aa8b0434b654",
-      "imported_sha256": "eacb19d045ad1a34868de46fa2324290c735bfe23d228f599c8a80a4bcfd1057"
+      "imported_sha256": "e5eb162ccc6bc1ab4ee6228bb4be0eaec57209302e3ec9b97e22cfac5f24adb4"
     },
     "internal/player/browserless/cdm/cdm_bridge.h": {
       "upstream_sha256": "04dd5ee96bb51993f7ab4477c1e515c202578e2644da6ed4467cf7c8bf810ea0",
-      "imported_sha256": "a720d707f90245340d9ab480a3d9ce75d66a825c420e17cbb68ac84dade57a22"
+      "imported_sha256": "3ac4db03d79b2405346e0066f3bf3713b96d7869e48836d036d0eef29f290f7e"
     },
     "internal/player/browserless/cdm/cdm_nocgo.go": {
       "upstream_sha256": "89970cb5cf218c6bd5a15013843ca01c163c3381333e2dacb64092f76c69c024",
-      "imported_sha256": "7e962f2ea0b895a0c450e4fc58f8500cc0df6aede5dac1eeaa8e680edf7fad01"
+      "imported_sha256": "e7ba058344ff4a6a2ee6a261f40cce0fad9f02fac2b810f395999d66bca0270a"
     },
     "internal/player/browserless/cdm/content_decryption_module.h": {
       "upstream_sha256": "09ce855530a35c3e0d682f6c355902c6a5a0b712ea4e65dadc8c8a168d3c1455",
@@ -187,17 +187,29 @@
   },
   "patch": {
     "path": "third_party/vibez-session.patch",
-    "sha256": "a62c6a7ef9e53702926889d677c69cb47a0f3fe6f5181f46085daa7a6da6bd49"
+    "sha256": "858f2736f10a25f2d6c9e49daa453ade485d3f60dfbe30e0479a9bb0e3fe2710"
   },
   "local_additions": {
     "internal/vibez/player/browserless/session.go": "baa4287c8248cb5298ff757ac25ce7ce5af8cc0e8835a2bd74e8f33c4c59aa4e",
     "internal/vibez/player/browserless/session_test.go": "848ffa77c528dce0f8de71e548fe7d730074754e44b9018bb9d07d3e598f0c7c",
-    "internal/vibez/player/browserless/stations.go": "b605b84c49b1d84c6ff2150e7b57048e18d9d857ddba12d78fe467bdfadc407a",
+    "internal/vibez/player/browserless/stations.go": "fbcfd060d4421e0938453fea496833b3c2a2ae3de3271c0867cac2569775127f",
     "internal/vibez/player/browserless/stations_test.go": "f04b44b23fc60e352e7d43da3cd8224602150c8a261323716146e917a3d43f47",
     "internal/vibez/player/browserless/license/stations.go": "b237e50c3c991b014c5b6b39dc80277ef2f46ec53fce66b4a5af76b64d93ed40",
     "internal/vibez/player/browserless/license/stations_test.go": "65d73bbc3fc156450fb4b8595ae770d997db3d26c8f73b478ee41e411e9b3e22",
     "internal/vibez/player/browserless/mp4/encryption.go": "6af3e55f0ad184a102069864a6c62f6a5282895e952a8aeee56f7f3f300a2e1a",
     "internal/vibez/player/browserless/mp4/encryption_test.go": "b0e9e66a8402565476e6a32384f4a318c81295d9f11fdaf0b7701c6c8b20016e",
-    "internal/vibez/player/browserless/cdm/cdm_nocgo.go": "7e962f2ea0b895a0c450e4fc58f8500cc0df6aede5dac1eeaa8e680edf7fad01"
+    "internal/vibez/player/browserless/videos.go": "9e67626c2498046b98ef6c84eec514976f00d0d2223f744be74b34da36b3a83f",
+    "internal/vibez/player/browserless/videos_test.go": "6d648de92d20541580cdbe35da2a7d75a32284c24737f7443efa0658149d7dab",
+    "internal/vibez/player/browserless/video_frames.go": "d1008782890c6b55dd37491ef9eb0fd116b02ca4dfd73da93d2eb0dffb7d303a",
+    "internal/vibez/player/browserless/license/videos.go": "cf849da08e017cadaf69c8c84ec754b1d45a5dc46dd2f9641b5b716ed7b33975",
+    "internal/vibez/player/browserless/license/videos_test.go": "f472d6132c513f9aa832d3b199e1e8de33ea9505854c69b8be1d63137769ac2e",
+    "internal/vibez/player/browserless/mp4/fragments.go": "bb181a5ade2cebec6516ca374dcea002d8e9d4104ade0c6ba0c94e213b348e8c",
+    "internal/vibez/player/browserless/mp4/video.go": "71a237cca10c653259f8265730e0058e53dbd2b3c02e41bdd19152e0a7081ae9",
+    "internal/vibez/player/browserless/mp4/video_test.go": "5e9ae6fefac1ac4efd606e63d0e53f456b0821dd487379f309b26789c115aa78",
+    "internal/vibez/player/browserless/cdn.go": "5de591ac600aaea7569f7ec56e0e44fb6a5965ce878a14baf8629655289ec50d",
+    "internal/vibez/player/browserless/cdn_dns.go": "76e3edb635f3f52b36069abcfce3f19568897a56eed2e01a4b994f5f74a7fc66",
+    "internal/vibez/player/browserless/cdn_test.go": "2be272fa91f69a0bfee195ed5b78c40c5ac46dedbfb306e7c992494d3ad2e4f0",
+    "internal/vibez/player/browserless/cdn_dns_test.go": "ba51fde178c3390727475816757769c915d946d3a3ce9e68c138e1f5eabc90ab",
+    "internal/vibez/player/browserless/media_http.go": "4f54c76ada1b88e5fd38217339f3845d380aa9d783da29f318807e9654410547"
   }
 }

@@ -32,6 +32,9 @@ type segmentRef struct {
 }
 
 type trackStream struct {
+	fragmentConfig     *mp4.TrackConfig
+	video              bool
+	videoStream        string
 	stationProtections *stationProtectionStore
 	stationInfo        *license.PlaybackInfo
 	encryption         *mp4.Encryption
@@ -59,12 +62,19 @@ type trackStream struct {
 
 // StreamServer manages local HTTP streaming for decrypted Apple Music tracks.
 type StreamServer struct {
-	cdmEngine *cdm.CDM
-	licClient *license.Client
-	listener  net.Listener
-	server    *http.Server
-	port      int
-	authToken string
+	mediaOnce    sync.Once
+	mediaHTTP    *http.Client
+	videoMu      sync.Mutex
+	videoState   nativeVideoState
+	videoClosed  bool
+	videoContext context.Context
+	videoCancel  context.CancelFunc
+	cdmEngine    *cdm.CDM
+	licClient    *license.Client
+	listener     net.Listener
+	server       *http.Server
+	port         int
+	authToken    string
 
 	mu         sync.RWMutex
 	streams    map[string]*trackStream
@@ -111,6 +121,7 @@ func NewStreamServer(cdmEngine *cdm.CDM, licClient *license.Client) (*StreamServ
 		streams:   make(map[string]*trackStream),
 	}
 
+	s.videoContext, s.videoCancel = context.WithCancel(context.Background())
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stream/", s.handleStream)
 
@@ -423,7 +434,7 @@ func (s *StreamServer) register(ctx context.Context, streamID string, st *trackS
 	// Warm segment 0 asynchronously so both initial playback and
 	// seek-to-start (0:00) can write the first ~10s immediately
 	// without waiting for an upstream CDN round-trip.
-	if len(st.segments) > 0 && (st.raw || s.cdmEngine != nil) {
+	if !st.video && st.videoStream == "" && len(st.segments) > 0 && (st.raw || s.cdmEngine != nil) {
 		go func() {
 			warmCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
@@ -514,6 +525,10 @@ func (s *StreamServer) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if st.video {
+		http.NotFound(w, r)
+		return
+	}
 	if st.live {
 		s.serveLive(w, r, streamID, st)
 		return
@@ -644,14 +659,22 @@ func (s *StreamServer) fetchAndDecryptSegment(ctx context.Context, client *http.
 		segURL = st.baseURI + seg.uri
 	}
 
-	segData, stage, err := fetchSegmentWithRetry(ctx, client, segURL, seg.offset, seg.length)
+	var segData []byte
+	var stage string
+	var err error
+	if st.fragmentConfig != nil {
+		segData, err = s.mediaBytes(ctx, segURL, seg.offset, seg.length, 32<<20)
+		stage = "fetch video audio"
+	} else {
+		segData, stage, err = fetchSegmentWithRetry(ctx, client, segURL, seg.offset, seg.length)
+	}
 	if err != nil {
 		return nil, stage, err
 	}
 	if st.raw {
 		return segData, "", nil
 	}
-	aacData, err := mp4.DecryptSegment(segData, st.kid, st.audioCfg, func(kid, iv, input []byte, subs []mp4.Subsample) ([]byte, error) {
+	decrypt := func(kid, iv, input []byte, subs []mp4.Subsample) ([]byte, error) {
 		cdmSubs := make([]cdm.Subsample, len(subs))
 		for si, sb := range subs {
 			cdmSubs[si] = cdm.Subsample{
@@ -663,7 +686,13 @@ func (s *StreamServer) fetchAndDecryptSegment(ctx context.Context, client *http.
 			return s.cdmEngine.DecryptCBCS(kid, iv, input, cdmSubs, st.encryption.Crypt, st.encryption.Skip)
 		}
 		return s.cdmEngine.DecryptSubsamples(kid, iv, input, cdmSubs)
-	}, encryptionOptions(st)...)
+	}
+	var aacData []byte
+	if st.fragmentConfig != nil && st.encryption != nil {
+		aacData, err = mp4.DecryptAudioFragment(segData, st.kid, *st.fragmentConfig, st.audioCfg, *st.encryption, decrypt)
+	} else {
+		aacData, err = mp4.DecryptSegment(segData, st.kid, st.audioCfg, decrypt, encryptionOptions(st)...)
+	}
 	if err != nil {
 		return nil, "decrypt", err
 	}
@@ -743,6 +772,14 @@ func fetchSegmentWithRetry(ctx context.Context, client *http.Client, segURL stri
 
 // Close terminates the local HTTP stream server.
 func (s *StreamServer) Close() error {
+	s.closeMedia()
+	if s.videoCancel != nil {
+		s.videoCancel()
+	}
+	s.videoMu.Lock()
+	s.videoClosed = true
+	s.resetVideoLocked()
+	s.videoMu.Unlock()
 	if s.server != nil {
 		return s.server.Close()
 	}

@@ -77,8 +77,8 @@ func playbackNote(kind string) string {
 	switch kind {
 	case "stations", "radioStation":
 		return "Station playback is not connected to this native player yet"
-	case "music-videos", "musicVideo", "artistUploadedVideo":
-		return "Video playback is not supported by this audio player"
+	case "artistUploadedVideo":
+		return "Apple does not expose a supported playback asset for this uploaded video"
 	default:
 		return "Playback is not available for this resource type yet"
 	}

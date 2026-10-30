@@ -47,6 +47,7 @@ type exitMsg struct {
 }
 
 type Model struct {
+	video             videoState
 	graphics          graphicsState
 	record            recordAnimation
 	artwork           artworkState
@@ -137,6 +138,7 @@ func New(ctx context.Context, api API, state daemon.State, keys Keys) *Model {
 			m.seenLog = e.ID
 		}
 	}
+	m.video.observed = m.videoKey()
 	m.restoreNavigation()
 	m.restore = m.cursorFor(m.query())
 	m.cursor = m.restore.Index
@@ -146,7 +148,7 @@ func New(ctx context.Context, api API, state daemon.State, keys Keys) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.poll(), m.fetch(true, false), m.syncRhythm(time.Now()), m.syncArtwork(), m.syncLyrics(), m.syncRecord(time.Now()), m.syncLyricsClock(), m.syncGraphics())
+	return tea.Batch(m.poll(), m.fetch(true, false), m.syncRhythm(time.Now()), m.syncArtwork(), m.syncLyrics(), m.syncRecord(time.Now()), m.syncLyricsClock(), m.syncGraphics(), m.syncVideo())
 }
 func (m *Model) query() catalog.Query {
 	l := m.UI.Location
@@ -228,8 +230,9 @@ func (m *Model) leave(action string) tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	before := m.toastVersion
 	m.graphicsMessage(msg)
+	m.videoMessage(msg)
 	_, cmd := m.update(msg)
-	cmd = tea.Batch(cmd, m.syncRhythm(time.Now()), m.syncArtwork(), m.syncLyrics(), m.syncRecord(time.Now()), m.syncLyricsClock(), m.syncGraphics())
+	cmd = tea.Batch(cmd, m.syncRhythm(time.Now()), m.syncArtwork(), m.syncLyrics(), m.syncRecord(time.Now()), m.syncLyricsClock(), m.syncGraphics(), m.syncVideo())
 	if before != m.toastVersion {
 		cmd = tea.Batch(cmd, m.NotificationTimer())
 	}
@@ -237,11 +240,38 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case graphicsWrite, graphicsQueryWrite:
+	case graphicsWrite, graphicsQueryWrite, videoWrite:
 		if data, done, ok := m.TerminalOutput(msg); ok {
 			return m, tea.Sequence(tea.Raw(data), func() tea.Msg { return done })
 		}
 		return m, nil
+	case videoLoaded:
+		if msg.generation == m.video.generation && msg.err == nil && !msg.frame.Valid() && !m.State.Playback.Playing {
+			m.video.waiting = true
+			return m, nil
+		}
+		if msg.generation == m.video.generation && msg.err == nil && m.State.Playback.Playing && (!msg.frame.Valid() || m.video.active && msg.frame.Position == m.video.sentPosition) {
+			m.video.ticking = true
+			generation := m.video.generation
+			delay := m.videoDelay(time.Now())
+			if !msg.frame.Valid() {
+				delay = max(delay, 100*time.Millisecond)
+			}
+			return m, tea.Tick(delay, func(time.Time) tea.Msg { return videoTick{generation} })
+		}
+		return m, nil
+	case videoUploaded:
+		var cmds []tea.Cmd
+		if msg.generation == m.video.generation && m.video.probing {
+			generation := m.video.generation
+			cmds = append(cmds, tea.Tick(graphicsProbeTimeout, func(time.Time) tea.Msg { return videoProbeTimeout{generation} }))
+		}
+		if msg.generation == m.video.generation && m.video.ticking {
+			generation := m.video.generation
+			cmds = append(cmds, tea.Tick(m.videoDelay(time.Now()), func(time.Time) tea.Msg { return videoTick{generation} }))
+		}
+		return m, tea.Batch(cmds...)
+
 	case artworkMsg:
 		m.acceptArtwork(msg)
 		return m, nil

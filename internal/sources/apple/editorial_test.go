@@ -52,7 +52,10 @@ func TestEditorialPreservesCategoriesAllResourceKindsAndRealCatalogIDs(t *testin
 	if station.Play == nil || !station.Play.Continuous || station.Play.ID != "station-id" {
 		t.Fatal("station has no continuous play action")
 	}
-	for _, item := range groups[1].items[1:3] {
+	if v := groups[1].items[1]; v.Track == nil || v.Track.MediaType != "video" || v.Track.Kind != "music-videos" {
+		t.Fatal("video lost its native playback identity")
+	}
+	for _, item := range groups[1].items[2:3] {
 		if item.PlaybackNote == "" || item.Play != nil || item.Track != nil {
 			t.Fatalf("unsupported playback: %+v", item)
 		}

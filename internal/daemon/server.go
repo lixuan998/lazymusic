@@ -733,6 +733,25 @@ func (s *Service) Handler() http.Handler {
 		}
 		write(w, doc)
 	})
+	mux.HandleFunc("POST /v1/video", func(w http.ResponseWriter, r *http.Request) {
+		if !authorized(r) {
+			fail(w, 409, fmt.Errorf("video frames require an attached frontend"))
+			return
+		}
+		var subject catalog.Subject
+		if !decode(w, r, &subject) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+		defer cancel()
+		frame, err := s.videoFrame(ctx, subject)
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		writeVideoFrame(w, frame)
+	})
+
 	mux.HandleFunc("POST /v1/artwork", func(w http.ResponseWriter, r *http.Request) {
 		var subject catalog.Subject
 		if !decode(w, r, &subject) {

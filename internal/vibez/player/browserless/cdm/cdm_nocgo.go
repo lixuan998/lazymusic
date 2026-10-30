@@ -46,3 +46,15 @@ func (c *CDM) Close() error {
 func (c *CDM) DecryptCBCS(_, _, _ []byte, _ []Subsample, _, _ int) ([]byte, error) {
 	return nil, errNoCgo
 }
+
+type VideoFrame struct {
+	RGBA          []byte
+	Width, Height int
+	Timestamp     int64
+}
+
+func (c *CDM) ConfigureVideo([]byte, int, int) error { return errNoCgo }
+func (c *CDM) ResetVideo()                           {}
+func (c *CDM) DecodeVideo([]byte, []byte, []byte, []Subsample, int, int, int64, int64) (VideoFrame, error) {
+	return VideoFrame{}, errNoCgo
+}

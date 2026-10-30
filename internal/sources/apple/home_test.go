@@ -55,7 +55,10 @@ func TestHomeKeepsStationOnlyAndUnknownResourceCategories(t *testing.T) {
 	if err != nil || len(p.Items) != 2 || p.Items[0].Kind != "music-videos" || p.Items[1].Title != "Something new" {
 		t.Fatalf("resources were filtered: %+v %v", p, err)
 	}
-	for _, item := range p.Items {
+	if p.Items[0].Track == nil || p.Items[0].Track.MediaType != "video" {
+		t.Fatal("Home video has no native playback action")
+	}
+	for _, item := range p.Items[1:] {
 		if item.PlaybackNote == "" || item.Track != nil || item.Play != nil {
 			t.Fatal("missing honest playback limit")
 		}

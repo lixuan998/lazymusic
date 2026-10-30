@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,11 +17,13 @@ import (
 	"lazymusic/internal/catalog"
 	"lazymusic/internal/lyrics"
 	"lazymusic/internal/session"
+	"lazymusic/internal/video"
 )
 
 type Client struct {
-	http  *http.Client
-	token string
+	http   *http.Client
+	token  string
+	source string
 }
 
 func NewClient(dir string) (*Client, error) {
@@ -81,6 +84,7 @@ func (c *Client) Attach(ctx context.Context) (Attachment, error) {
 	err := c.call(ctx, http.MethodPost, "/v1/attach", AttachRequest{PID: os.Getpid()}, &a)
 	if err == nil {
 		c.token = a.Token
+		c.source = a.State.Source.ID
 	}
 	return a, err
 }
@@ -133,3 +137,48 @@ func (c *Client) Mutate(ctx context.Context, mutation catalog.Mutation) (catalog
 	return result, err
 }
 func (c *Client) Close() { c.http.CloseIdleConnections() }
+
+func (c *Client) VideoFrame(ctx context.Context, id string) (video.Frame, error) {
+	data, _ := json.Marshal(catalog.Subject{Source: c.source, ID: id})
+	r, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://lazymusic.local/v1/video", bytes.NewReader(data))
+	if err != nil {
+		return video.Frame{}, err
+	}
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-Lazymusic-Client", c.token)
+	response, err := c.http.Do(r)
+	if err != nil {
+		return video.Frame{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode == http.StatusNoContent {
+		return video.Frame{}, nil
+	}
+	if response.StatusCode != 200 {
+		var failure APIError
+		json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&failure)
+		if failure.Error == "" {
+			failure.Error = response.Status
+		}
+		return video.Frame{}, fmt.Errorf("%s", failure.Error)
+	}
+	if response.Header.Get("Content-Type") != "image/png" || len(response.Header.Get(videoMetadataHeader)) > 4096 {
+		return video.Frame{}, fmt.Errorf("invalid video response")
+	}
+	metadata, err := base64.RawStdEncoding.DecodeString(response.Header.Get(videoMetadataHeader))
+	if err != nil {
+		return video.Frame{}, fmt.Errorf("invalid video metadata")
+	}
+	var frame video.Frame
+	if json.Unmarshal(metadata, &frame) != nil {
+		return video.Frame{}, fmt.Errorf("invalid video metadata")
+	}
+	frame.PNG, err = io.ReadAll(io.LimitReader(response.Body, video.MaxBytes+1))
+	if err != nil {
+		return video.Frame{}, err
+	}
+	if frame.Source != c.source || frame.ID != id || !frame.Valid() {
+		return video.Frame{}, fmt.Errorf("invalid video frame")
+	}
+	return frame, nil
+}

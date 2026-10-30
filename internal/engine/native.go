@@ -18,6 +18,7 @@ import (
 	"lazymusic/internal/vibez/player/browserless"
 	"lazymusic/internal/vibez/provider"
 	"lazymusic/internal/vibez/provider/apple"
+	"lazymusic/internal/video"
 )
 
 type Native struct {
@@ -269,4 +270,10 @@ func (n *Native) SetEqualizer(eq music.Equalizer) error {
 		bands[i].Gain = g[i]
 	}
 	return n.p.SetEqualizer(bands)
+}
+
+func (n *Native) VideoFrame(ctx context.Context, id string) (video.Frame, error) {
+	frame, err := n.p.VideoFrame(ctx, id)
+	frame.Source = music.Apple
+	return frame, err
 }

@@ -63,8 +63,16 @@ int cdm_context_decrypt(
 // cdm_context_destroy destroys the CDM instance and unloads the shared library.
 void cdm_context_destroy(cdm_context_t* ctx);
 
+int cdm_configure_video(cdm_context_t* ctx, uint8_t* extra, uint32_t length, int width, int height);
+void cdm_reset_video(cdm_context_t* ctx);
+int cdm_decode_video(cdm_context_t* ctx, const uint8_t* key, const uint8_t* iv, uint32_t iv_size,
+                     const uint8_t* data, uint32_t length, const uint16_t* clear,
+                     const uint32_t* cipher, uint32_t count, uint32_t crypt, uint32_t skip,
+                     int64_t timestamp, int64_t earliest, uint8_t** rgb, int* width, int* height,
+                     int64_t* pts);
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif // CDM_BRIDGE_H_
+#endif  // CDM_BRIDGE_H_

@@ -51,7 +51,19 @@ for rel in [
     'internal/vibez/player/browserless/license/stations_test.go',
     'internal/vibez/player/browserless/mp4/encryption.go',
     'internal/vibez/player/browserless/mp4/encryption_test.go',
-    'internal/vibez/player/browserless/cdm/cdm_nocgo.go',
+    'internal/vibez/player/browserless/media_http.go',
+    'internal/vibez/player/browserless/cdn.go',
+    'internal/vibez/player/browserless/cdn_dns.go',
+    'internal/vibez/player/browserless/cdn_test.go',
+    'internal/vibez/player/browserless/cdn_dns_test.go',
+    'internal/vibez/player/browserless/videos.go',
+    'internal/vibez/player/browserless/videos_test.go',
+    'internal/vibez/player/browserless/video_frames.go',
+    'internal/vibez/player/browserless/license/videos.go',
+    'internal/vibez/player/browserless/license/videos_test.go',
+    'internal/vibez/player/browserless/mp4/fragments.go',
+    'internal/vibez/player/browserless/mp4/video.go',
+    'internal/vibez/player/browserless/mp4/video_test.go',
 ]:
     dest = ROOT / rel
     if dest.exists():

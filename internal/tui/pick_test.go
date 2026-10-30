@@ -89,17 +89,18 @@ func TestPickAndPlaceMovesOneQueueOccurrenceBeforeOrAfter(t *testing.T) {
 		key, order   string
 		index        int
 	}{
-		{1, 3, "p", "acdbe", 3}, {1, 3, "P", "acbde", 2},
-		{3, 1, "p", "abdce", 2}, {3, 1, "P", "adbce", 1},
-		{0, 4, "p", "bcdea", 4}, {4, 0, "P", "eabcd", 0},
-		{2, 2, "p", "abcde", 2}, {2, 2, "P", "abcde", 2},
-		{1, 0, "p", "abcde", 1}, {1, 2, "P", "abcde", 1},
+		{1, 3, "p", "acdbe", 3}, {1, 3, "B", "acbde", 2},
+		{3, 1, "p", "abdce", 2}, {3, 1, "B", "adbce", 1},
+		{0, 4, "p", "bcdea", 4}, {4, 0, "B", "eabcd", 0},
+		{2, 2, "p", "abcde", 2}, {2, 2, "B", "abcde", 2},
+		{1, 0, "p", "abcde", 1}, {1, 2, "B", "abcde", 1},
 	} {
-		for _, pickKey := range []string{"p", "P"} {
+		for _, pickKey := range []string{"p", "B"} {
 			t.Run(fmt.Sprintf("%d/%d/%s/%s", tc.from, tc.target, tc.key, pickKey), func(t *testing.T) {
 				m, a := pickModel()
+				// Exercise both placement directions independently of default bindings.
 				m.UI.QueueCursor = tc.from
-				m.normal(pickKey)
+				m.pickOrPlace(pickKey == "B")
 				if m.picked == nil || !m.picked.fromQueue || a.calls != 0 {
 					t.Fatal("pickup modified playback or did not retain the occurrence")
 				}
@@ -107,9 +108,9 @@ func TestPickAndPlaceMovesOneQueueOccurrenceBeforeOrAfter(t *testing.T) {
 					t.Fatal("picked row has no visible marker")
 				}
 				m.UI.QueueCursor = tc.target
-				cmd := m.normal(tc.key)
+				cmd := m.pickOrPlace(tc.key == "B")
 				if cmd != nil {
-					if duplicate := m.normal(tc.key); duplicate != nil {
+					if duplicate := m.pickOrPlace(tc.key == "B"); duplicate != nil {
 						t.Fatal("duplicate placement was submitted")
 					}
 					m.Update(cmd())
@@ -129,25 +130,19 @@ func TestPickAndPlaceMovesOneQueueOccurrenceBeforeOrAfter(t *testing.T) {
 }
 
 func TestContentPickCopiesSongAndPlacesAtQueueCursor(t *testing.T) {
-	for _, before := range []bool{false, true} {
-		m, a := pickModel()
-		m.UI.Focus = 1
-		m.items = []catalog.Item{{Source: "demo", ID: "x", Title: "Picked song", Track: &music.Track{Source: "demo", ID: "x", Title: "Picked song"}}}
-		m.normal("p")
-		m.items[0].Track.ID = "later-selection"
-		m.UI.Focus, m.UI.QueueCursor = 2, 1
-		key, want := "p", "abxcde"
-		if before {
-			key, want = "P", "axbcde"
-		}
-		cmd := m.normal(key)
-		if cmd == nil {
-			t.Fatal("missing placement")
-		}
-		m.Update(cmd())
-		if queueOrder(m.State.Queue) != want || a.lastCommand.Op != "insert" || m.State.Playback.Track.ID != "c" {
-			t.Fatal("content pickup did not insert its captured song at the target")
-		}
+	m, a := pickModel()
+	m.UI.Focus = 1
+	m.items = []catalog.Item{{Source: "demo", ID: "x", Title: "Picked song", Track: &music.Track{Source: "demo", ID: "x", Title: "Picked song"}}}
+	m.normal("p")
+	m.items[0].Track.ID = "later-selection"
+	m.UI.Focus, m.UI.QueueCursor = 2, 1
+	cmd := m.normal("p")
+	if cmd == nil {
+		t.Fatal("missing placement")
+	}
+	m.Update(cmd())
+	if queueOrder(m.State.Queue) != "abxcde" || a.lastCommand.Op != "insert" || m.State.Playback.Track.ID != "c" {
+		t.Fatal("content pickup lost its captured song or target")
 	}
 }
 
@@ -159,7 +154,7 @@ func TestContentArtistPickExpandsNestedAlbumsAndAllPages(t *testing.T) {
 	a.pages["opaque-artist/artist/"] = catalog.Page{Items: []catalog.Item{{Play: &catalog.Query{Page: "opaque-album", ID: "album"}}}}
 	a.pages["opaque-album/album/"] = catalog.Page{Items: []catalog.Item{{Track: &music.Track{Source: "demo", ID: "x"}}}, Next: "second"}
 	a.pages["opaque-album/album/second"] = catalog.Page{Items: []catalog.Item{{Track: &music.Track{Source: "demo", ID: "y"}}}}
-	resolve := m.normal("P")
+	resolve := m.normal("p")
 	if m.picked == nil || !m.picked.loading || a.calls != 0 {
 		t.Fatal("collection pickup did not start a separate read")
 	}
@@ -222,22 +217,22 @@ func TestQueueEnterStillPlaysAndEmptyQueueAcceptsContent(t *testing.T) {
 	m.State = a.snapshot()
 	m.UI.Focus = 1
 	m.items = []catalog.Item{{ID: "x", Track: &music.Track{ID: "x"}}}
-	m.normal("P")
+	m.normal("p")
 	m.UI.Focus = 2
-	cmd = m.normal("P")
+	cmd = m.normal("p")
 	m.Update(cmd())
 	if len(m.State.Queue) != 1 || m.State.Queue[0].ID != "x" || m.State.Playback.Playing {
 		t.Fatal("empty queue placement started playback or lost picked song")
 	}
 }
 
-func TestCollectionPlaybackUsesControlEnterAndKeepsPickKeysLocal(t *testing.T) {
+func TestCollectionPlaybackUsesUppercasePAndKeepsPickLocal(t *testing.T) {
 	m, a := pickModel()
 	m.UI.Focus = 1
 	m.items = []catalog.Item{{ID: "album", Title: "Album", Play: &catalog.Query{Source: "demo", Page: "collection"}}}
-	cmd := m.normal(KeyString(decodeKey(t, "\x1b[13;5u")))
+	cmd := m.normal("P")
 	if cmd == nil {
-		t.Fatal("Ctrl+Enter does not play the selected collection")
+		t.Fatal("P does not play the selected collection")
 	}
 	// Inspect dispatch without executing a playback request in this fake engine.
 	if m.picked != nil || a.calls != 0 {

@@ -50,7 +50,27 @@ for i=1,4 do
   request("a=d,d=I,i="..first..",q=2")
   assert(#output==before+4, "source changes exhausted picture/query ownership slots")
 end
+-- Turntable, capability query and Content video have separate owned IDs.
+local probe_id, record_id, video_id = 0x6d3000, 0x6d3001, 0x6d3002
+local before = #output
+request("a=q,i="..probe_id..",f=24,s=1,v=1;AAAA")
+for _, id in ipairs({record_id, video_id}) do
+  request("a=T,U=1,f=100,t=d,i="..id..",p=1,c=12,r=6,q=2,m=0;AAAA")
+end
+assert(#output==before+3, "video could not coexist with the record and query")
+request("a=T,U=1,f=100,t=d,i="..(video_id+1)..",p=1,c=12,r=6,q=2,m=0;AAAA")
+assert(#output==before+3, "relay accepted an unbounded fourth image owner")
 graphics.detach(buf)
+assert(#output==before+6, "detach did not clean all three owned IDs")
+graphics.attach(buf, channel, {write=function(data) output[#output+1]=data end,send=function()end})
+before=#output
+request("a=T,U=1,f=100,t=d,i="..video_id..",p=1,c=12,r=6,q=2,m=1;AAAA")
+assert(#output==before, "partial video packet was sent as a separate host UI call")
+request("q=2,m=0;BBBB")
+assert(#output==before+1 and output[#output]:find("m=1;AAAA",1,true) and output[#output]:find("m=0;BBBB",1,true), "relay did not batch validated video packets in order")
+request("a=T,U=1,f=100,t=d,i="..video_id..",p=1,c=12,r=6,q=2,m=1;CCCC")
+graphics.detach(buf)
+assert(#output==before+2 and not output[#output]:find("CCCC",1,true), "detach flushed an incomplete video image")
 vim.api.nvim_win_close(win,true)
 vim.api.nvim_buf_delete(buf,{force=true})
 

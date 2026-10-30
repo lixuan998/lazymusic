@@ -52,8 +52,9 @@ var keyDefinitions = []keyDefinition{
 	{"page_up", "Navigation Content Queue Log Dialog", "Half page up", []string{"ctrl+u", "pgup"}},
 	{"page_down", "Navigation Content Queue Log Dialog", "Half page down", []string{"ctrl+d", "pgdown"}},
 	{"open", "Navigation Content Login Dialog Sound", "Open / enter child", []string{"l", "right"}},
-	{"activate", "Navigation Content Queue Player Login Dialog", "Open / play selection", []string{"enter"}},
-	{"back", "Content Login Dialog Sound", "Back / parent / cancel", []string{"h", "left", "esc", "backspace"}},
+	{"activate", "Navigation Content Queue Player Video Login Dialog", "Open / play selection", []string{"enter"}},
+	{"back", "Content Video Login Dialog Sound", "Back / parent / cancel", []string{"h", "left", "esc", "backspace"}},
+	{"video", "Content Video", "Toggle video / browser", []string{"v"}},
 	{"filter", "Content", "Filter loaded items", []string{"/"}},
 	{"query", "Content", "Edit Search query", []string{"i"}},
 	{"scope", "Content", "Switch Search catalog / library", []string{"s"}},
@@ -62,7 +63,7 @@ var keyDefinitions = []keyDefinition{
 	{"refresh", "Content", "Refresh content", []string{"r"}},
 	{"login_retry", "Login", "Sign in again (account options)", []string{"r"}},
 	{"login_copy", "Login", "Copy current sign-in link", []string{"y"}},
-	{"add", "Content Queue Player", "Add to queue / library / playlist", []string{"a"}},
+	{"add", "Content Queue Player Video", "Add to queue / library / playlist", []string{"a"}},
 	{"enqueue", "Content", "Copy selection to queue", []string{"y"}},
 	{"play_next", "Content", "Play selection next (also in add menu)", nil},
 	{"play_selection", "Content", "Play song / entire collection", []string{"P"}},
@@ -74,8 +75,8 @@ var keyDefinitions = []keyDefinition{
 	{"queue_up", "Queue", "Move song up", []string{"["}},
 	{"queue_down", "Queue", "Move song down", []string{"]"}},
 	{"queue_focus_playing", "Queue", "Focus current song (center view)", []string{"f"}},
-	{"related", "Content Queue Player Dialog", "Go to album / artist", []string{"o"}},
-	{"credits", "Content Queue Player Dialog", "View credits", []string{"c"}},
+	{"related", "Content Queue Player Video Dialog", "Go to album / artist", []string{"o"}},
+	{"credits", "Content Queue Player Video Dialog", "View credits", []string{"c"}},
 	{"playback_mode", "Global", "Cycle playback mode", []string{"m"}},
 	{"stop", "Global", "Stop playback", []string{"x"}},
 	{"next", "Global", "Next song", []string{">"}},
@@ -124,7 +125,7 @@ func LoadKeys(dir string) (Keys, error) {
 		}
 		keys[action] = value
 	}
-	for _, scope := range []string{"Navigation", "Content", "Queue", "Player", "Log", "Sound", "Login", "Dialog"} {
+	for _, scope := range []string{"Navigation", "Content", "Queue", "Player", "Log", "Sound", "Login", "Dialog", "Video"} {
 		seen := map[string]string{}
 		for _, d := range keyDefinitions {
 			if !inScope(d, scope) && !inScope(d, "Global") {
@@ -158,6 +159,9 @@ func (k Keys) ActionFor(scope, key string) string {
 }
 
 func (m *Model) keyScope() string {
+	if m.UI.Focus == 1 && m.showingVideo() {
+		return "Video"
+	}
 	if m.UI.Focus == 1 && m.LoginSelected() {
 		return "Login"
 	}

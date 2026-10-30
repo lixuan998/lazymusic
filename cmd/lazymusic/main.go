@@ -43,7 +43,8 @@ Run lazymusic to open or restore your session. Login lives in the content panel.
   H/J/K/L        Resize the focused panel (Shift+h/j/k/l)
   o / c          Album/artist links / credits in panels 2, 3 and 4
   a              Add menu; create playlist in Playlists (panel 2)
-  y / P          Queue selection / play next (panel 2)
+  y / P          Queue selection / play song or collection (panel 2)
+  v              Switch video / browser (panel 2)
   d / D          Remove / clear playback queue (panel 3)
   [ / ]          Reorder queue (panel 3)
   < / >          Previous / next song (Global)

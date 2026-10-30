@@ -106,6 +106,16 @@ func (m *Model) normal(key string) tea.Cmd {
 		}
 	}
 	switch action {
+	case "video":
+		if m.videoKey() == "" {
+			m.notice = "Play a video first"
+			return nil
+		}
+		m.UI.Video = !m.UI.Video
+		if m.UI.Video {
+			m.video.failed = ""
+		}
+		return m.dirty()
 	case "related", "credits":
 		return m.inspectWork(action)
 	case "pick_after", "pick_before":
@@ -220,9 +230,22 @@ func (m *Model) normal(key string) tea.Cmd {
 			}
 			l := m.UI.Location
 			l.Scope = m.UI.SearchScope
+			valid := false
+			for _, section := range m.searchSections() {
+				if l.Section == section {
+					valid = true
+				}
+			}
+			if !valid {
+				l.Section = "songs"
+				m.UI.SearchSection = "songs"
+			}
 			return m.navigate(l, false)
 		}
 	case "open", "activate":
+		if m.UI.Focus == 1 && m.showingVideo() {
+			return m.command(daemon.Command{Op: "toggle"})
+		}
 		if m.UI.Focus == 0 {
 			m.UI.Focus = 1
 			if m.UI.NavPage == "search" && m.UI.SearchQuery == "" {
@@ -239,6 +262,10 @@ func (m *Model) normal(key string) tea.Cmd {
 		}
 		return m.selectItem("replace")
 	case "back":
+		if m.showingVideo() {
+			m.UI.Video = false
+			return m.dirty()
+		}
 		if key == "esc" && m.picked != nil {
 			return m.cancelPicked()
 		}
@@ -293,7 +320,7 @@ func (m *Model) normal(key string) tea.Cmd {
 			m.Report("warn", "catalog", "A library change is still in progress")
 			return nil
 		}
-		if m.UI.Focus == 1 && m.UI.Location.Page == "playlists" && m.State.Source.Capabilities.PlaylistCreate {
+		if m.UI.Focus == 1 && !m.showingVideo() && m.UI.Location.Page == "playlists" && m.State.Source.Capabilities.PlaylistCreate {
 			m.closeEdit()
 			m.edit = &editDialog{phase: "name", operation: catalog.CreatePlaylist, title: "New playlist", origin: m.query().Key()}
 			return nil

@@ -87,6 +87,27 @@ func TestSearchScopesAndWrappedPagination(t *testing.T) {
 	}
 }
 
+func TestCatalogVideoSearchReturnsPlayableMediaAndKeepsPagination(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/catalog/cn/search" || r.URL.Query().Get("types") != "music-videos" {
+			t.Fatal("wrong video catalog route")
+		}
+		w.Write([]byte(`{"results":{"music-videos":{"data":[{"id":"movie","type":"music-videos","attributes":{"name":"Video","durationInMillis":120000}}],"next":"/v1/catalog/cn/search?types=music-videos&offset=25"}}}`))
+	})
+	q := Query{Page: "search", Section: "music-videos", Term: "video"}
+	for i := 0; i < 2; i++ {
+		p, err := c.Browse(context.Background(), q)
+		if err != nil || len(p.Items) != 1 || p.Items[0].Track == nil || p.Items[0].Track.MediaType != "video" || p.Items[0].Track.PlaybackID != "movie" {
+			t.Fatal("video became an unsupported catalog item", p, err)
+		}
+		q.Next = p.Next
+	}
+	q.Next, q.Scope = "", "library"
+	if _, err := c.Browse(context.Background(), q); err == nil {
+		t.Fatal("unsupported library video search was sent")
+	}
+}
+
 func TestPaginationCannotSendCredentialsToAnotherHost(t *testing.T) {
 	hit := false
 	outside := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit = true }))

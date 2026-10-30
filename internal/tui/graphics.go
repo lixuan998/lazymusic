@@ -89,6 +89,9 @@ func (m *Model) GraphicsCleanup() string {
 	if g.queried {
 		cleanup += termimage.Delete(g.probeID())
 	}
+	if m.video.used {
+		cleanup += termimage.Delete(m.videoImageID())
+	}
 	return g.wrap(cleanup)
 }
 func (m *Model) ClearGraphics() tea.Cmd {
@@ -108,6 +111,13 @@ func (m *Model) ClearGraphics() tea.Cmd {
 // TerminalOutput lets the containing application preserve both output order
 // and its source epoch before handing raw graphics to the terminal renderer.
 func (m *Model) TerminalOutput(msg tea.Msg) (string, tea.Msg, bool) {
+	if out, ok := msg.(videoWrite); ok {
+		if out.generation != m.video.generation {
+			return "", nil, false
+		}
+		return out.data, out.done, true
+	}
+
 	if query, ok := msg.(graphicsQueryWrite); ok {
 		g := &m.graphics
 		if query.attempt != g.queryGeneration || !g.queryPending || g.disabled || g.replied {

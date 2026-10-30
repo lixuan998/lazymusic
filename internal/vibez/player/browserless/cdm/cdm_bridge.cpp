@@ -2,6 +2,8 @@
 #include "content_decryption_module.h"
 
 #include <iostream>
+#include <atomic>
+#include <algorithm>
 #include <vector>
 #include <chrono>
 #include <cstring>
@@ -80,8 +82,39 @@ public:
     }
 };
 
+class VideoFrameImpl : public cdm::VideoFrame {
+   public:
+    cdm::VideoFormat format = cdm::kUnknownVideoFormat;
+    cdm::Size size{};
+    cdm::Buffer* buffer = nullptr;
+    uint32_t offsets[3]{}, strides[3]{};
+    int64_t timestamp = 0;
+    ~VideoFrameImpl() {
+        if (buffer) buffer->Destroy();
+    }
+    void SetFormat(cdm::VideoFormat f) override { format = f; }
+    cdm::VideoFormat Format() const override { return format; }
+    void SetSize(cdm::Size s) override { size = s; }
+    cdm::Size Size() const override { return size; }
+    void SetFrameBuffer(cdm::Buffer* b) override {
+        if (buffer) buffer->Destroy();
+        buffer = b;
+    }
+    cdm::Buffer* FrameBuffer() override { return buffer; }
+    void SetPlaneOffset(cdm::VideoPlane p, uint32_t n) override {
+        if (p < 3) offsets[p] = n;
+    }
+    uint32_t PlaneOffset(cdm::VideoPlane p) override { return p < 3 ? offsets[p] : 0; }
+    void SetStride(cdm::VideoPlane p, uint32_t n) override {
+        if (p < 3) strides[p] = n;
+    }
+    uint32_t Stride(cdm::VideoPlane p) override { return p < 3 ? strides[p] : 0; }
+    void SetTimestamp(int64_t t) override { timestamp = t; }
+    int64_t Timestamp() const override { return timestamp; }
+};
+
 class Host11Impl : public cdm::Host_11 {
-public:
+   public:
     std::mutex cv_m;
     std::condition_variable msg_cv;
     std::condition_variable update_cv;
@@ -96,16 +129,24 @@ public:
     bool certResolved = false;
     bool certFailed = false;
     int usableKeys = 0;
+    std::atomic<bool> outputQueryPending{false};
+    struct Timer {
+        std::chrono::steady_clock::time_point at;
+        void* context;
+    };
+    std::vector<Timer> timers;
 
-    cdm::Buffer* Allocate(uint32_t capacity) override {
-        return new BufferImpl(capacity);
+    cdm::Buffer* Allocate(uint32_t capacity) override { return new BufferImpl(capacity); }
+
+    void SetTimer(int64_t delay_ms, void* context) override {
+        std::lock_guard<std::mutex> lock(cv_m);
+        if (timers.size() < 128)
+            timers.push_back({std::chrono::steady_clock::now() +
+                                  std::chrono::milliseconds(std::max<int64_t>(0, delay_ms)),
+                              context});
     }
 
-    void SetTimer(int64_t delay_ms, void* context) override {}
-
-    cdm::Time GetCurrentWallTime() override {
-        return static_cast<cdm::Time>(wall_time_seconds());
-    }
+    cdm::Time GetCurrentWallTime() override { return static_cast<cdm::Time>(wall_time_seconds()); }
 
     void OnInitialized(bool success) override {
         std::lock_guard<std::mutex> lk(cv_m);
@@ -166,7 +207,7 @@ public:
 
     void EnableOutputProtection(uint32_t desired_protection_mask) override {}
 
-    void QueryOutputProtectionStatus() override {}
+    void QueryOutputProtectionStatus() override { outputQueryPending = true; }
 
     void OnDeferredInitializationDone(cdm::StreamType stream_type, cdm::Status decoder_status) override {}
 
@@ -193,6 +234,32 @@ struct cdm_context {
     cdm::ContentDecryptionModule_11* cdm11 = nullptr;
     Host11Impl host;
 };
+
+// Go serializes entry points. Pump callbacks on that same CDM execution path,
+// without detached threads that could outlive the CDM or race a decryption.
+static void pump_host(cdm_context_t* ctx) {
+    if (ctx->host.outputQueryPending.exchange(false))
+        ctx->cdm11->OnQueryOutputProtectionStatus(cdm::kQuerySucceeded, cdm::kLinkTypeUnknown,
+                                                  cdm::kProtectionNone);
+    for (int n = 0; n < 32; n++) {
+        void* context = nullptr;
+        bool found = false;
+        {
+            std::lock_guard<std::mutex> lock(ctx->host.cv_m);
+            auto now = std::chrono::steady_clock::now();
+            for (auto it = ctx->host.timers.begin(); it != ctx->host.timers.end(); ++it) {
+                if (it->at <= now) {
+                    context = it->context;
+                    ctx->host.timers.erase(it);
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found) break;
+        ctx->cdm11->TimerExpired(context);
+    }
+}
 
 extern "C" {
 
@@ -236,6 +303,7 @@ cdm_context_t* cdm_context_create(const char* library_path) {
 
     ctx->cdm11 = static_cast<cdm::ContentDecryptionModule_11*>(raw);
     ctx->cdm11->Initialize(true, false, false);
+    pump_host(ctx);
 
     return ctx;
 }
@@ -393,6 +461,7 @@ int cdm_context_decrypt(
 ) {
     if (!ctx || !ctx->cdm11 || !in_data || in_size == 0) return -1;
 
+    pump_host(ctx);
     cdm::InputBuffer_2 input = {};
     input.data = in_data;
     input.data_size = in_size;
@@ -451,4 +520,99 @@ void cdm_context_destroy(cdm_context_t* ctx) {
     delete ctx;
 }
 
-} // extern "C"
+}  // extern "C"
+extern "C" int cdm_configure_video(cdm_context_t* ctx,uint8_t* extra,uint32_t length,int width,int height){
+    if (!ctx || !ctx->cdm11 || width < 1 || height < 1 || width > 1920 || height > 1080) return -1;
+    ctx->cdm11->DeinitializeDecoder(cdm::kStreamTypeVideo);
+    cdm::VideoDecoderConfig_2 config{};
+    config.codec = cdm::kCodecH264;
+    if (length < 2) return -1;
+    switch (extra[1]) {
+        case 66:
+            config.profile = cdm::kH264ProfileBaseline;
+            break;
+        case 77:
+            config.profile = cdm::kH264ProfileMain;
+            break;
+        case 100:
+            config.profile = cdm::kH264ProfileHigh;
+            break;
+        default:
+            return -1;
+    }
+    config.format = cdm::kI420;
+    config.coded_size = {(width + 15) & ~15, (height + 15) & ~15};
+    config.extra_data = extra;
+    config.extra_data_size = length;
+    config.encryption_scheme = cdm::EncryptionScheme::kCbcs;
+    return ctx->cdm11->InitializeVideoDecoder(config);
+}
+extern "C" void cdm_reset_video(cdm_context_t* ctx) {
+    if (ctx && ctx->cdm11) ctx->cdm11->DeinitializeDecoder(cdm::kStreamTypeVideo);
+}
+extern "C" int cdm_decode_video(cdm_context_t* ctx, const uint8_t* key, const uint8_t* iv,
+                                uint32_t iv_size, const uint8_t* data, uint32_t length,
+                                const uint16_t* clear, const uint32_t* cipher, uint32_t count,
+                                uint32_t crypt, uint32_t skip, int64_t timestamp, int64_t earliest,
+                                uint8_t** rgb, int* width, int* height, int64_t* pts) {
+    if (!ctx || !ctx->cdm11 || !data || !length) return -1;
+    pump_host(ctx);
+    cdm::InputBuffer_2 input{};
+    input.data = data;
+    input.data_size = length;
+    input.encryption_scheme = cdm::EncryptionScheme::kCbcs;
+    input.pattern = {crypt, skip};
+    input.key_id = key;
+    input.key_id_size = 16;
+    input.iv = iv;
+    input.iv_size = iv_size;
+    input.timestamp = timestamp;
+    std::vector<cdm::SubsampleEntry> subs;
+    for (uint32_t i = 0; i < count; i++) subs.push_back({clear[i], cipher[i]});
+    cdm::SubsampleEntry whole{0, length};
+    input.subsamples = count ? subs.data() : &whole;
+    input.num_subsamples = count ? count : 1;
+    VideoFrameImpl frame;
+    auto status = ctx->cdm11->DecryptAndDecodeFrame(input, &frame);
+    if (status != cdm::kSuccess) return static_cast<int>(status);
+    if (!frame.buffer || frame.format != cdm::kI420 || frame.size.width < 1 ||
+        frame.size.height < 1 || frame.size.width > 1920 || frame.size.height > 1080)
+        return -2;
+    // Late pictures still pass through the licensed decoder for dependencies,
+    // but avoid a full RGB conversion/copy when catching up or seeking.
+    if (frame.timestamp < earliest) return static_cast<int>(cdm::kNeedMoreData);
+    auto source = frame.buffer->Data();
+    auto size = frame.buffer->Size();
+    for (int plane = 0; plane < 3; plane++) {
+        uint32_t rows = plane ? (frame.size.height + 1) / 2 : frame.size.height;
+        uint32_t columns = plane ? (frame.size.width + 1) / 2 : frame.size.width;
+        uint64_t end = static_cast<uint64_t>(frame.offsets[plane]) +
+                       static_cast<uint64_t>(rows - 1) * frame.strides[plane] + columns;
+        if (frame.strides[plane] < columns || end > size) return -3;
+    }
+    int w = frame.size.width, h = frame.size.height;
+    double scale = std::min(1.0, std::min(1280.0 / w, 720.0 / h));
+    *width = std::max(1, static_cast<int>(w * scale));
+    *height = std::max(1, static_cast<int>(h * scale));
+    *rgb = static_cast<uint8_t*>(std::malloc(static_cast<size_t>(*width) * (*height) * 4));
+    if (!*rgb) return -4;
+    auto clamp = [](int n) -> uint8_t {
+        return static_cast<uint8_t>(std::max(0, std::min(255, n)));
+    };
+    for (int y = 0; y < *height; y++) {
+        int sy = h == *height ? y : y * h / (*height);
+        for (int x = 0; x < *width; x++) {
+            int sx = w == *width ? x : x * w / (*width);
+            int Y = source[frame.offsets[0] + sy * frame.strides[0] + sx] - 16;
+            int U = source[frame.offsets[1] + (sy / 2) * frame.strides[1] + sx / 2] - 128;
+            int V = source[frame.offsets[2] + (sy / 2) * frame.strides[2] + sx / 2] - 128;
+            auto pixel = *rgb + (static_cast<size_t>(y) * (*width) + x) * 4;
+            pixel[0] = clamp((298 * Y + 409 * V + 128) >> 8);
+            pixel[1] = clamp((298 * Y - 100 * U - 208 * V + 128) >> 8);
+            pixel[2] = clamp((298 * Y + 516 * U + 128) >> 8);
+            pixel[3] = 255;
+        }
+    }
+    *pts = frame.timestamp;
+    return 0;
+}

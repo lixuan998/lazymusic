@@ -32,7 +32,9 @@ type detailsMsg struct {
 
 func (m *Model) workSubject() (catalog.Subject, string, bool) {
 	var track *music.Track
-	if m.UI.Focus == 1 {
+	if m.UI.Focus == 1 && m.showingVideo() {
+		track = m.State.Playback.Track
+	} else if m.UI.Focus == 1 {
 		items := m.visible()
 		if m.LoginSelected() || m.cursor < 0 || m.cursor >= len(items) {
 			return catalog.Subject{}, "", false

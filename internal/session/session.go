@@ -33,6 +33,7 @@ type Cursor struct {
 }
 
 type UI struct {
+	Video          bool              `json:"video,omitempty"`
 	NavSelection   string            `json:"nav_selection,omitempty"`
 	Categories     map[string]string `json:"categories,omitempty"`
 	NavWidth       int               `json:"nav_width,omitempty"`
