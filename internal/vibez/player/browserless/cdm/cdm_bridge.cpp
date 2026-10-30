@@ -268,7 +268,7 @@ int cdm_context_generate_challenge(
     uint32_t* out_challenge_size,
     char** out_session_id
 ) {
-    if (!ctx || !ctx->cdm11 || !kid || kid_size != 16) return -1;
+    if (!ctx || !ctx->cdm11 || !kid || (kid_size != 16 && (kid_size < 32 || kid_size > 65536 || std::memcmp(kid + 4, "pssh", 4) != 0))) return -1;
 
     // Reset host session state
     {
@@ -295,7 +295,8 @@ int cdm_context_generate_challenge(
         0x00, 0x00, 0x00, 0x14,
         0x08, 0x01, 0x12, 0x10
     };
-    pssh.insert(pssh.end(), kid, kid + kid_size);
+    if (kid_size == 16) pssh.insert(pssh.end(), kid, kid + kid_size);
+    else pssh.assign(kid, kid + kid_size);
 
     ctx->cdm11->CreateSessionAndGenerateRequest(
         2,
@@ -387,14 +388,16 @@ int cdm_context_decrypt(
     const uint32_t* cipher_bytes,
     uint32_t num_subsamples,
     uint8_t* out_decrypted,
-    uint32_t* out_size
+    uint32_t* out_size,
+    int cbcs, uint32_t crypt_blocks, uint32_t skip_blocks
 ) {
     if (!ctx || !ctx->cdm11 || !in_data || in_size == 0) return -1;
 
     cdm::InputBuffer_2 input = {};
     input.data = in_data;
     input.data_size = in_size;
-    input.encryption_scheme = cdm::EncryptionScheme::kCenc;
+    input.encryption_scheme = cbcs ? cdm::EncryptionScheme::kCbcs : cdm::EncryptionScheme::kCenc;
+    input.pattern = {crypt_blocks, skip_blocks};
     input.key_id = key_id;
     input.key_id_size = key_id_size;
     input.iv = iv;

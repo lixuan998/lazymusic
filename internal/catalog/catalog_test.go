@@ -66,3 +66,24 @@ func TestPlayCollectionLoadsAllPages(t *testing.T) {
 		t.Fatalf("tracks=%v err=%v", tracks, err)
 	}
 }
+
+func TestContinuousSelectionsRequireFiniteResolutionBeforeQueueExpansion(t *testing.T) {
+	for _, infinite := range []bool{false, true} {
+		calls := 0
+		b := collectionBrowser(func(context.Context, Query) (Page, error) {
+			calls++
+			return Page{Continuous: infinite, Items: []Item{{Track: &music.Track{ID: "episode", MediaType: "episode"}}}}, nil
+		})
+		tracks, err := All(context.Background(), b, Query{Continuous: true, Page: "opaque-station"})
+		if calls != 1 {
+			t.Fatal("read an endless stream while resolving a queue selection")
+		}
+		if infinite {
+			if err == nil || tracks != nil {
+				t.Fatal("expanded an endless source")
+			}
+		} else if err != nil || len(tracks) != 1 || tracks[0].MediaType != "episode" {
+			t.Fatal("failed to queue a finite episode")
+		}
+	}
+}

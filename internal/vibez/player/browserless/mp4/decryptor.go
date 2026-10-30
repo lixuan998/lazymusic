@@ -165,6 +165,7 @@ func DecryptSegment(
 	kid []byte,
 	cfg AudioConfig,
 	decryptFn DecryptFunc,
+	encryption ...Encryption,
 ) ([]byte, error) {
 	// Find moof box
 	moofIdx := bytes.Index(segData, []byte("moof"))
@@ -201,14 +202,21 @@ func DecryptSegment(
 
 	// Sanity-bound sampleCount against remaining senc buffer to prevent OOM
 	remainingSencBytes := sencEnd - (sencStart + 16)
-	if remainingSencBytes < 0 || int64(sampleCount) > int64(remainingSencBytes)/8 || sampleCount > 65536 {
+	ivSize := 8
+	if len(encryption) > 0 {
+		ivSize = encryption[0].IVSize
+	}
+	minEntry := ivSize
+	if hasSubsamples {
+		minEntry += 2
+	}
+	if remainingSencBytes < 0 || (minEntry > 0 && int64(sampleCount) > int64(remainingSencBytes)/int64(minEntry)) || sampleCount > 65536 {
 		return nil, fmt.Errorf("invalid or excessive sample count %d in senc (available bytes: %d)", sampleCount, remainingSencBytes)
 	}
 
 	samplesEnc := make([]SampleEncInfo, sampleCount)
 	offset := sencStart + 16
-	ivSize := 8
-	if !hasSubsamples && sampleCount > 0 && remainingSencBytes == int(sampleCount)*16 {
+	if len(encryption) == 0 && !hasSubsamples && sampleCount > 0 && remainingSencBytes == int(sampleCount)*16 {
 		ivSize = 16
 	}
 	for i := range sampleCount {
@@ -217,6 +225,9 @@ func DecryptSegment(
 		}
 		iv := make([]byte, ivSize)
 		copy(iv, moofData[offset:offset+ivSize])
+		if ivSize == 0 && len(encryption) > 0 {
+			iv = append([]byte(nil), encryption[0].ConstantIV...)
+		}
 		offset += ivSize
 
 		var subsamples []Subsample

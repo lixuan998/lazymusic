@@ -56,7 +56,8 @@ int cdm_context_decrypt(
     const uint32_t* cipher_bytes,
     uint32_t num_subsamples,
     uint8_t* out_decrypted,
-    uint32_t* out_size
+    uint32_t* out_size,
+    int cbcs, uint32_t crypt_blocks, uint32_t skip_blocks
 );
 
 // cdm_context_destroy destroys the CDM instance and unloads the shared library.

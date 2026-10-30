@@ -92,7 +92,7 @@ func (m *Model) align() {
 func (m *Model) mainRows(h int) []string {
 	l := m.UI.Location
 	var rows []string
-	if l.Page == "home" {
+	if len(m.tabs) > 0 || l.Page == "home" {
 		rows = append(rows, m.homeTabBar())
 	} else if l.Page == "library" || l.Page == "search" {
 		sections := []string{"songs", "albums", "artists"}
@@ -118,8 +118,11 @@ func (m *Model) mainRows(h int) []string {
 			scope = "Library"
 		}
 		rows = append(rows, muted.Render(scope+"  ·  ")+plain(l.Query)+muted.Render(m.scopeHint()))
-	} else if l.Page == "home" {
-		label := "Personal recommendations"
+	} else if len(m.tabs) > 0 || l.Page == "home" {
+		label := l.Title
+		if l.Page == "home" {
+			label = "Personal recommendations"
+		}
 		items := m.visible()
 		if len(items) > 0 && m.cursor < len(items) && items[m.cursor].Group != "" {
 			label = items[m.cursor].Group
@@ -158,7 +161,7 @@ func (m *Model) mainRows(h int) []string {
 			if p := m.picked; p != nil && !p.fromQueue && p.origin == m.query().Key() && p.itemID == item.CursorID() {
 				label = "◆ " + label
 			}
-			if l.Page == "home" && item.Track == nil {
+			if (len(m.tabs) > 0 || l.Page == "home") && item.Track == nil {
 				label += "  " + muted.Render("["+plain(item.Kind)+"]")
 			}
 			if item.Track != nil {
@@ -370,6 +373,14 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 		progress = good.Render(playbackIcon(s.Status, s.Playing, s.Loading)+" "+status) + "  " + bar + "  " + duration(s.Position) + " / " + duration(total) + muted.Render("  system vol —")
 	}
 	quality := "Original"
+	if s.Track != nil && s.Track.MediaType == "live" {
+		progress = good.Render(playbackIcon(s.Status, s.Playing, s.Loading)+" "+status) + accent.Render("  ● LIVE") + "  " + duration(s.Position)
+		if m.State.SystemVolume.Available {
+			progress += muted.Render(fmt.Sprintf("  vol %.0f%%", s.Volume*100))
+		} else {
+			progress += muted.Render("  system vol —")
+		}
+	}
 	if m.State.PreferredQuality != "" {
 		for _, q := range m.State.Source.Qualities {
 			if q.ID == m.State.PreferredQuality {
@@ -377,7 +388,14 @@ func (m *Model) ViewWithContent(override *ContentPanel) tea.View {
 			}
 		}
 	}
-	playerBox := box("4 Now playing · "+playbackMode(s.RepeatMode, s.ShuffleMode)+" · "+quality, []string{track, progress}, w, m.playerHeight(), m.UI.Focus == 3)
+	playerTitle := "4 Now playing"
+	if s.Track != nil && s.Track.MediaType == "episode" {
+		playerTitle += " · Radio episode"
+	}
+	if s.Continuous != nil {
+		playerTitle += " · Station: " + plain(s.Continuous.Term)
+	}
+	playerBox := box(playerTitle+" · "+playbackMode(s.RepeatMode, s.ShuffleMode)+" · "+quality, []string{track, progress}, w, m.playerHeight(), m.UI.Focus == 3)
 	label := strings.ToUpper(m.UI.NavPage)
 	if label == "" {
 		label = strings.ToUpper(m.UI.Location.Page)

@@ -6,7 +6,19 @@ import (
 	"lazymusic/internal/session"
 )
 
-type navItem struct{ page, title string }
+type navItem struct {
+	page, title string
+	query       *catalog.Query
+}
+
+func (n navItem) location(source string) session.Location {
+	l := session.Location{Source: source, Page: n.page, Section: "songs", Title: n.title}
+	if n.query != nil {
+		q := n.query
+		l = session.Location{Source: q.Source, Page: q.Page, Section: q.Section, Scope: q.Scope, Kind: q.Kind, ID: q.ID, Query: q.Term, Title: n.title}
+	}
+	return l
+}
 
 // Keep an independent queue viewport so focusing the current song can center
 // it, and subsequent navigation scrolls only when the cursor leaves the view.
@@ -41,21 +53,25 @@ func (m *Model) navItems() []navItem {
 	c := m.State.Source.Capabilities
 	var out []navItem
 	if c.Home {
-		out = append(out, navItem{"home", "Home"})
+		out = append(out, navItem{page: "home", title: "Home"})
+	}
+	for _, page := range m.State.Source.Pages {
+		q := page.Query
+		out = append(out, navItem{page: page.ID, title: page.Title, query: &q})
 	}
 	if c.Library {
-		out = append(out, navItem{"library", "Library"})
+		out = append(out, navItem{page: "library", title: "Library"})
 	}
 	if c.Folders {
-		out = append(out, navItem{"folders", "Folders"})
+		out = append(out, navItem{page: "folders", title: "Folders"})
 	}
 	if c.Playlists {
-		out = append(out, navItem{"playlists", "Playlists"})
+		out = append(out, navItem{page: "playlists", title: "Playlists"})
 	}
 	if c.Library || c.CatalogSearch {
-		out = append(out, navItem{"search", "Search"})
+		out = append(out, navItem{page: "search", title: "Search"})
 	}
-	return append(out, navItem{"login", "Login"})
+	return append(out, navItem{page: "login", title: "Login"})
 }
 func (m *Model) findNav(page string) int {
 	for i, n := range m.navItems() {
@@ -82,14 +98,42 @@ func (m *Model) restoreNavigation() {
 	}
 	if !found {
 		n := m.navItems()[0]
-		m.UI.Location = session.Location{Source: m.State.Source.ID, Page: n.page, Section: "songs", Title: n.title}
+		m.UI.Location = n.location(m.State.Source.ID)
 		page = n.page
 		m.UI.History = nil
 	}
 	m.UI.NavPage = page
-	if !hadPage || !found || m.UI.NavIndex < 0 || m.UI.NavIndex >= len(m.navItems()) {
+	selection := m.UI.NavSelection
+	if selection == "" && hadPage && found {
+		// Old snapshots stored an index among the built-in navigation items.
+		// Source-provided pages can be inserted without changing that selection.
+		var legacy []navItem
+		for _, n := range m.navItems() {
+			if n.query == nil {
+				legacy = append(legacy, n)
+			}
+		}
+		if m.UI.NavIndex >= 0 && m.UI.NavIndex < len(legacy) {
+			selection = legacy[m.UI.NavIndex].page
+		}
+		for _, n := range m.navItems() {
+			if n.page == page && n.query != nil {
+				selection = page
+			}
+		}
+	}
+	if selection != "" {
+		m.UI.NavIndex = m.findNav(page)
+		for i, n := range m.navItems() {
+			if n.page == selection {
+				m.UI.NavIndex = i
+				break
+			}
+		}
+	} else if !hadPage || !found || m.UI.NavIndex < 0 || m.UI.NavIndex >= len(m.navItems()) {
 		m.UI.NavIndex = m.findNav(page)
 	}
+	m.UI.NavSelection = m.navItems()[m.UI.NavIndex].page
 	if !m.State.Source.Capabilities.CatalogSearch {
 		m.UI.SearchScope = "library"
 		if m.UI.Location.Page == "search" {
@@ -200,6 +244,9 @@ func (m *Model) openChild() tea.Cmd {
 	}
 	item := items[m.cursor]
 	if item.Open == nil {
+		if item.PlaybackNote != "" {
+			m.Report("warn", "catalog", item.PlaybackNote)
+		}
 		return nil
 	}
 	q := *item.Open

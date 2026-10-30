@@ -73,6 +73,9 @@ func (m *Model) pickOrPlace(before bool) tea.Cmd {
 		}
 		item := items[m.cursor]
 		if item.Track == nil && item.Play == nil {
+			if item.PlaybackNote != "" {
+				m.Report("warn", "catalog", item.PlaybackNote)
+			}
 			return nil
 		}
 		if item.Source != "" && item.Source != p.source {

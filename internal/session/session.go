@@ -33,6 +33,8 @@ type Cursor struct {
 }
 
 type UI struct {
+	NavSelection   string            `json:"nav_selection,omitempty"`
+	Categories     map[string]string `json:"categories,omitempty"`
 	NavWidth       int               `json:"nav_width,omitempty"`
 	QueueWidth     int               `json:"queue_width,omitempty"`
 	NavHeight      int               `json:"nav_height,omitempty"`
@@ -72,10 +74,15 @@ func (u UI) Clone() UI {
 	for k, c := range u.Cursors {
 		v.Cursors[k] = c
 	}
+	v.Categories = make(map[string]string, len(u.Categories))
+	for k, id := range u.Categories {
+		v.Categories[k] = id
+	}
 	return v
 }
 
 type Playback struct {
+	Continuous *music.Query    `json:"continuous,omitempty"`
 	Equalizer  music.Equalizer `json:"equalizer"`
 	Quality    string          `json:"quality,omitempty"`
 	Queue      []music.Track   `json:"queue"`
@@ -143,6 +150,11 @@ func Load(dir string) (Snapshot, error) {
 }
 
 func (s *Snapshot) Normalize() {
+	if s.Playback.Continuous != nil {
+		q := *s.Playback.Continuous
+		q.Next, q.Refresh = "", false
+		s.Playback.Continuous = &q
+	}
 	if s.UI.SearchScope == "apple" {
 		s.UI.SearchScope = "catalog"
 	}

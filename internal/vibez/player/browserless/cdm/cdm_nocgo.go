@@ -42,3 +42,7 @@ func (c *CDM) DecryptSubsamples(_, _, _ []byte, _ []Subsample) ([]byte, error) {
 func (c *CDM) Close() error {
 	return nil
 }
+
+func (c *CDM) DecryptCBCS(_, _, _ []byte, _ []Subsample, _, _ int) ([]byte, error) {
+	return nil, errNoCgo
+}

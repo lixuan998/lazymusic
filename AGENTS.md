@@ -8,11 +8,12 @@
 - `internal/app/`：单个 Bubble Tea application、内嵌 Login、来源配置与授权组件安装。异步消息使用来源 epoch，防止切换来源后旧响应污染新页面。
 - `internal/app/auth_runtime.go`：仅为存在 C++ ABI 缺口的 Linux amd64 官方授权子进程准备固定、双重摘要校验的兼容运行库。来源为 conda-forge GCC，保存在来源私有 helpers/runtime 中；只解包指定的普通库文件，不执行包脚本、不安装系统包。通过系统 ELF loader 的 --library-path 启动，不导出 LD_LIBRARY_PATH，避免影响浏览器、父进程或播放后端。不得以兼容 C++ 的方式替换 glibc。
 - `internal/nvimconfig/`：为已安装的 Lua 插件生成 lazy.nvim 配置，幂等更新、原子替换并备份不同的旧内容；运行路径不得包含 DESTDIR。
-- `internal/music/`：平台无关的 Source、Capabilities、Quality、Track、Query、State；曲目标识是 `(Source, ID)`。
+- `internal/music/`：平台无关的 Source、Capabilities、Quality、Track、Query、State；曲目标识是 `(Source, ID)`。Source.Pages 声明来源专有的导航根节点与 opaque Query，UI 不判断平台名称添加页面。
 - `internal/catalog/`：Browser、Page、Item、Tab、Inspector 和可选 Editor 合约及有界集合分页。Item.Open/Play、Actions.Playlists 为后端提供的 opaque Query；Item.Writable 仅表示可编辑的目标歌单。
 - `internal/sources/apple/`、`internal/sources/local/`：浏览、搜索、推荐与目录配置。任何服务 URL/资源 ID 解释均放在对应后端。
 - `internal/backend/registry.go`：来源注册与组合点，定义描述、能力、可用音质、Browser 与 Engine 工厂。
 - `internal/engine/`：播放合约、Native Apple 适配器、LOCAL 播放器和供 LOCAL 使用的 Queue 元数据状态机。Queue 本身不输出音频，不对用户暴露模拟后端。
+- `internal/engine/continuous.go`：动态电台控制层，后台有界取歌、低水位续播、保留约 200 首历史；网络请求不持有控制锁，generation 拦截旧电台回复，Pause/Stop 禁止迟到请求自动发声。session.Playback.Continuous 保存稳定的 opaque Query，冷恢复暂停。通过可选 StartContinuous / Select 保留来源中立的 IPC 和 Queue 选择行为。
 - `internal/audio/`：LOCAL 系统原生音频输出；`internal/volume/`：系统默认输出设备音量，两者职责独立。
 - `internal/daemon/`：Unix socket HTTP、进程锁、单前端 lease、UI revision、串行播放命令、日志和快照。协议破坏性变更递增 ProtocolVersion。
 - `internal/session/`：版本化 JSON 快照、迁移、原子保存和可持久化字段清理。
@@ -26,7 +27,7 @@
 ## 增加音乐平台
 
 1. 在 `music` 中定义稳定 Source ID，在 `internal/sources/<id>/` 实现 `catalog.Browser`；声明实际支持的能力，不要假装支持 Home/搜索/歌单。
-2. 返回中立的 Item/Tab；保留平台推荐分类标题。生成明确的 Open 和 Play Query。禁止 UI 根据资源字符串拼平台 URL。
+2. 返回中立的 Item/Tab；保留平台推荐分类标题和所有返回资源，不以暂不支持播放为由隐藏项目或整组分类。生成明确的 Open 和 Play Query；不可播放时提供 Item.PlaybackNote。来源特有页面通过 Source.Pages 声明，分类通过 Page.Tabs / ActiveTab 声明，session 按 query 独立保存分类。禁止 UI 根据资源字符串拼平台 URL。
 3. 实现 `engine.Engine`；支持 EQ 时声明 Equalizer 能力并实现 `SetEqualizer(music.Equalizer)`，在播放输出中实际应用，不只保存状态。Restore 必须只恢复元数据、队列及位置，不自动发声；Close 释放原生输出、流和 goroutine。异步运行错误必须进入 State.Error，或实现 `Events() <-chan eventlog.Entry`。
 4. 在 backend registry 增加来源描述、Browser 和 Engine 工厂；在 app 的来源设置流程增加该平台的授权/目录配置步骤。浏览和播放能力不要写进 app/TUI 的平台判断。
 5. 只有真实播放路径能选择的音质才能放入 Source.Qualities，使用稳定 Quality.ID 和 DefaultQuality，并实现 `SetQuality(string) error`。提供新后端的实测支持边界。目录中的 lossless 标签不等于播放器支持无损；偏好与实际流质量必须区分。
@@ -54,6 +55,9 @@
 - 日志、快照、错误信息不能含 token、cookie、私钥、CDM 密钥、授权头或签名流地址。清理整个签名 URL 的 path/query，不只 query。会话只存恢复所需的稳定元数据。
 - 原子写入快照；保留无法读取的旧文件用于恢复。IPC 目录校验所有者和 symlink，socket 私有，命令有界；集合分页检测循环、取消和数量上限。
 - 不在源码中放凭据、CDM、辅助授权 binary、缓存、录音或测试音频。当前 Apple 授权沿用 Vibez 官方组件；不要复制其 broker 凭据，也不要声称是独立 Apple 应用身份。
+- Apple Home 完整保留 recommendations 接口返回的分类、分页及资源；接口未返回的首页模块不得伪造。New/Radio 的 editorial.go 只解析官方公开区域页面的 serialized-server-data 内容字段，不读取网页 token/配置、执行脚本或发送账号授权头。限制正文大小、缓存数量、同源重定向和账号地区路径；不把 Radio 被重定向到 New 当作正常响应。公开内容 schema 的测试使用合成元数据，不保存账号响应或网页认证材料。
+- Apple stations.go 使用真实电台 ID 的 next-tracks 接口；禁止把个人/风格电台改造成 ra.<songID>。Query.Continuous 使 Enter 经 Engine.StartContinuous 调台；Browse 只解析元数据，动态歌曲电台返回 Page.Continuous 拒绝无限展开，有限节目返回带 Kind/MediaType 的单个 Track，使 y/p 可使用原有队列路径。原生播放器中保留媒体类型，禁止把电台节目当作普通歌曲查询或无限续播。
+- browserless/stations.go 与 license/stations.go 解析 Apple 已授权 station assets，按现有偏好选择 AAC 变体；CENC/CBCS 参数和公开 KID 从媒体保护元数据读取，实际密钥只由授权 CDM 使用，不导出。CBCS 的常量 IV 与 HLS PSSH KID 不能按普通歌曲的 CENC 假设处理。直播按 media-sequence 刷新窗口、去重和切换保护信息；没有真实直播验证时必须说明边界，不能仅用合成流测试声明完整兼容性。新本地 native 文件需加入 vendor_vibez.py 的 local_additions，并同步固定源码 patch 和摘要。
 
 ## 验证与改动规范
 

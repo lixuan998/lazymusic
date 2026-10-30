@@ -61,7 +61,7 @@ func (m *Model) workSubject() (catalog.Subject, string, bool) {
 	if source == "" {
 		source = m.State.Source.ID
 	}
-	return catalog.Subject{Source: source, ID: track.ID, PlaybackID: track.PlaybackID}, track.Title, true
+	return catalog.Subject{Kind: track.Kind, Source: source, ID: track.ID, PlaybackID: track.PlaybackID}, track.Title, true
 }
 
 func (m *Model) inspectWork(mode string) tea.Cmd {

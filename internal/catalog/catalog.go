@@ -10,16 +10,17 @@ import (
 )
 
 type Item struct {
-	Writable bool         `json:"writable,omitempty"`
-	Source   string       `json:"source,omitempty"`
-	Group    string       `json:"group,omitempty"`
-	Open     *Query       `json:"open,omitempty"`
-	Play     *Query       `json:"play,omitempty"`
-	ID       string       `json:"id"`
-	Kind     string       `json:"kind"`
-	Title    string       `json:"title"`
-	Subtitle string       `json:"subtitle,omitempty"`
-	Track    *music.Track `json:"track,omitempty"`
+	PlaybackNote string       `json:"playback_note,omitempty"`
+	Writable     bool         `json:"writable,omitempty"`
+	Source       string       `json:"source,omitempty"`
+	Group        string       `json:"group,omitempty"`
+	Open         *Query       `json:"open,omitempty"`
+	Play         *Query       `json:"play,omitempty"`
+	ID           string       `json:"id"`
+	Kind         string       `json:"kind"`
+	Title        string       `json:"title"`
+	Subtitle     string       `json:"subtitle,omitempty"`
+	Track        *music.Track `json:"track,omitempty"`
 }
 
 // CursorID distinguishes the same recommendation in different Home groups.
@@ -36,10 +37,11 @@ type Tab struct {
 	Query Query  `json:"query"`
 }
 type Page struct {
-	Tabs      []Tab  `json:"tabs,omitempty"`
-	ActiveTab string `json:"active_tab,omitempty"`
-	Items     []Item `json:"items"`
-	Next      string `json:"next,omitempty"`
+	Continuous bool   `json:"continuous,omitempty"`
+	Tabs       []Tab  `json:"tabs,omitempty"`
+	ActiveTab  string `json:"active_tab,omitempty"`
+	Items      []Item `json:"items"`
+	Next       string `json:"next,omitempty"`
 }
 
 type Browser interface {
@@ -72,6 +74,9 @@ func All(ctx context.Context, b Browser, q Query) ([]music.Track, error) {
 			p, err := b.Browse(ctx, q)
 			if err != nil {
 				return err
+			}
+			if p.Continuous {
+				return fmt.Errorf("This station is continuous; play it directly instead of expanding it into a fixed queue")
 			}
 			for _, i := range p.Items {
 				if i.Track != nil {

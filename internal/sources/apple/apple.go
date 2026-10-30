@@ -24,18 +24,23 @@ type Query = catalog.Query
 type Page = catalog.Page
 type Item = catalog.Item
 type Client struct {
-	homeMu     sync.Mutex
-	homeGroups []homeResource
-	homeAt     time.Time
-	cfg        *config.Config
-	http       *http.Client
-	base       string
-	mu         sync.Mutex
-	storefront string
+	stationMu      sync.Mutex
+	stationCache   map[string]stationInfo
+	editorialMu    sync.Mutex
+	editorialCache map[string]editorialCache
+	publicBase     string
+	homeMu         sync.Mutex
+	homeGroups     []homeResource
+	homeAt         time.Time
+	cfg            *config.Config
+	http           *http.Client
+	base           string
+	mu             sync.Mutex
+	storefront     string
 }
 
 func New(cfg *config.Config) *Client {
-	return &Client{cfg: cfg, http: &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}, base: "https://api.music.apple.com/v1", storefront: cfg.StoreFront}
+	return &Client{cfg: cfg, http: &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}, base: "https://api.music.apple.com/v1", publicBase: "https://music.apple.com", editorialCache: map[string]editorialCache{}, storefront: cfg.StoreFront}
 }
 
 type resource struct {
@@ -148,8 +153,14 @@ func (c *Client) Browse(ctx context.Context, q Query) (Page, error) {
 	if q.Source != "" && q.Source != music.Apple {
 		return Page{}, fmt.Errorf("wrong source for Apple Music")
 	}
+	if q.Page == "station" {
+		return c.stationSelection(ctx, q)
+	}
 	if q.Page == "home" || q.Page == "home-section" {
 		return c.home(ctx, q)
+	}
+	if q.Page == "new" || q.Page == "radio" || q.Page == "editorial" {
+		return c.editorial(ctx, q)
 	}
 	if q.Next != "" {
 		if q.Page == "search" {
@@ -268,6 +279,10 @@ func convert(r collection) Page {
 			i.Open = &q
 			p := q
 			i.Play = &p
+		}
+		if v.Type == "stations" {
+			q := Query{Source: music.Apple, Page: "station", Kind: "stations", ID: v.ID, Term: i.Title, Continuous: true}
+			i.Play = &q
 		}
 		out.Items = append(out.Items, i)
 	}

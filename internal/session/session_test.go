@@ -15,6 +15,8 @@ func TestSnapshotRoundTripAndNoStreamURLs(t *testing.T) {
 	s := Snapshot{Backend: "apple", UI: DefaultUI(), Playback: Playback{Queue: []music.Track{{ID: "1", Title: "中文", PreviewURL: "https://stream.invalid/?secret=abc", ArtworkURL: "https://art.invalid/"}}, Position: 18 * time.Second, Volume: .4, WasPlaying: true}}
 	s.UI.Location = Location{Page: "search", Scope: "library", Query: "中文"}
 	s.UI.Cursors["saved"] = Cursor{Index: 40, Offset: 29, ID: "resource"}
+	s.UI.NavSelection = "radio"
+	s.UI.Categories = map[string]string{"feed": "moods"}
 	if err := Save(dir, s); err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +24,7 @@ func TestSnapshotRoundTripAndNoStreamURLs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Playback.Position != 18*time.Second || r.UI.Cursors["saved"].Offset != 29 || r.UI.Location.Query != "中文" {
+	if r.Playback.Position != 18*time.Second || r.UI.Cursors["saved"].Offset != 29 || r.UI.Location.Query != "中文" || r.UI.NavSelection != "radio" || r.UI.Categories["feed"] != "moods" {
 		t.Fatalf("lost session: %+v", r)
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, "session.json"))
@@ -46,10 +48,12 @@ func TestUnknownVersionIsNotSilentlyReplaced(t *testing.T) {
 func TestUICloneDoesNotShareCursorsOrHistory(t *testing.T) {
 	u := DefaultUI()
 	u.History = []Location{{Title: "before"}}
+	u.Categories = map[string]string{"feed": "before"}
 	v := u.Clone()
 	v.History[0].Title = "after"
 	v.Cursors["x"] = Cursor{Index: 9}
-	if u.History[0].Title != "before" || len(u.Cursors) != 0 {
+	v.Categories["feed"] = "after"
+	if u.History[0].Title != "before" || len(u.Cursors) != 0 || u.Categories["feed"] != "before" {
 		t.Fatal("UI clone aliases mutable state")
 	}
 }

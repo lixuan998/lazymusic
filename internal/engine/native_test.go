@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"lazymusic/internal/music"
+	"lazymusic/internal/session"
 	"lazymusic/internal/vibez/player/browserless"
 	"lazymusic/internal/vibez/provider"
 )
@@ -36,5 +38,16 @@ func TestQualityReloadPreservesPausedQueueAndPosition(t *testing.T) {
 	}
 	if err := n.SetQuality("lossless"); err == nil {
 		t.Fatal("unsupported bitrate accepted")
+	}
+}
+
+func TestRadioEpisodeMetadataSurvivesNativeConversionAndRestore(t *testing.T) {
+	n := &Native{p: &browserless.Player{}}
+	track := music.Track{Source: music.Apple, ID: "ra.episode", PlaybackID: "ra.episode", Kind: "stations", MediaType: "episode", Title: "Radio episode", Duration: time.Hour}
+	saved := session.Playback{Queue: []music.Track{track}, Position: 19 * time.Second}
+	n.p.RestoreTracks(toNativeTracks(saved.Queue), saved.Index, saved.Position)
+	s, q, _ := n.State()
+	if s.Playing || s.Track == nil || s.Track.Kind != "stations" || s.Track.MediaType != "episode" || q[0].MediaType != "episode" || s.Position != 19*time.Second {
+		t.Fatal("episode lost its media identity")
 	}
 }

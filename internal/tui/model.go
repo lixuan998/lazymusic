@@ -108,6 +108,9 @@ func New(ctx context.Context, api API, state daemon.State, keys Keys) *Model {
 	if u.Cursors == nil {
 		u.Cursors = map[string]session.Cursor{}
 	}
+	if u.Categories == nil {
+		u.Categories = map[string]string{}
+	}
 	if u.LibrarySection == "" {
 		u.LibrarySection = "songs"
 	}
@@ -146,6 +149,7 @@ func (m *Model) query() catalog.Query {
 }
 
 func (m *Model) remember() {
+	m.UI.NavSelection = m.navItems()[max(0, min(m.UI.NavIndex, len(m.navItems())-1))].page
 	m.align()
 	m.alignQueue()
 	items := m.visible()
@@ -157,6 +161,7 @@ func (m *Model) remember() {
 	m.UI.Cursors[m.query().Key()] = session.Cursor{Index: m.cursor, Offset: m.offset, ID: id}
 }
 func (m *Model) dirty() tea.Cmd {
+	m.UI.NavSelection = m.navItems()[max(0, min(m.UI.NavIndex, len(m.navItems())-1))].page
 	m.alignQueue()
 	if !m.restoring {
 		m.remember()
@@ -301,11 +306,14 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.items = msg.page.Items
 		}
-		if m.UI.Location.Page == "home" {
+		if msg.page.Tabs != nil || !msg.append {
 			m.tabs = msg.page.Tabs
 			if msg.page.ActiveTab != "" {
 				m.UI.Location.ID = msg.page.ActiveTab
-				m.UI.HomeCategory = msg.page.ActiveTab
+				m.UI.Categories[categoryKey(m.query())] = msg.page.ActiveTab
+				if m.UI.Location.Page == "home" {
+					m.UI.HomeCategory = msg.page.ActiveTab
+				}
 			}
 		}
 		m.next = msg.page.Next

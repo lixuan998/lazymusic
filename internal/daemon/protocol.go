@@ -10,7 +10,7 @@ import (
 	"lazymusic/internal/volume"
 )
 
-const ProtocolVersion = 8
+const ProtocolVersion = 9
 
 type State struct {
 	Equalizer        music.Equalizer  `json:"equalizer"`

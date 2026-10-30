@@ -83,4 +83,26 @@ Apple Music: add songs/albums to the library, create playlists, and add songs
 to editable playlists. Cloud deletion is unavailable in Apple's public API;
 d on a library item explains this limit. No local files are deleted.
 
+APPLE MUSIC navigation includes Home, New and Radio; LOCAL omits these pages.
+Home keeps every category/resource returned by the recommendations API,
+including stations and unsupported resource types. Available categories vary
+by account, region and time. New/Radio use structured content from Apple's
+public regional pages, without sending account authorization or requiring a
+browser. Use ,/. in Content to switch categories and View all to open full
+sections where available. Categories and navigation restore with the session.
+Track-based personal, discovery, artist and genre stations play natively on
+macOS/Linux: Enter or Ctrl+Enter tunes the station, and the background service
+refills upcoming songs automatically. The player shows the station and current
+song. Pause, resume, seek, next/previous, EQ and background sessions use the
+usual controls. Cold restore stays paused and retains the station context.
+Replacing/clearing the queue ends station mode. An endless station cannot be
+expanded with y/p into a fixed collection; add individual songs from Queue.
+Radio episodes resolve as finite stream entries: Enter plays, y queues, and
+p/P picks/places them. Native CBCS playback, seeking and paused restoration
+have been verified on macOS/Linux. Live media-window refresh has regression
+coverage, but real live radio is not verified with the current account/region
+(the media endpoint returns 404). Videos remain visible with playback limits.
+Public page format changes or regional redirects report an error instead of
+presenting another page. The plugin shares the TUI's station controls.
+
  vim:tw=78:ts=8:noet:ft=help:norl:

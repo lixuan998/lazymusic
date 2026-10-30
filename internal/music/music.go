@@ -14,6 +14,7 @@ const (
 // Source and ID form an identity. PlaybackID is opaque to the UI; the JSON name
 // retains compatibility with pre-P4 Apple session files.
 type Track struct {
+	Kind, MediaType        string
 	Source                 string `json:"Source,omitempty"`
 	ID                     string
 	PlaybackID             string `json:"CatalogID,omitempty"`
@@ -24,6 +25,7 @@ type Track struct {
 }
 
 type State struct {
+	Continuous          *Query `json:"continuous,omitempty"`
 	Status              string `json:"Status,omitempty"`
 	Track               *Track
 	Playing, Loading    bool
@@ -52,6 +54,7 @@ type Quality struct {
 	Bitrate int    `json:"bitrate,omitempty"`
 }
 type Source struct {
+	Pages          []SourcePage `json:"pages,omitempty"`
 	QualityNote    string       `json:"quality_note,omitempty"`
 	Qualities      []Quality    `json:"qualities,omitempty"`
 	DefaultQuality string       `json:"default_quality,omitempty"`
@@ -59,4 +62,11 @@ type Source struct {
 	Name           string       `json:"name"`
 	RequiresLogin  bool         `json:"requires_login"`
 	Capabilities   Capabilities `json:"capabilities"`
+}
+
+// SourcePage adds a source-defined root without platform checks in the TUI.
+type SourcePage struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Query Query  `json:"query"`
 }

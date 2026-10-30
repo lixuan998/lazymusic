@@ -58,10 +58,18 @@ func (m *Model) fetch(reset, refresh bool) tea.Cmd {
 		return pageMsg{key: key, generation: generation, append: !reset, page: p, err: err}
 	}
 }
+func categoryKey(q catalog.Query) string {
+	q.ID, q.Next, q.Refresh = "", "", false
+	return q.Key()
+}
+
 func (m *Model) navigate(l session.Location, push bool) tea.Cmd {
 	m.remember()
 	if push {
 		m.UI.History = append(m.UI.History, m.UI.Location)
+	}
+	if l.Page != m.UI.Location.Page || l.Kind != m.UI.Location.Kind || l.Query != m.UI.Location.Query {
+		m.tabs = nil
 	}
 	m.UI.Location = l
 	if l.Page == "home" && l.ID != "" {
@@ -84,7 +92,13 @@ func (m *Model) activateNav() tea.Cmd {
 	m.UI.NavIndex = max(0, min(m.UI.NavIndex, len(nav)-1))
 	n := nav[m.UI.NavIndex]
 	m.UI.NavPage = n.page
-	l := session.Location{Source: m.State.Source.ID, Page: n.page, Section: "songs", Title: n.title}
+	l := n.location(m.State.Source.ID)
+	if n.query != nil {
+		q := *n.query
+		if id := m.UI.Categories[categoryKey(q)]; id != "" {
+			l.ID = id
+		}
+	}
 	switch n.page {
 	case "home":
 		l.ID = m.UI.HomeCategory
@@ -101,7 +115,7 @@ func (m *Model) activateNav() tea.Cmd {
 }
 func (m *Model) category(next bool) tea.Cmd {
 	l := m.UI.Location
-	if l.Page == "home" {
+	if len(m.tabs) > 0 || l.Page == "home" {
 		if len(m.tabs) == 0 {
 			return nil
 		}
@@ -119,8 +133,10 @@ func (m *Model) category(next bool) tea.Cmd {
 		}
 		q := m.tabs[i].Query
 		l.Source = q.Source
+		l.Page = q.Page
 		l.ID = q.ID
 		l.Section = q.Section
+		l.Scope, l.Kind, l.Query = q.Scope, q.Kind, q.Term
 		return m.navigate(l, false)
 	}
 	if l.Page != "library" && l.Page != "search" {
@@ -175,11 +191,15 @@ func (m *Model) selectItem(op string) tea.Cmd {
 		}
 		return m.command(cmd)
 	}
-	if op == "replace" {
+	if op == "replace" && (item.Open != nil || item.Play == nil) {
 		return m.openChild()
 	}
 	if item.Play == nil {
-		m.notice = "Open this item and choose a playable collection"
+		note := item.PlaybackNote
+		if note == "" {
+			note = "Open this item and choose a playable collection"
+		}
+		m.Report("warn", "catalog", note)
 		return nil
 	}
 	actual := op

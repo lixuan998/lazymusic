@@ -1,3 +1,31 @@
+--- a/internal/vibez/provider/provider.go
++++ b/internal/vibez/provider/provider.go
+@@ -21,15 +21,16 @@
+ }
+ 
+ type Track struct {
+-	ID         string
+-	CatalogID  string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
+-	Title      string
+-	Artist     string
+-	Album      string
+-	Duration   time.Duration
+-	ArtworkURL string
+-	PreviewURL string
+-	Genres     []string
++	Kind, MediaType string
++	ID              string
++	CatalogID       string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
++	Title           string
++	Artist          string
++	Album           string
++	Duration        time.Duration
++	ArtworkURL      string
++	PreviewURL      string
++	Genres          []string
+ 	// DiscNumber and TrackNumber give the track's position on its album.
+ 	// Zero means unknown.
+ 	DiscNumber  int
 --- a/internal/vibez/player/browserless/player.go
 +++ b/internal/vibez/player/browserless/player.go
 @@ -73,6 +73,8 @@
@@ -87,49 +115,6 @@
  
  		switch {
  		case p.idx == from:
---- a/internal/vibez/player/browserless/streamer.go
-+++ b/internal/vibez/player/browserless/streamer.go
-@@ -520,6 +520,12 @@
- 		}
- 	}
- 
-+	skipFrames := 0
-+	if !st.raw {
-+		if n, err := strconv.Atoi(r.URL.Query().Get("skip_frames")); err == nil && n > 0 && n <= 1000000 {
-+			skipFrames = n
-+		}
-+	}
- 	contentType := "audio/aac"
- 	if st.raw {
- 		contentType = st.rawFormat.contentType
-@@ -571,6 +577,14 @@
- 			}
- 		}
- 
-+		if skipFrames > 0 {
-+			var trimErr error
-+			aacData, skipFrames, trimErr = trimADTSFrames(aacData, skipFrames)
-+			if trimErr != nil {
-+				fail(i, "seek", trimErr)
-+				return
-+			}
-+		}
- 		// Write to HTTP client (GStreamer). A failed write means the client
- 		// has gone, so there is nobody left to abort for; log it only.
- 		if _, err := w.Write(aacData); err != nil {
---- a/internal/vibez/player/browserless/streamer_test.go
-+++ b/internal/vibez/player/browserless/streamer_test.go
-@@ -218,8 +218,8 @@
- 		t.Fatalf("Seek(14s) returned error: %v", err)
- 	}
- 	st, _ := p.GetState()
--	if st.Position != 12*time.Second {
--		t.Errorf("Position after Seek(14s) = %v, want 12s (start of segment 2)", st.Position)
-+	if st.Position > 14*time.Second || 14*time.Second-st.Position > 24*time.Millisecond {
-+		t.Errorf("Position after Seek(14s) = %v, want within one AAC frame before 14s", st.Position)
- 	}
- }
- 
 --- a/internal/vibez/player/browserless/player_test.go
 +++ b/internal/vibez/player/browserless/player_test.go
 @@ -159,10 +159,10 @@
@@ -156,6 +141,253 @@
  
  	streamer, err := NewStreamServer(nil, lic)
  	if err != nil {
+--- a/internal/vibez/player/browserless/streamer.go
++++ b/internal/vibez/player/browserless/streamer.go
+@@ -23,20 +23,30 @@
+ )
+ 
+ type segmentRef struct {
+-	uri      string
+-	offset   int64
+-	length   int64
+-	duration float64
++	keyURI, initURI        string
++	initOffset, initLength int64
++	uri                    string
++	offset                 int64
++	length                 int64
++	duration               float64
+ }
+ 
+ type trackStream struct {
+-	trackID   string
+-	kid       []byte
+-	audioCfg  mp4.AudioConfig
+-	baseURI   string
+-	segments  []segmentRef
+-	totalDur  time.Duration
+-	createdAt time.Time
++	stationProtections *stationProtectionStore
++	stationInfo        *license.PlaybackInfo
++	encryption         *mp4.Encryption
++	stationURI         string
++	live               bool
++	mediaSequence      int64
++	keyURI             string
++	initURI            string
++	trackID            string
++	kid                []byte
++	audioCfg           mp4.AudioConfig
++	baseURI            string
++	segments           []segmentRef
++	totalDur           time.Duration
++	createdAt          time.Time
+ 
+ 	// raw marks an unencrypted library upload: segments are byte ranges of
+ 	// the file itself and pass through without decryption.
+@@ -121,6 +131,9 @@
+ // PrepareTrack resolves Apple Music playback metadata, acquires the Widevine license,
+ // parses the HLS manifest, and returns a local HTTP streaming URL and total duration.
+ func (s *StreamServer) PrepareTrack(ctx context.Context, trackID string, prefer256k bool) (string, time.Duration, error) {
++	if strings.HasPrefix(trackID, "ra.") {
++		return s.prepareStation(ctx, trackID, prefer256k)
++	}
+ 	// A library ID reaches here only when it has no catalog song.
+ 	if strings.HasPrefix(trackID, "i.") {
+ 		return s.prepareRawTrack(ctx, trackID)
+@@ -501,6 +514,11 @@
+ 		return
+ 	}
+ 
++	if st.live {
++		s.serveLive(w, r, streamID, st)
++		return
++	}
++
+ 	// Support start_seg parameter for instant seeking
+ 	startSeg := 0
+ 	if qSeg := r.URL.Query().Get("start_seg"); qSeg != "" {
+@@ -520,6 +538,12 @@
+ 		}
+ 	}
+ 
++	skipFrames := 0
++	if !st.raw {
++		if n, err := strconv.Atoi(r.URL.Query().Get("skip_frames")); err == nil && n > 0 && n <= 1000000 {
++			skipFrames = n
++		}
++	}
+ 	contentType := "audio/aac"
+ 	if st.raw {
+ 		contentType = st.rawFormat.contentType
+@@ -571,6 +595,14 @@
+ 			}
+ 		}
+ 
++		if skipFrames > 0 {
++			var trimErr error
++			aacData, skipFrames, trimErr = trimADTSFrames(aacData, skipFrames)
++			if trimErr != nil {
++				fail(i, "seek", trimErr)
++				return
++			}
++		}
+ 		// Write to HTTP client (GStreamer). A failed write means the client
+ 		// has gone, so there is nobody left to abort for; log it only.
+ 		if _, err := w.Write(aacData); err != nil {
+@@ -600,6 +632,13 @@
+ }
+ 
+ func (s *StreamServer) fetchAndDecryptSegment(ctx context.Context, client *http.Client, st *trackStream, seg segmentRef) ([]byte, string, error) {
++	if st.stationInfo != nil && seg.keyURI != "" {
++		var err error
++		st, err = s.stationSegmentProtection(ctx, st, seg)
++		if err != nil {
++			return nil, "protection", err
++		}
++	}
+ 	segURL := seg.uri
+ 	if !strings.HasPrefix(segURL, "http://") && !strings.HasPrefix(segURL, "https://") {
+ 		segURL = st.baseURI + seg.uri
+@@ -620,8 +659,11 @@
+ 				CipherBytes: sb.CipherBytes,
+ 			}
+ 		}
++		if st.encryption != nil && st.encryption.CBCS {
++			return s.cdmEngine.DecryptCBCS(kid, iv, input, cdmSubs, st.encryption.Crypt, st.encryption.Skip)
++		}
+ 		return s.cdmEngine.DecryptSubsamples(kid, iv, input, cdmSubs)
+-	})
++	}, encryptionOptions(st)...)
+ 	if err != nil {
+ 		return nil, "decrypt", err
+ 	}
+--- a/internal/vibez/player/browserless/streamer_test.go
++++ b/internal/vibez/player/browserless/streamer_test.go
+@@ -218,8 +218,8 @@
+ 		t.Fatalf("Seek(14s) returned error: %v", err)
+ 	}
+ 	st, _ := p.GetState()
+-	if st.Position != 12*time.Second {
+-		t.Errorf("Position after Seek(14s) = %v, want 12s (start of segment 2)", st.Position)
++	if st.Position > 14*time.Second || 14*time.Second-st.Position > 24*time.Millisecond {
++		t.Errorf("Position after Seek(14s) = %v, want within one AAC frame before 14s", st.Position)
+ 	}
+ }
+ 
+--- a/internal/vibez/player/browserless/cdm/cdm.go
++++ b/internal/vibez/player/browserless/cdm/cdm.go
+@@ -12,6 +12,7 @@
+ import "C"
+ 
+ import (
++	"bytes"
+ 	"errors"
+ 	"fmt"
+ 	"sync"
+@@ -72,7 +73,7 @@
+ 	if c.ctx == nil {
+ 		return nil, "", errors.New("cdm context is closed")
+ 	}
+-	if len(kid) != 16 {
++	if len(kid) != 16 && (len(kid) < 32 || len(kid) > 65536 || !bytes.Equal(kid[4:8], []byte("pssh"))) {
+ 		return nil, "", fmt.Errorf("invalid KID length: %d (expected 16)", len(kid))
+ 	}
+ 
+@@ -137,6 +138,12 @@
+ 
+ // DecryptSubsamples decrypts an audio frame with a subsample table using AES-CTR (cenc).
+ func (c *CDM) DecryptSubsamples(keyID, iv, input []byte, subsamples []Subsample) ([]byte, error) {
++	return c.decryptSample(keyID, iv, input, subsamples, 0, 0, 0)
++}
++func (c *CDM) DecryptCBCS(keyID, iv, input []byte, subs []Subsample, crypt, skip int) ([]byte, error) {
++	return c.decryptSample(keyID, iv, input, subs, 1, crypt, skip)
++}
++func (c *CDM) decryptSample(keyID, iv, input []byte, subsamples []Subsample, cbcs, crypt, skip int) ([]byte, error) {
+ 	c.mu.Lock()
+ 	defer c.mu.Unlock()
+ 
+@@ -144,6 +151,9 @@
+ 		return nil, errors.New("cdm context is closed")
+ 	}
+ 
++	if len(keyID) != 16 || len(iv) == 0 || len(input) == 0 {
++		return nil, errors.New("invalid encrypted sample")
++	}
+ 	decrypted := make([]byte, len(input))
+ 	var outSize C.uint32_t
+ 
+@@ -173,7 +183,7 @@
+ 		cipherPtr,
+ 		numSubs,
+ 		(*C.uint8_t)(unsafe.Pointer(&decrypted[0])),
+-		&outSize,
++		&outSize, C.int(cbcs), C.uint32_t(crypt), C.uint32_t(skip),
+ 	)
+ 	if ret != 0 {
+ 		return nil, fmt.Errorf("decryption failed with status %d", ret)
+--- a/internal/vibez/player/browserless/cdm/cdm_bridge.cpp
++++ b/internal/vibez/player/browserless/cdm/cdm_bridge.cpp
+@@ -268,7 +268,7 @@
+     uint32_t* out_challenge_size,
+     char** out_session_id
+ ) {
+-    if (!ctx || !ctx->cdm11 || !kid || kid_size != 16) return -1;
++    if (!ctx || !ctx->cdm11 || !kid || (kid_size != 16 && (kid_size < 32 || kid_size > 65536 || std::memcmp(kid + 4, "pssh", 4) != 0))) return -1;
+ 
+     // Reset host session state
+     {
+@@ -295,7 +295,8 @@
+         0x00, 0x00, 0x00, 0x14,
+         0x08, 0x01, 0x12, 0x10
+     };
+-    pssh.insert(pssh.end(), kid, kid + kid_size);
++    if (kid_size == 16) pssh.insert(pssh.end(), kid, kid + kid_size);
++    else pssh.assign(kid, kid + kid_size);
+ 
+     ctx->cdm11->CreateSessionAndGenerateRequest(
+         2,
+@@ -387,14 +388,16 @@
+     const uint32_t* cipher_bytes,
+     uint32_t num_subsamples,
+     uint8_t* out_decrypted,
+-    uint32_t* out_size
++    uint32_t* out_size,
++    int cbcs, uint32_t crypt_blocks, uint32_t skip_blocks
+ ) {
+     if (!ctx || !ctx->cdm11 || !in_data || in_size == 0) return -1;
+ 
+     cdm::InputBuffer_2 input = {};
+     input.data = in_data;
+     input.data_size = in_size;
+-    input.encryption_scheme = cdm::EncryptionScheme::kCenc;
++    input.encryption_scheme = cbcs ? cdm::EncryptionScheme::kCbcs : cdm::EncryptionScheme::kCenc;
++    input.pattern = {crypt_blocks, skip_blocks};
+     input.key_id = key_id;
+     input.key_id_size = key_id_size;
+     input.iv = iv;
+--- a/internal/vibez/player/browserless/cdm/cdm_bridge.h
++++ b/internal/vibez/player/browserless/cdm/cdm_bridge.h
+@@ -56,7 +56,8 @@
+     const uint32_t* cipher_bytes,
+     uint32_t num_subsamples,
+     uint8_t* out_decrypted,
+-    uint32_t* out_size
++    uint32_t* out_size,
++    int cbcs, uint32_t crypt_blocks, uint32_t skip_blocks
+ );
+ 
+ // cdm_context_destroy destroys the CDM instance and unloads the shared library.
+--- a/internal/vibez/player/browserless/cdm/cdm_nocgo.go
++++ b/internal/vibez/player/browserless/cdm/cdm_nocgo.go
+@@ -42,3 +42,7 @@
+ func (c *CDM) Close() error {
+ 	return nil
+ }
++
++func (c *CDM) DecryptCBCS(_, _, _ []byte, _ []Subsample, _, _ int) ([]byte, error) {
++	return nil, errNoCgo
++}
 --- a/internal/vibez/player/browserless/license/client.go
 +++ b/internal/vibez/player/browserless/license/client.go
 @@ -45,7 +45,8 @@
@@ -168,3 +400,48 @@
  		},
  	}
  }
+--- a/internal/vibez/player/browserless/mp4/decryptor.go
++++ b/internal/vibez/player/browserless/mp4/decryptor.go
+@@ -165,6 +165,7 @@
+ 	kid []byte,
+ 	cfg AudioConfig,
+ 	decryptFn DecryptFunc,
++	encryption ...Encryption,
+ ) ([]byte, error) {
+ 	// Find moof box
+ 	moofIdx := bytes.Index(segData, []byte("moof"))
+@@ -201,14 +202,21 @@
+ 
+ 	// Sanity-bound sampleCount against remaining senc buffer to prevent OOM
+ 	remainingSencBytes := sencEnd - (sencStart + 16)
+-	if remainingSencBytes < 0 || int64(sampleCount) > int64(remainingSencBytes)/8 || sampleCount > 65536 {
++	ivSize := 8
++	if len(encryption) > 0 {
++		ivSize = encryption[0].IVSize
++	}
++	minEntry := ivSize
++	if hasSubsamples {
++		minEntry += 2
++	}
++	if remainingSencBytes < 0 || (minEntry > 0 && int64(sampleCount) > int64(remainingSencBytes)/int64(minEntry)) || sampleCount > 65536 {
+ 		return nil, fmt.Errorf("invalid or excessive sample count %d in senc (available bytes: %d)", sampleCount, remainingSencBytes)
+ 	}
+ 
+ 	samplesEnc := make([]SampleEncInfo, sampleCount)
+ 	offset := sencStart + 16
+-	ivSize := 8
+-	if !hasSubsamples && sampleCount > 0 && remainingSencBytes == int(sampleCount)*16 {
++	if len(encryption) == 0 && !hasSubsamples && sampleCount > 0 && remainingSencBytes == int(sampleCount)*16 {
+ 		ivSize = 16
+ 	}
+ 	for i := range sampleCount {
+@@ -217,6 +225,9 @@
+ 		}
+ 		iv := make([]byte, ivSize)
+ 		copy(iv, moofData[offset:offset+ivSize])
++		if ivSize == 0 && len(encryption) > 0 {
++			iv = append([]byte(nil), encryption[0].ConstantIV...)
++		}
+ 		offset += ivSize
+ 
+ 		var subsamples []Subsample

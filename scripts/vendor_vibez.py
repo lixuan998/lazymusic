@@ -42,10 +42,20 @@ if patch.exists():
         dest = ROOT / "internal/vibez" / Path(rel).relative_to("internal")
         hashes["imported_sha256"] = hashlib.sha256(dest.read_bytes()).hexdigest()
 manifest["local_additions"] = {}
-for name in ["session.go", "session_test.go"]:
-    dest = ROOT / "internal/vibez/player/browserless" / name
+for rel in [
+    'internal/vibez/player/browserless/session.go',
+    'internal/vibez/player/browserless/session_test.go',
+    'internal/vibez/player/browserless/stations.go',
+    'internal/vibez/player/browserless/stations_test.go',
+    'internal/vibez/player/browserless/license/stations.go',
+    'internal/vibez/player/browserless/license/stations_test.go',
+    'internal/vibez/player/browserless/mp4/encryption.go',
+    'internal/vibez/player/browserless/mp4/encryption_test.go',
+    'internal/vibez/player/browserless/cdm/cdm_nocgo.go',
+]:
+    dest = ROOT / rel
     if dest.exists():
-        manifest["local_additions"][str(dest.relative_to(ROOT))] = hashlib.sha256(dest.read_bytes()).hexdigest()
+        manifest["local_additions"][rel] = hashlib.sha256(dest.read_bytes()).hexdigest()
 (ROOT / "third_party").mkdir(exist_ok=True)
 (ROOT / "third_party/VIBEZ-LICENSE").write_bytes((SOURCE / "LICENSE").read_bytes())
 (ROOT / "third_party/vibez-source.json").write_text(json.dumps(manifest, indent=2) + "\n")

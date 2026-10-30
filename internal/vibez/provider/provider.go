@@ -21,15 +21,16 @@ func (p ArtworkPalette) HasColors() bool {
 }
 
 type Track struct {
-	ID         string
-	CatalogID  string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
-	Title      string
-	Artist     string
-	Album      string
-	Duration   time.Duration
-	ArtworkURL string
-	PreviewURL string
-	Genres     []string
+	Kind, MediaType string
+	ID              string
+	CatalogID       string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
+	Title           string
+	Artist          string
+	Album           string
+	Duration        time.Duration
+	ArtworkURL      string
+	PreviewURL      string
+	Genres          []string
 	// DiscNumber and TrackNumber give the track's position on its album.
 	// Zero means unknown.
 	DiscNumber  int

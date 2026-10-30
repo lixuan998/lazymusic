@@ -34,5 +34,5 @@ type Factory func(context.Context, session.Playback) (Engine, error)
 
 func Capture(e Engine) session.Playback {
 	s, q, i := e.State()
-	return session.Playback{Queue: session.CleanTracks(q), Index: i, Position: s.Position, Volume: s.Volume, Repeat: s.RepeatMode, Shuffle: s.ShuffleMode, WasPlaying: s.Playing}
+	return session.Playback{Continuous: s.Continuous, Queue: session.CleanTracks(q), Index: i, Position: s.Position, Volume: s.Volume, Repeat: s.RepeatMode, Shuffle: s.ShuffleMode, WasPlaying: s.Playing}
 }

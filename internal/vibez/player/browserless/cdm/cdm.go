@@ -12,6 +12,7 @@ package cdm
 import "C"
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sync"
@@ -72,7 +73,7 @@ func (c *CDM) GenerateChallenge(kid []byte) ([]byte, string, error) {
 	if c.ctx == nil {
 		return nil, "", errors.New("cdm context is closed")
 	}
-	if len(kid) != 16 {
+	if len(kid) != 16 && (len(kid) < 32 || len(kid) > 65536 || !bytes.Equal(kid[4:8], []byte("pssh"))) {
 		return nil, "", fmt.Errorf("invalid KID length: %d (expected 16)", len(kid))
 	}
 
@@ -137,6 +138,12 @@ func (c *CDM) Decrypt(keyID, iv, ciphertext []byte) ([]byte, error) {
 
 // DecryptSubsamples decrypts an audio frame with a subsample table using AES-CTR (cenc).
 func (c *CDM) DecryptSubsamples(keyID, iv, input []byte, subsamples []Subsample) ([]byte, error) {
+	return c.decryptSample(keyID, iv, input, subsamples, 0, 0, 0)
+}
+func (c *CDM) DecryptCBCS(keyID, iv, input []byte, subs []Subsample, crypt, skip int) ([]byte, error) {
+	return c.decryptSample(keyID, iv, input, subs, 1, crypt, skip)
+}
+func (c *CDM) decryptSample(keyID, iv, input []byte, subsamples []Subsample, cbcs, crypt, skip int) ([]byte, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -144,6 +151,9 @@ func (c *CDM) DecryptSubsamples(keyID, iv, input []byte, subsamples []Subsample)
 		return nil, errors.New("cdm context is closed")
 	}
 
+	if len(keyID) != 16 || len(iv) == 0 || len(input) == 0 {
+		return nil, errors.New("invalid encrypted sample")
+	}
 	decrypted := make([]byte, len(input))
 	var outSize C.uint32_t
 
@@ -173,7 +183,7 @@ func (c *CDM) DecryptSubsamples(keyID, iv, input []byte, subsamples []Subsample)
 		cipherPtr,
 		numSubs,
 		(*C.uint8_t)(unsafe.Pointer(&decrypted[0])),
-		&outSize,
+		&outSize, C.int(cbcs), C.uint32_t(crypt), C.uint32_t(skip),
 	)
 	if ret != 0 {
 		return nil, fmt.Errorf("decryption failed with status %d", ret)

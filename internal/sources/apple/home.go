@@ -2,6 +2,7 @@ package apple
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"lazymusic/internal/catalog"
 	"lazymusic/internal/music"
@@ -76,13 +77,6 @@ func (c *Client) home(ctx context.Context, q Query) (Page, error) {
 		if title == "" {
 			title = "For You"
 		}
-		items := []Item{}
-		for _, child := range r.Relationships.Contents.Data {
-			items = appendHome(items, child, title)
-		}
-		if len(items) == 0 && len(r.Relationships.Contents.Data) > 0 && r.Relationships.Contents.Next == "" {
-			continue
-		}
 		out.Tabs = append(out.Tabs, catalog.Tab{ID: r.ID, Title: title, Query: Query{Source: music.Apple, Page: "home", Section: "songs", ID: r.ID}})
 		if selected == nil || r.ID == q.ID {
 			selected = r
@@ -146,13 +140,28 @@ type homeResource struct {
 	} `json:"relationships"`
 }
 type homeAttributes struct {
-	Name     string `json:"name"`
-	Artist   string `json:"artistName"`
-	Curator  string `json:"curatorName"`
-	Duration int64  `json:"durationInMillis"`
-	Title    struct {
-		Display string `json:"stringForDisplay"`
-	} `json:"title"`
+	Name     string    `json:"name"`
+	Artist   string    `json:"artistName"`
+	Curator  string    `json:"curatorName"`
+	Duration int64     `json:"durationInMillis"`
+	Title    homeTitle `json:"title"`
+}
+
+type homeTitle struct {
+	Display string `json:"stringForDisplay"`
+}
+
+func (t *homeTitle) UnmarshalJSON(data []byte) error {
+	var text string
+	if len(data) > 0 && data[0] == '"' {
+		if err := json.Unmarshal(data, &text); err != nil {
+			return err
+		}
+		t.Display = text
+		return nil
+	}
+	type object homeTitle
+	return json.Unmarshal(data, (*object)(t))
 }
 
 func appendHome(out []Item, r homeResource, group string) []Item {
@@ -173,12 +182,11 @@ func appendHome(out []Item, r homeResource, group string) []Item {
 		}
 		return out
 	}
-	// Capability-driven items: unsupported radio/video resources are omitted.
-	if r.Type != "albums" && r.Type != "playlists" && r.Type != "songs" {
-		return out
-	}
 	raw := resource{ID: r.ID, Type: r.Type}
 	raw.Attributes.Name = r.Attributes.Name
+	if raw.Attributes.Name == "" {
+		raw.Attributes.Name = r.Attributes.Title.Display
+	}
 	raw.Attributes.Artist = r.Attributes.Artist
 	raw.Attributes.Curator = r.Attributes.Curator
 	raw.Attributes.Duration = r.Attributes.Duration
@@ -188,6 +196,12 @@ func appendHome(out []Item, r homeResource, group string) []Item {
 		i.Group = group
 		if strings.TrimSpace(i.Title) == "" {
 			i.Title = "Untitled " + r.Type
+		}
+		if i.Track == nil && i.Play == nil && i.Open == nil {
+			i.PlaybackNote = playbackNote(r.Type)
+			if i.Subtitle == "" {
+				i.Subtitle = i.PlaybackNote
+			}
 		}
 		out = append(out, i)
 	}

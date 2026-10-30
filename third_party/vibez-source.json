@@ -30,7 +30,7 @@
     },
     "internal/provider/provider.go": {
       "upstream_sha256": "8f8d1892f84efc0ca0ea84628648bfd0908db84bb63df95ac57782927a6fa35c",
-      "imported_sha256": "8f8d1892f84efc0ca0ea84628648bfd0908db84bb63df95ac57782927a6fa35c"
+      "imported_sha256": "8709093c64c8f1cf0e2746f206ff13e9a8a134f6b65f0880dc8dde615fe97b1e"
     },
     "internal/provider/apple/apple.go": {
       "upstream_sha256": "e8553b80d8fa9ae711aab21536e7f6f27c19e8ea6264858548c574b5fa1058d9",
@@ -126,7 +126,7 @@
     },
     "internal/player/browserless/streamer.go": {
       "upstream_sha256": "e8429468267112389ddc721ff952be9a9780b5f448a43602f940320eea0a2a8f",
-      "imported_sha256": "45d4154a3f8c9580ae33d7298fa3978651f97cd87106261ce72f3bb6521b9ec7"
+      "imported_sha256": "fce0221bc53f9918d9f7d2d1ff4bba6fbb0b2ea2ab2ce6a3db8ca52078a18d99"
     },
     "internal/player/browserless/streamer_test.go": {
       "upstream_sha256": "5c2c004580a4737ebbac4a80393122477ff564241b576acd283a0b2a62573804",
@@ -134,19 +134,19 @@
     },
     "internal/player/browserless/cdm/cdm.go": {
       "upstream_sha256": "34668351c5373526d3c7a0a248cd6e3f36eab86b92ab8bd7acd764ee42e91479",
-      "imported_sha256": "34668351c5373526d3c7a0a248cd6e3f36eab86b92ab8bd7acd764ee42e91479"
+      "imported_sha256": "e0d483860964900333757cb7ab26ca5f907fa7e821becf1f353d83c0a9901d90"
     },
     "internal/player/browserless/cdm/cdm_bridge.cpp": {
       "upstream_sha256": "d986f136e7f3b02bb202b82c0435da617d12b089febfca0a4670aa8b0434b654",
-      "imported_sha256": "d986f136e7f3b02bb202b82c0435da617d12b089febfca0a4670aa8b0434b654"
+      "imported_sha256": "eacb19d045ad1a34868de46fa2324290c735bfe23d228f599c8a80a4bcfd1057"
     },
     "internal/player/browserless/cdm/cdm_bridge.h": {
       "upstream_sha256": "04dd5ee96bb51993f7ab4477c1e515c202578e2644da6ed4467cf7c8bf810ea0",
-      "imported_sha256": "04dd5ee96bb51993f7ab4477c1e515c202578e2644da6ed4467cf7c8bf810ea0"
+      "imported_sha256": "a720d707f90245340d9ab480a3d9ce75d66a825c420e17cbb68ac84dade57a22"
     },
     "internal/player/browserless/cdm/cdm_nocgo.go": {
       "upstream_sha256": "89970cb5cf218c6bd5a15013843ca01c163c3381333e2dacb64092f76c69c024",
-      "imported_sha256": "89970cb5cf218c6bd5a15013843ca01c163c3381333e2dacb64092f76c69c024"
+      "imported_sha256": "7e962f2ea0b895a0c450e4fc58f8500cc0df6aede5dac1eeaa8e680edf7fad01"
     },
     "internal/player/browserless/cdm/content_decryption_module.h": {
       "upstream_sha256": "09ce855530a35c3e0d682f6c355902c6a5a0b712ea4e65dadc8c8a168d3c1455",
@@ -166,7 +166,7 @@
     },
     "internal/player/browserless/mp4/decryptor.go": {
       "upstream_sha256": "3c6dec1be8797118f5a8fd86589b2333dd4a2259321c2864b1b0e07abf084d02",
-      "imported_sha256": "3c6dec1be8797118f5a8fd86589b2333dd4a2259321c2864b1b0e07abf084d02"
+      "imported_sha256": "7bb4f255c30bbde2707ecf5ebd7ae2a9c11290361d79ff6726b72e4a2a852455"
     },
     "internal/player/browserless/mp4/decryptor_test.go": {
       "upstream_sha256": "68ff171dc45c1f1f559420c97b8ab02f8e099bc24e208ef753cf80e378726985",
@@ -187,10 +187,17 @@
   },
   "patch": {
     "path": "third_party/vibez-session.patch",
-    "sha256": "6be70c2eb6c967332b28eb0b7f514990ad1a9965659e20e8c2712534b9e5549b"
+    "sha256": "a62c6a7ef9e53702926889d677c69cb47a0f3fe6f5181f46085daa7a6da6bd49"
   },
   "local_additions": {
     "internal/vibez/player/browserless/session.go": "85183ebb163fd20dc83cb32e82decb21886de6182f3c74110705e26dd559c6f5",
-    "internal/vibez/player/browserless/session_test.go": "88caf6502b04b92628b51aeea7038c43fd94b10cb03f465d16a412b31cf09ce6"
+    "internal/vibez/player/browserless/session_test.go": "88caf6502b04b92628b51aeea7038c43fd94b10cb03f465d16a412b31cf09ce6",
+    "internal/vibez/player/browserless/stations.go": "b605b84c49b1d84c6ff2150e7b57048e18d9d857ddba12d78fe467bdfadc407a",
+    "internal/vibez/player/browserless/stations_test.go": "f04b44b23fc60e352e7d43da3cd8224602150c8a261323716146e917a3d43f47",
+    "internal/vibez/player/browserless/license/stations.go": "b237e50c3c991b014c5b6b39dc80277ef2f46ec53fce66b4a5af76b64d93ed40",
+    "internal/vibez/player/browserless/license/stations_test.go": "65d73bbc3fc156450fb4b8595ae770d997db3d26c8f73b478ee41e411e9b3e22",
+    "internal/vibez/player/browserless/mp4/encryption.go": "6af3e55f0ad184a102069864a6c62f6a5282895e952a8aeee56f7f3f300a2e1a",
+    "internal/vibez/player/browserless/mp4/encryption_test.go": "b0e9e66a8402565476e6a32384f4a318c81295d9f11fdaf0b7701c6c8b20016e",
+    "internal/vibez/player/browserless/cdm/cdm_nocgo.go": "7e962f2ea0b895a0c450e4fc58f8500cc0df6aede5dac1eeaa8e680edf7fad01"
   }
 }

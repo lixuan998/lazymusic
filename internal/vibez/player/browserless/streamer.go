@@ -23,20 +23,30 @@ import (
 )
 
 type segmentRef struct {
-	uri      string
-	offset   int64
-	length   int64
-	duration float64
+	keyURI, initURI        string
+	initOffset, initLength int64
+	uri                    string
+	offset                 int64
+	length                 int64
+	duration               float64
 }
 
 type trackStream struct {
-	trackID   string
-	kid       []byte
-	audioCfg  mp4.AudioConfig
-	baseURI   string
-	segments  []segmentRef
-	totalDur  time.Duration
-	createdAt time.Time
+	stationProtections *stationProtectionStore
+	stationInfo        *license.PlaybackInfo
+	encryption         *mp4.Encryption
+	stationURI         string
+	live               bool
+	mediaSequence      int64
+	keyURI             string
+	initURI            string
+	trackID            string
+	kid                []byte
+	audioCfg           mp4.AudioConfig
+	baseURI            string
+	segments           []segmentRef
+	totalDur           time.Duration
+	createdAt          time.Time
 
 	// raw marks an unencrypted library upload: segments are byte ranges of
 	// the file itself and pass through without decryption.
@@ -121,6 +131,9 @@ func NewStreamServer(cdmEngine *cdm.CDM, licClient *license.Client) (*StreamServ
 // PrepareTrack resolves Apple Music playback metadata, acquires the Widevine license,
 // parses the HLS manifest, and returns a local HTTP streaming URL and total duration.
 func (s *StreamServer) PrepareTrack(ctx context.Context, trackID string, prefer256k bool) (string, time.Duration, error) {
+	if strings.HasPrefix(trackID, "ra.") {
+		return s.prepareStation(ctx, trackID, prefer256k)
+	}
 	// A library ID reaches here only when it has no catalog song.
 	if strings.HasPrefix(trackID, "i.") {
 		return s.prepareRawTrack(ctx, trackID)
@@ -501,6 +514,11 @@ func (s *StreamServer) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if st.live {
+		s.serveLive(w, r, streamID, st)
+		return
+	}
+
 	// Support start_seg parameter for instant seeking
 	startSeg := 0
 	if qSeg := r.URL.Query().Get("start_seg"); qSeg != "" {
@@ -614,6 +632,13 @@ func (s *StreamServer) getOrFetchSegment0(ctx context.Context, client *http.Clie
 }
 
 func (s *StreamServer) fetchAndDecryptSegment(ctx context.Context, client *http.Client, st *trackStream, seg segmentRef) ([]byte, string, error) {
+	if st.stationInfo != nil && seg.keyURI != "" {
+		var err error
+		st, err = s.stationSegmentProtection(ctx, st, seg)
+		if err != nil {
+			return nil, "protection", err
+		}
+	}
 	segURL := seg.uri
 	if !strings.HasPrefix(segURL, "http://") && !strings.HasPrefix(segURL, "https://") {
 		segURL = st.baseURI + seg.uri
@@ -634,8 +659,11 @@ func (s *StreamServer) fetchAndDecryptSegment(ctx context.Context, client *http.
 				CipherBytes: sb.CipherBytes,
 			}
 		}
+		if st.encryption != nil && st.encryption.CBCS {
+			return s.cdmEngine.DecryptCBCS(kid, iv, input, cdmSubs, st.encryption.Crypt, st.encryption.Skip)
+		}
 		return s.cdmEngine.DecryptSubsamples(kid, iv, input, cdmSubs)
-	})
+	}, encryptionOptions(st)...)
 	if err != nil {
 		return nil, "decrypt", err
 	}

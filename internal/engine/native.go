@@ -12,6 +12,7 @@ import (
 	"lazymusic/internal/eventlog"
 	"lazymusic/internal/music"
 	"lazymusic/internal/session"
+	applecatalog "lazymusic/internal/sources/apple"
 	"lazymusic/internal/vibez/audioquality"
 	vplayer "lazymusic/internal/vibez/player"
 	"lazymusic/internal/vibez/player/browserless"
@@ -88,7 +89,14 @@ func NewNative(ctx context.Context, dir string, saved session.Playback) (Engine,
 		_ = n.Close()
 		return nil, err
 	}
-	return n, nil
+	tuner := newContinuous(n, applecatalog.New(cfg).StationTracks)
+	tuner.mu.Lock()
+	if saved.Continuous != nil {
+		q := *saved.Continuous
+		tuner.query = &q
+	}
+	tuner.mu.Unlock()
+	return tuner, nil
 }
 
 func (n *Native) State() (music.State, []music.Track, int) {
@@ -104,6 +112,9 @@ func (n *Native) State() (music.State, []music.Track, int) {
 	return music.State{Track: trackPtr(s.Track), Playing: s.Playing, Loading: s.Loading, Position: s.Position, Volume: s.Volume, Bitrate: s.Bitrate, RepeatMode: s.RepeatMode, ShuffleMode: s.ShuffleMode, Error: s.Error, SkippedID: s.SkippedID}, q, index
 }
 func (n *Native) Restore(s session.Playback) error {
+	if s.Index >= 0 && s.Index < len(s.Queue) && s.Queue[s.Index].MediaType == "live" {
+		s.Position = 0
+	}
 	if err := n.SetEqualizer(s.Equalizer); err != nil {
 		return err
 	}
@@ -146,11 +157,24 @@ func (n *Native) Stop() error {
 	_ = n.p.SetVolume(1)
 	return nil
 }
-func (n *Native) Next() error     { n.clearError(); return n.p.Next() }
-func (n *Native) Previous() error { n.clearError(); return n.p.Previous() }
+func (n *Native) Next() error { n.clearError(); return n.p.Next() }
+func (n *Native) Previous() error {
+	n.clearError()
+	s, q, i := n.State()
+	if s.Track != nil && s.Track.MediaType == "live" {
+		if i <= 0 {
+			return fmt.Errorf("live radio cannot restart; choose another queued item")
+		}
+		return n.Replace(q, i-1, true)
+	}
+	return n.p.Previous()
+}
 func (n *Native) Seek(pos time.Duration) error {
 	n.clearError()
 	s, q, i := n.State()
+	if s.Track != nil && s.Track.MediaType == "live" {
+		return fmt.Errorf("this is a live stream; seeking is unavailable")
+	}
 	if !s.Playing && !s.Loading {
 		n.p.RestoreTracks(toNativeTracks(q), i, pos)
 		return nil
@@ -190,7 +214,7 @@ func (n *Native) Close() error {
 }
 
 func fromNativeTrack(t provider.Track) music.Track {
-	return music.Track{Source: music.Apple, ID: t.ID, PlaybackID: t.CatalogID, Title: t.Title, Artist: t.Artist, Album: t.Album, Duration: t.Duration, Genres: t.Genres, AudioVariants: t.AudioVariants}
+	return music.Track{Kind: t.Kind, MediaType: t.MediaType, Source: music.Apple, ID: t.ID, PlaybackID: t.CatalogID, Title: t.Title, Artist: t.Artist, Album: t.Album, Duration: t.Duration, Genres: t.Genres, AudioVariants: t.AudioVariants}
 }
 func fromNativeTracks(q []provider.Track) []music.Track {
 	out := make([]music.Track, len(q))
@@ -202,7 +226,7 @@ func fromNativeTracks(q []provider.Track) []music.Track {
 func toNativeTracks(q []music.Track) []provider.Track {
 	out := make([]provider.Track, len(q))
 	for i, t := range q {
-		out[i] = provider.Track{ID: t.ID, CatalogID: t.PlaybackID, Title: t.Title, Artist: t.Artist, Album: t.Album, Duration: t.Duration}
+		out[i] = provider.Track{Kind: t.Kind, MediaType: t.MediaType, ID: t.ID, CatalogID: t.PlaybackID, Title: t.Title, Artist: t.Artist, Album: t.Album, Duration: t.Duration}
 	}
 	return out
 }
@@ -224,6 +248,9 @@ func (n *Native) SetQuality(id string) error {
 	s, q, i := n.State()
 	if err = n.p.SetAudioBitrate(rate); err != nil {
 		return err
+	}
+	if s.Track != nil && s.Track.MediaType == "live" {
+		s.Position = 0
 	}
 	n.p.RestoreTracks(toNativeTracks(q), i, s.Position)
 	if s.Playing {

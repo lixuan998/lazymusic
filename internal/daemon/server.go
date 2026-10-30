@@ -140,14 +140,7 @@ func (s *Service) redact(msg string) string {
 			msg = strings.ReplaceAll(msg, v, "[REDACTED]")
 		}
 	}
-	// Media URLs can contain independently signed query parameters.
-	for _, word := range strings.Fields(msg) {
-		if strings.Contains(word, "://") && strings.Contains(word, "?") {
-			clean := strings.SplitN(word, "?", 2)[0] + "?[REDACTED]"
-			msg = strings.ReplaceAll(msg, word, clean)
-		}
-	}
-	return msg
+	return eventlog.Redact(msg)
 }
 
 func (s *Service) State() State {
@@ -157,7 +150,7 @@ func (s *Service) State() State {
 	u := s.saved.UI.Clone()
 	err := s.lastError
 	s.mu.Unlock()
-	state := music.State{Position: p.Position, Volume: p.Volume, RepeatMode: p.Repeat, ShuffleMode: p.Shuffle}
+	state := music.State{Continuous: p.Continuous, Position: p.Position, Volume: p.Volume, RepeatMode: p.Repeat, ShuffleMode: p.Shuffle}
 	q := session.CleanTracks(p.Queue)
 	index := p.Index
 	if len(q) > 0 {
@@ -410,7 +403,11 @@ func (s *Service) execute(ctx context.Context, c Command) error {
 		if c.Index < 0 || c.Index >= len(q) {
 			return fmt.Errorf("queue index out of range")
 		}
-		err = e.Replace(q, c.Index, true)
+		if selector, ok := e.(interface{ Select(int) error }); ok {
+			err = selector.Select(c.Index)
+		} else {
+			err = e.Replace(q, c.Index, true)
+		}
 	case "remove":
 		_, q, _ := e.State()
 		if c.ExpectedQueue != "" && c.ExpectedQueue != music.QueueKey(q) {
@@ -439,6 +436,22 @@ func (s *Service) execute(ctx context.Context, c Command) error {
 				return fmt.Errorf("selection belongs to another music source")
 			}
 			q.Source = s.source.ID
+			if q.Continuous && c.Op == "replace" {
+				tuner, ok := e.(interface {
+					StartContinuous(context.Context, music.Query) error
+				})
+				if !ok {
+					return fmt.Errorf("this source does not support continuous stations")
+				}
+				if err = tuner.StartContinuous(ctx, q); err != nil {
+					return err
+				}
+				s.mu.Lock()
+				s.lastOp = "replace"
+				s.mu.Unlock()
+				s.logs.Add("info", "command", "Start station")
+				return s.saveLocked()
+			}
 			tracks, err = catalog.All(ctx, b, q)
 			if err != nil {
 				return err

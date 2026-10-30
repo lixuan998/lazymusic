@@ -19,7 +19,7 @@ func (m *Model) actionEnabled(action string) bool {
 	case "scope":
 		return m.UI.Location.Page == "search" && m.State.Source.Capabilities.CatalogSearch
 	case "category_next", "category_previous":
-		return m.UI.Focus != 1 || m.UI.Location.Page == "home" || m.UI.Location.Page == "library" || m.UI.Location.Page == "search"
+		return m.UI.Focus != 1 || len(m.tabs) > 0 || m.UI.Location.Page == "home" || m.UI.Location.Page == "library" || m.UI.Location.Page == "search"
 	case "eq_toggle", "eq_reset", "eq_preset":
 		return m.State.Source.Capabilities.Equalizer && (m.UI.Zen || m.UI.Visualizer == 2)
 	case "open", "back", "up", "down":

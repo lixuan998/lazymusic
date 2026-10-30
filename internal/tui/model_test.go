@@ -279,6 +279,7 @@ func TestRestoreKeepsUnconfirmedLoginSelectionOnExistingPage(t *testing.T) {
 	m.UI.NavPage = "home"
 	m.UI.NavIndex = len(m.navItems()) - 1
 	m.UI.Focus = 0
+	m.remember()
 	restored := New(context.Background(), api, daemon.State{Backend: "demo", UI: m.UI}, nil)
 	if restored.UI.NavIndex != len(restored.navItems())-1 || restored.UI.Location.Page != "home" || restored.exiting {
 		t.Fatal("restore opened or lost unconfirmed Login selection")
