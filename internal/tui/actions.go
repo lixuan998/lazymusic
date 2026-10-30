@@ -112,6 +112,8 @@ func (m *Model) normal(key string) tea.Cmd {
 		return m.pickOrPlace(action == "pick_before")
 	case "cancel_pick":
 		return m.cancelPicked()
+	case "undo_placement":
+		return m.undoPlacement()
 	case "zen":
 		m.UI.Zen = !m.UI.Zen
 		if m.UI.Zen {

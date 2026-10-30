@@ -52,6 +52,9 @@ func (m *Model) cancelPicked() tea.Cmd {
 }
 
 func (m *Model) pickOrPlace(before bool) tea.Cmd {
+	if m.placementBusy {
+		return nil
+	}
 	if m.picked != nil && m.picked.placing {
 		return nil
 	}
@@ -152,7 +155,7 @@ func (m *Model) placePicked(before bool) tea.Cmd {
 	}
 	m.alignQueue()
 	to := m.UI.QueueCursor
-	command := daemon.Command{ExpectedQueue: music.QueueKey(m.State.Queue)}
+	command := daemon.Command{Placement: true, ExpectedQueue: music.QueueKey(m.State.Queue)}
 	if p.fromQueue {
 		command.Op, command.Index = "move", p.index
 		if before && p.index < to {

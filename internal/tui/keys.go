@@ -68,6 +68,7 @@ var keyDefinitions = []keyDefinition{
 	{"play_selection", "Content", "Play song / entire collection", []string{"ctrl+enter"}},
 	{"pick_after", "Content Queue", "Pick / place after cursor", []string{"p"}},
 	{"pick_before", "Content Queue", "Pick / place before cursor", []string{"P"}},
+	{"undo_placement", "Content Queue", "Undo / redo last pick & place", []string{"u"}},
 	{"cancel_pick", "Queue", "Cancel picked selection", []string{"esc"}},
 	{"remove", "Content Queue", "Remove selected item", []string{"d"}},
 	{"clear", "Queue", "Clear playback queue", []string{"D"}},

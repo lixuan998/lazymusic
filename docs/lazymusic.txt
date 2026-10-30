@@ -60,6 +60,12 @@ all track pages; artists expand all their albums and tracks in source order.
 The picked item is marked with a diamond and a status line. Collection reads
 are asynchronous and cancellable. Placement is a single guarded queue edit,
 preserves playback, and waits for its reply before allowing another placement.
+Content/Queue: u undoes the last successful pick/place; u again redoes it.
+It toggles until the next successful placement replaces the record. Collections
+undo as a batch. Canceled, failed and unchanged placements keep the record.
+Undo/redo survives session restoration and never rewinds surviving playback.
+Removing the playing inserted song stops it; redo stays paused. Tail appends
+(including radio refill) preserve history; other queue edits invalidate it.
 o/c opens album/artist links or credits in Content, Queue and Player.
 Login is available through Navigation or :login. Text fields keep letters
 as text; Esc/Ctrl+c cancels. The plugin has no separate music keymap.

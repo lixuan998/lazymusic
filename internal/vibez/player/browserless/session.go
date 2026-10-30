@@ -141,3 +141,43 @@ func (p *Player) InsertTracks(tracks []provider.Track, at int) error {
 	p.scheduleNextPrefetch()
 	return nil
 }
+
+// EditTracks commits metadata under the same lock as automatic track changes.
+// Removing the playing occurrence selects its successor paused; surviving
+// audio retains its decoder, stream URL and exact playback position.
+func (p *Player) EditTracks(edit func([]provider.Track, int) ([]provider.Track, int, bool, error)) error {
+	p.mu.Lock()
+	q, index, removed, err := edit(append([]provider.Track(nil), p.queue...), p.idx)
+	if err != nil {
+		p.mu.Unlock()
+		return err
+	}
+	p.cancelPrefetchLocked()
+	p.stagedPreps = nil
+	p.queue, p.idx = q, index
+	if removed {
+		if p.playCtx != nil {
+			p.playCtx()
+			p.playCtx = nil
+		}
+		p.curStream, p.curStreamURL, p.streamErr = "", "", ""
+		p.ended = false
+		p.seekOffset = 0
+		p.resumePosition, p.resumeTrackID = 0, ""
+		p.state.Playing, p.state.Loading = false, false
+		p.state.Position = 0
+		p.state.Track = nil
+	}
+	if p.state.Track == nil && len(q) > 0 {
+		t := q[index]
+		p.state.Track = &t
+	}
+	s := p.state
+	p.mu.Unlock()
+	if removed && p.sink != nil {
+		p.sink.Stop()
+	}
+	p.bcast.Send(s)
+	p.scheduleNextPrefetch()
+	return nil
+}

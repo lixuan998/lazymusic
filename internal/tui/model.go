@@ -47,6 +47,7 @@ type exitMsg struct {
 }
 
 type Model struct {
+	placementBusy     bool
 	picked            *pickedSelection
 	pickGeneration    uint64
 	pickCancel        context.CancelFunc
@@ -236,6 +237,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case queuePlacedMsg:
 		return m, m.acceptPlaced(msg)
+	case placementUndoneMsg:
+		return m, m.acceptUndonePlacement(msg)
 	case rhythmFrame:
 		if msg.generation == m.rhythm.generation && m.rhythm.running {
 			m.rhythm.running = false

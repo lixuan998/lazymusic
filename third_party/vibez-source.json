@@ -190,8 +190,8 @@
     "sha256": "a62c6a7ef9e53702926889d677c69cb47a0f3fe6f5181f46085daa7a6da6bd49"
   },
   "local_additions": {
-    "internal/vibez/player/browserless/session.go": "85183ebb163fd20dc83cb32e82decb21886de6182f3c74110705e26dd559c6f5",
-    "internal/vibez/player/browserless/session_test.go": "88caf6502b04b92628b51aeea7038c43fd94b10cb03f465d16a412b31cf09ce6",
+    "internal/vibez/player/browserless/session.go": "baa4287c8248cb5298ff757ac25ce7ce5af8cc0e8835a2bd74e8f33c4c59aa4e",
+    "internal/vibez/player/browserless/session_test.go": "848ffa77c528dce0f8de71e548fe7d730074754e44b9018bb9d07d3e598f0c7c",
     "internal/vibez/player/browserless/stations.go": "b605b84c49b1d84c6ff2150e7b57048e18d9d857ddba12d78fe467bdfadc407a",
     "internal/vibez/player/browserless/stations_test.go": "f04b44b23fc60e352e7d43da3cd8224602150c8a261323716146e917a3d43f47",
     "internal/vibez/player/browserless/license/stations.go": "b237e50c3c991b014c5b6b39dc80277ef2f46ec53fce66b4a5af76b64d93ed40",

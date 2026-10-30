@@ -71,3 +71,16 @@ func TestInsertTracksDoesNotResetActivePlayback(t *testing.T) {
 		t.Fatal("insertion restarted or interrupted the active stream")
 	}
 }
+
+func TestAtomicQueueEditRetainsActiveNativeStream(t *testing.T) {
+	p := &Player{queue: []provider.Track{{ID: "a"}, {ID: "b"}}, idx: 1, curStream: "active", curStreamURL: "loopback-active", seekOffset: 12 * time.Second}
+	p.state.Track = &p.queue[1]
+	p.state.Playing = true
+	p.state.Position = 17 * time.Second
+	err := p.EditTracks(func(q []provider.Track, index int) ([]provider.Track, int, bool, error) {
+		return []provider.Track{q[1], q[0]}, 0, false, nil
+	})
+	if err != nil || !p.state.Playing || p.state.Position != 17*time.Second || p.curStream != "active" || p.curStreamURL != "loopback-active" || p.seekOffset != 12*time.Second || p.idx != 0 || p.state.Track.ID != "b" {
+		t.Fatal("queue edit restarted the decoder or changed position")
+	}
+}

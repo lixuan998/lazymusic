@@ -148,6 +148,7 @@ func (s *Service) State() State {
 	e := s.engine
 	p := s.saved.Playback
 	u := s.saved.UI.Clone()
+	placement := s.saved.Placement
 	err := s.lastError
 	s.mu.Unlock()
 	state := music.State{Continuous: p.Continuous, Position: p.Position, Volume: p.Volume, RepeatMode: p.Repeat, ShuffleMode: p.Shuffle}
@@ -193,7 +194,7 @@ func (s *Service) State() State {
 	if preferred == "" {
 		preferred = s.source.DefaultQuality
 	}
-	return State{Equalizer: p.Equalizer, PreferredQuality: preferred, SystemVolume: systemVolume, Logs: s.logs.Entries(), Source: s.source, ObservedAt: time.Now().UTC(), Protocol: ProtocolVersion, PID: os.Getpid(), Backend: s.saved.Backend, StartedAt: s.started, Playback: state, Queue: q, Index: index, UI: u, EngineReady: e != nil, Error: s.redact(err)}
+	return State{Placement: placement.Status(q), Equalizer: p.Equalizer, PreferredQuality: preferred, SystemVolume: systemVolume, Logs: s.logs.Entries(), Source: s.source, ObservedAt: time.Now().UTC(), Protocol: ProtocolVersion, PID: os.Getpid(), Backend: s.saved.Backend, StartedAt: s.started, Playback: state, Queue: q, Index: index, UI: u, EngineReady: e != nil, Error: s.redact(err)}
 }
 
 // Call only while commandMu is held. Native playback continues during disk IO.
@@ -295,6 +296,12 @@ func (s *Service) execute(ctx context.Context, c Command) error {
 	e, err := s.ensureEngine(ctx)
 	if err != nil {
 		return err
+	}
+	if c.Placement {
+		return s.place(ctx, e, c)
+	}
+	if c.Op == "undo-placement" {
+		return s.undoPlacement(ctx, e, c)
 	}
 	switch c.Op {
 	case "equalizer":
@@ -449,6 +456,7 @@ func (s *Service) execute(ctx context.Context, c Command) error {
 				s.mu.Lock()
 				s.lastOp = "replace"
 				s.mu.Unlock()
+				s.invalidatePlacement()
 				s.logs.Add("info", "command", "Start station")
 				return s.saveLocked()
 			}
@@ -516,6 +524,10 @@ func (s *Service) execute(ctx context.Context, c Command) error {
 		s.lastOp = c.Op
 	}
 	s.mu.Unlock()
+	switch c.Op {
+	case "replace", "clear", "remove", "move", "insert", "play-next":
+		s.invalidatePlacement()
+	}
 	s.logs.Add("info", "command", c.Op)
 	return s.saveLocked()
 }

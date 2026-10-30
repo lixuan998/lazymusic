@@ -95,11 +95,12 @@ type Playback struct {
 }
 
 type Snapshot struct {
-	Version   int       `json:"version"`
-	Backend   string    `json:"backend"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Playback  Playback  `json:"playback"`
-	UI        UI        `json:"ui"`
+	Placement *Placement `json:"placement,omitempty"`
+	Version   int        `json:"version"`
+	Backend   string     `json:"backend"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	Playback  Playback   `json:"playback"`
+	UI        UI         `json:"ui"`
 }
 
 func CleanTrack(t music.Track) music.Track {
@@ -150,6 +151,19 @@ func Load(dir string) (Snapshot, error) {
 }
 
 func (s *Snapshot) Normalize() {
+	if s.Placement != nil {
+		p := s.Placement.Clone()
+		if p.ID == "" || p.ExpectedQueue == "" || p.ExpectedLength < 0 || p.ExpectedLength > 10000 || (p.Op != "move" && p.Op != "insert") || p.From < 0 || p.From > 10000 || p.To < 0 || p.To > 10000 || len(p.Tracks) > 10000 || (p.Op == "insert" && len(p.Tracks) == 0) {
+			s.Placement = nil
+		} else {
+			for i := range p.Tracks {
+				if p.Tracks[i].Source == "" {
+					p.Tracks[i].Source = s.Backend
+				}
+			}
+			s.Placement = p
+		}
+	}
 	if s.Playback.Continuous != nil {
 		q := *s.Playback.Continuous
 		q.Next, q.Refresh = "", false

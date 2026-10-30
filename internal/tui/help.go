@@ -30,12 +30,19 @@ func (m *Model) actionEnabled(action string) bool {
 		return m.UI.Focus == 2 || m.UI.Location.Page == "library" || m.UI.Location.Page == "playlists" || m.UI.Location.Scope == "library"
 	case "cancel_pick":
 		return m.picked != nil && !m.picked.placing
+	case "undo_placement":
+		return !m.placementBusy && !(m.picked != nil && m.picked.placing)
 	}
 	return true
 }
 
 func (m *Model) helpDescription(d keyDefinition) string {
 	switch d.action {
+	case "undo_placement":
+		if m.State.Placement != nil && m.State.Placement.Undone {
+			return "Redo last pick & place (u toggles)"
+		}
+		return "Undo last pick & place (u toggles)"
 	case "pick_after", "pick_before":
 		if m.UI.Focus == 2 && m.picked != nil {
 			if d.action == "pick_before" {

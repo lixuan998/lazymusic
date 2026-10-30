@@ -13,6 +13,7 @@ import (
 func TestSnapshotRoundTripAndNoStreamURLs(t *testing.T) {
 	dir := t.TempDir()
 	s := Snapshot{Backend: "apple", UI: DefaultUI(), Playback: Playback{Queue: []music.Track{{ID: "1", Title: "中文", PreviewURL: "https://stream.invalid/?secret=abc", ArtworkURL: "https://art.invalid/"}}, Position: 18 * time.Second, Volume: .4, WasPlaying: true}}
+	s.Placement = &Placement{ID: "latest", Op: "insert", Tracks: s.Playback.Queue, ExpectedQueue: "guard", ExpectedLength: 1}
 	s.UI.Location = Location{Page: "search", Scope: "library", Query: "中文"}
 	s.UI.Cursors["saved"] = Cursor{Index: 40, Offset: 29, ID: "resource"}
 	s.UI.NavSelection = "radio"
@@ -26,6 +27,9 @@ func TestSnapshotRoundTripAndNoStreamURLs(t *testing.T) {
 	}
 	if r.Playback.Position != 18*time.Second || r.UI.Cursors["saved"].Offset != 29 || r.UI.Location.Query != "中文" || r.UI.NavSelection != "radio" || r.UI.Categories["feed"] != "moods" {
 		t.Fatalf("lost session: %+v", r)
+	}
+	if r.Placement == nil || r.Placement.Tracks[0].Source != "apple" || r.Placement.Tracks[0].Title != "中文" {
+		t.Fatal("lost or did not normalize placement history")
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, "session.json"))
 	if strings.Contains(string(b), "secret=abc") || strings.Contains(string(b), "art.invalid") {
