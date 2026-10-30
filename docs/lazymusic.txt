@@ -79,6 +79,11 @@ Unsupported terminals fall back to color half-block images. Set
 LAZYMUSIC_IMAGE_DISABLE=1 to force this fallback. tmux/zellij default to it.
 Native images in the Nvim float require Nvim 0.12+, termguicolors, and the
 bundled image relay (updated by make install). Older Nvim uses the fallback.
+Verified image support is reused for the same host TTY when reopening after
+background playback. Query IDs are independent of artwork IDs, so a cached
+cover or a redraw cannot discard a delayed capability response. Lost queries
+retry a bounded number of times; frame errors retain native image rendering.
+After make install, restart Nvim to reload the updated Lua modules.
 The relay handles only buffer-local direct image commands and cleans up its
 own images when the music terminal exits; it cannot access arbitrary files.
 Cover requests are cancellable and cached in memory, never in the session.

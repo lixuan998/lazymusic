@@ -82,7 +82,7 @@ func TestNativeArtworkUploadsOnceResizesWithoutResendingAndCleansOwnID(t *testin
 func TestUnsupportedTerminalFallsBackAndLateUploadCannotRestoreImage(t *testing.T) {
 	m := nativeArtModel(t)
 	m.graphics.replied = false
-	m.graphicsMessage(uv.KittyGraphicsEvent{Options: kitty.Options{ID: m.graphics.id}, Payload: []byte("ENOTSUP")})
+	m.graphicsMessage(uv.KittyGraphicsEvent{Options: kitty.Options{ID: m.graphics.probeID()}, Payload: []byte("ENOTSUP")})
 	prepare := m.syncGraphics()
 	if prepare == nil || m.graphics.ready() {
 		t.Fatal("unsupported terminal did not prepare its photographic fallback")

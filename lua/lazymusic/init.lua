@@ -134,10 +134,12 @@ function M.open()
 	vim.wo[state.win].winblend = 0
 	if not running() then
 		local buf = state.buf
+		local image_available = graphics.available() and vim.env.LAZYMUSIC_IMAGE_DISABLE ~= "1"
 		local job_options = {
 			env = {
-				LAZYMUSIC_IMAGE_BRIDGE = graphics.available() and "osc" or "",
-				LAZYMUSIC_IMAGE_DISABLE = graphics.available() and "" or "1",
+				LAZYMUSIC_IMAGE_BRIDGE = image_available and "osc" or "",
+				LAZYMUSIC_IMAGE_DISABLE = image_available and "" or "1",
+				LAZYMUSIC_IMAGE_SUPPORTED = image_available and graphics.confirmed() and "1" or "",
 				LAZYMUSIC_IMAGE_HOST = vim.env.TERM_PROGRAM or vim.env.TERM or "",
 			},
 			on_exit = function(_, code)

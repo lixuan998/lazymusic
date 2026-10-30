@@ -237,7 +237,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case graphicsWrite:
+	case graphicsWrite, graphicsQueryWrite:
 		if data, done, ok := m.TerminalOutput(msg); ok {
 			return m, tea.Sequence(tea.Raw(data), func() tea.Msg { return done })
 		}

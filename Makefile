@@ -17,6 +17,7 @@ test:
 
 test-nvim:
 	nvim --headless -u NONE -i NONE -l tests/nvim_spec.lua
+	nvim --headless -u NONE -i NONE -l tests/nvim_graphics_spec.lua
 
 vet:
 	CGO_ENABLED=1 $(GO) vet ./...

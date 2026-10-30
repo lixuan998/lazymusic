@@ -10,7 +10,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/ansi"
 	"lazymusic/internal/artwork"
 	"lazymusic/internal/termimage"
 	"lazymusic/internal/turntable"
@@ -21,6 +20,10 @@ type graphicsState struct {
 	disabled, relay, known, queried, replied, checked bool
 	active, pending, preparing, clearing              bool
 	generation                                        uint64
+	used                                              bool
+	queryPending, querySent, queryTimed               bool
+	queryGeneration                                   uint64
+	queryAttempts                                     int
 	target, prepared, sent, failed                    string
 	png                                               []byte
 	scene                                             image.Image
@@ -32,7 +35,6 @@ type graphicsState struct {
 	frameSupport                                      int
 	probing                                           bool
 }
-type graphicsTimeout struct{}
 type graphicsFrameTimeout struct{ generation uint64 }
 type graphicsCleared struct{ generation uint64 }
 type graphicsWrite struct {
@@ -63,8 +65,9 @@ func newGraphicsState() graphicsState {
 	_, _ = rand.Read(nonce[:])
 	host := strings.ToLower(os.Getenv("LAZYMUSIC_IMAGE_HOST") + " " + os.Getenv("TERM_PROGRAM") + " " + os.Getenv("TERM"))
 	relay := os.Getenv("LAZYMUSIC_IMAGE_BRIDGE") == "osc"
-	return graphicsState{id: termimage.MinID + int(binary.BigEndian.Uint16(nonce[:]))%65535, relay: relay,
-		known:    strings.Contains(host, "ghostty") || strings.Contains(host, "kitty"),
+	confirmed := relay && os.Getenv("LAZYMUSIC_IMAGE_SUPPORTED") == "1"
+	return graphicsState{replied: confirmed, id: termimage.MinID + int(binary.BigEndian.Uint16(nonce[:]))%65535, relay: relay,
+		known:    confirmed || strings.Contains(host, "ghostty") || strings.Contains(host, "kitty"),
 		disabled: os.Getenv("LAZYMUSIC_IMAGE_DISABLE") == "1" || os.Getenv("NVIM") != "" && !relay || os.Getenv("TMUX") != "" || os.Getenv("ZELLIJ") != ""}
 }
 func (g *graphicsState) ready() bool { return !g.disabled && g.replied && g.known }
@@ -78,17 +81,23 @@ func (g *graphicsState) wrap(s string) string {
 // GraphicsCleanup is also emitted after the terminal program has stopped, so
 // interrupted shutdown cannot leave this application's image in GPU storage.
 func (m *Model) GraphicsCleanup() string {
-	if !m.graphics.queried {
-		return ""
+	g := &m.graphics
+	var cleanup string
+	if g.used {
+		cleanup += termimage.Delete(g.id)
 	}
-	return m.graphics.wrap(termimage.Delete(m.graphics.id))
+	if g.queried {
+		cleanup += termimage.Delete(g.probeID())
+	}
+	return g.wrap(cleanup)
 }
 func (m *Model) ClearGraphics() tea.Cmd {
 	g := &m.graphics
 	g.generation++
 	g.active, g.pending, g.preparing, g.probing = false, false, false, false
 	g.sent = ""
-	if cleanup := m.GraphicsCleanup(); cleanup != "" {
+	if g.used {
+		cleanup := g.wrap(termimage.Delete(g.id))
 		g.clearing = true
 		out := graphicsWrite{g.generation, cleanup, graphicsCleared{g.generation}}
 		return func() tea.Msg { return out }
@@ -99,6 +108,13 @@ func (m *Model) ClearGraphics() tea.Cmd {
 // TerminalOutput lets the containing application preserve both output order
 // and its source epoch before handing raw graphics to the terminal renderer.
 func (m *Model) TerminalOutput(msg tea.Msg) (string, tea.Msg, bool) {
+	if query, ok := msg.(graphicsQueryWrite); ok {
+		g := &m.graphics
+		if query.attempt != g.queryGeneration || !g.queryPending || g.disabled || g.replied {
+			return "", nil, false
+		}
+		return g.wrap(termimage.Query(g.probeID())), graphicsQuerySent{query.attempt}, true
+	}
 	out, ok := msg.(graphicsWrite)
 	if !ok || out.generation != m.graphics.generation {
 		return "", nil, false
@@ -136,12 +152,8 @@ func (m *Model) syncGraphics() tea.Cmd {
 		g.target = key
 	}
 	var commands []tea.Cmd
-	if !g.disabled && !g.queried {
-		g.queried = true
-		commands = append(commands, tea.Raw(g.wrap(termimage.Query(g.id))), tea.Tick(1500*time.Millisecond, func(time.Time) tea.Msg { return graphicsTimeout{} }))
-		if !g.relay && !g.known {
-			commands = append(commands, tea.Raw(ansi.RequestXTVersion))
-		}
+	if probe := m.syncGraphicsProbe(); probe != nil {
+		commands = append(commands, probe)
 	}
 	if g.failed == key || g.pending || g.preparing {
 		return tea.Batch(commands...)
@@ -212,7 +224,7 @@ func (m *Model) syncGraphics() tea.Cmd {
 			sequence = termimage.Transmit(g.png, g.id, columns, rows)
 		}
 	}
-	g.pending = true
+	g.pending, g.used = true, true
 	generation := g.generation
 	out := graphicsWrite{generation, g.wrap(sequence), graphicsUploaded{generation, key, columns, rows, g.preparedAngle}}
 	return func() tea.Msg { return out }
@@ -222,24 +234,43 @@ func (m *Model) graphicsMessage(msg tea.Msg) {
 	g := &m.graphics
 	switch msg := msg.(type) {
 	case uv.KittyGraphicsEvent:
-		if msg.Options.ID != g.id || !g.queried {
+		if msg.Options.ID == g.probeID() && g.queried {
+			g.queryPending = false
+			g.checked = true
+			// Positive evidence is sticky for this terminal. A late error can describe
+			// a deleted image or an older probe; it cannot revoke a successful query.
+			if string(msg.Payload) == "OK" {
+				g.replied, g.known = true, true
+			}
 			return
 		}
-		if g.probing || msg.Options.Rows == 1 {
-			if g.probing {
-				g.probing = false
-				g.frameSupport = -1
-				if string(msg.Payload) == "OK" {
-					g.frameSupport = 1
-				}
-			} else if g.frameSupport == 1 && string(msg.Payload) != "OK" {
-				// A terminal can evict or reject a frame. Fall back to complete images.
-				g.frameSupport = -1
-				g.prepared, g.sent = "", ""
+		if msg.Options.ID != g.id || !g.used {
+			return
+		}
+		if g.probing {
+			g.probing = false
+			g.frameSupport = -1
+			if string(msg.Payload) == "OK" {
+				g.frameSupport = 1
 			}
-		} else {
-			g.replied = string(msg.Payload) == "OK"
+		} else if g.frameSupport == 1 && string(msg.Payload) != "OK" {
+			// Frame errors may omit r=1. Retry a complete native image without
+			// confusing a drawing failure with the separate capability query.
+			g.frameSupport = -1
+			g.prepared, g.sent = "", ""
+		}
+	case graphicsQuerySent:
+		if msg.attempt == g.queryGeneration && g.queryPending {
+			g.querySent = true
+		}
+	case graphicsTimeout:
+		if msg.attempt != g.queryGeneration || !g.queryPending || !g.queryTimed || g.replied {
+			return
+		}
+		g.queryPending, g.querySent, g.queryTimed = false, false, false
+		if g.queryAttempts >= graphicsProbeAttempts {
 			g.checked = true
+			m.Report("info", "graphics", "Terminal image query timed out; using pixel artwork until support is confirmed")
 		}
 	case graphicsFrameTimeout:
 		if msg.generation == g.generation && g.probing {
@@ -250,11 +281,6 @@ func (m *Model) graphicsMessage(msg tea.Msg) {
 		name := strings.ToLower(msg.Name)
 		if strings.Contains(name, "ghostty") || strings.Contains(name, "kitty") {
 			g.known = true
-		}
-	case graphicsTimeout:
-		g.checked = true
-		if !g.ready() {
-			m.Report("info", "graphics", "Terminal image protocol unavailable; using pixel artwork")
 		}
 	case graphicsCleared:
 		if msg.generation == g.generation {

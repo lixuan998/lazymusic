@@ -2,15 +2,31 @@
 local M = {}
 local sessions = {}
 local min_id, max_id = 0x6d0001, 0x6dffff
+local verified_ui
+
+-- Proof belongs to the attached host TTYs, not a song, float, buffer or job.
+local function ui_key()
+  local channels = {}
+  for _, ui in ipairs(vim.api.nvim_list_uis()) do
+    if ui.stdout_tty then channels[#channels + 1] = tostring(ui.chan) end
+  end
+  if #channels == 0 then return nil end
+  table.sort(channels)
+  return table.concat(channels, ",")
+end
 
 function M.available()
   return type(vim.api.nvim_ui_send) == "function" and vim.o.termguicolors
-    and #vim.api.nvim_list_uis() > 0 and not vim.env.TMUX and not vim.env.ZELLIJ
+    and ui_key() ~= nil and not vim.env.TMUX and not vim.env.ZELLIJ
+end
+
+function M.confirmed()
+  return M.available() and verified_ui ~= nil and verified_ui == ui_key()
 end
 
 function M.attach(buf, job, hooks)
   hooks = hooks or {}
-  local s = { ids = {}, current = nil, job = job }
+  local s = { ids = {}, probes = {}, current = nil, job = job }
   sessions[buf] = s
   local write = hooks.write or vim.api.nvim_ui_send
   local send = hooks.send or function(data) vim.api.nvim_chan_send(job, data) end
@@ -63,11 +79,12 @@ function M.attach(buf, job, hooks)
         if count >= 2 then return end
         s.ids[id] = true
       end
+      if params.a == "q" then s.probes[id] = true end
       if params.m == "1" then s.current = id else s.current = nil end
       -- Forward only our validated direct graphics commands, never arbitrary
       -- terminal requests, file names or escape sequences from a child process.
       write("\27_G" .. body .. "\27\\")
-      if params.a == "d" then s.ids[id] = nil end
+      if params.a == "d" then s.ids[id], s.probes[id] = nil, nil end
     end,
   })
   vim.api.nvim_create_autocmd("TermResponse", {
@@ -78,6 +95,9 @@ function M.attach(buf, job, hooks)
       if not metadata then return end
       local id = tonumber(("," .. metadata .. ","):match(",i=(%d+),"))
       if id and s.ids[id] and #sequence < 1024 and vim.api.nvim_buf_is_valid(buf) then
+        local payload = sequence:match(";(.+)$")
+        if payload then payload = payload:gsub("\27\\$", "") end
+        if s.probes[id] and payload == "OK" then verified_ui = ui_key() end
         if sequence:sub(-2) ~= "\27\\" then sequence = sequence .. "\27\\" end
         send(sequence)
       end

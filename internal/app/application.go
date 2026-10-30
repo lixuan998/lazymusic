@@ -246,7 +246,9 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		msg.state.UI.Focus = 1
 		msg.state.UI.NavIndex = -1
+		previousMusic := a.music
 		a.music = tui.New(a.ctx, a.client, msg.state, a.keys)
+		a.music.InheritGraphicsSupport(previousMusic)
 		a.music.SetSize(a.width, a.height)
 		a.resetLogin()
 		return a, tea.Sequence(wrapCommand(cleanup, a.epoch), wrapCommand(a.music.Init(), a.epoch))
