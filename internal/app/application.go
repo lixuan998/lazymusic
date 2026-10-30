@@ -239,6 +239,7 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.epoch++
 		a.music.CancelPick()
 		a.music.CancelArtwork()
+		a.music.CancelLyrics()
 		// Connecting is an explicit transition back to the selected source's content.
 		if msg.state.UI.NavPage == "login" || msg.state.UI.Location.Page == "login" {
 			msg.state.UI = session.DefaultUI()

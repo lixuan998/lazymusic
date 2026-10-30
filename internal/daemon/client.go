@@ -14,6 +14,7 @@ import (
 
 	"lazymusic/internal/artwork"
 	"lazymusic/internal/catalog"
+	"lazymusic/internal/lyrics"
 	"lazymusic/internal/session"
 )
 
@@ -110,6 +111,11 @@ func (c *Client) Inspect(ctx context.Context, subject catalog.Subject) (catalog.
 	var details catalog.Details
 	err := c.call(ctx, http.MethodPost, "/v1/inspect", subject, &details)
 	return details, err
+}
+func (c *Client) Lyrics(ctx context.Context, subject catalog.Subject) (lyrics.Document, error) {
+	var doc lyrics.Document
+	err := c.call(ctx, http.MethodPost, "/v1/lyrics", subject, &doc)
+	return doc, err
 }
 func (c *Client) Artwork(ctx context.Context, subject catalog.Subject) (artwork.Image, error) {
 	var im artwork.Image

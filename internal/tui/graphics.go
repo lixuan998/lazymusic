@@ -25,8 +25,15 @@ type graphicsState struct {
 	png                                               []byte
 	scene                                             image.Image
 	columns, rows                                     int
+	coverKey                                          string
+	renderer                                          *turntable.Renderer
+	preparedAngle, sentAngle                          float64
+	preparedPatch                                     bool
+	frameSupport                                      int
+	probing                                           bool
 }
 type graphicsTimeout struct{}
+type graphicsFrameTimeout struct{ generation uint64 }
 type graphicsCleared struct{ generation uint64 }
 type graphicsWrite struct {
 	generation uint64
@@ -39,11 +46,16 @@ type graphicsPrepared struct {
 	png        []byte
 	scene      image.Image
 	err        error
+	renderer   *turntable.Renderer
+	angle      float64
+	patch      bool
+	coverKey   string
 }
 type graphicsUploaded struct {
 	generation    uint64
 	key           string
 	columns, rows int
+	angle         float64
 }
 
 func newGraphicsState() graphicsState {
@@ -74,7 +86,7 @@ func (m *Model) GraphicsCleanup() string {
 func (m *Model) ClearGraphics() tea.Cmd {
 	g := &m.graphics
 	g.generation++
-	g.active, g.pending, g.preparing = false, false, false
+	g.active, g.pending, g.preparing, g.probing = false, false, false, false
 	g.sent = ""
 	if cleanup := m.GraphicsCleanup(); cleanup != "" {
 		g.clearing = true
@@ -106,13 +118,22 @@ func (m *Model) syncGraphics() tea.Cmd {
 		}
 		return nil
 	}
-	key := m.turntableSceneKey()
+	key, coverKey := m.turntableSceneKey(), m.turntableCoverKey()
 	if g.target != key {
-		cleanup := m.ClearGraphics()
-		g.target = key
-		if cleanup != nil {
-			return cleanup
+		if g.active && g.coverKey == coverKey {
+			// Keep the current image on screen while changing only its LED state.
+			// Song/source changes still clear immediately to avoid stale album art.
+			g.generation++
+			g.pending, g.preparing, g.probing = false, false, false
+			g.prepared = ""
+		} else {
+			cleanup := m.ClearGraphics()
+			g.target = key
+			if cleanup != nil {
+				return cleanup
+			}
 		}
+		g.target = key
 	}
 	var commands []tea.Cmd
 	if !g.disabled && !g.queried {
@@ -125,15 +146,50 @@ func (m *Model) syncGraphics() tea.Cmd {
 	if g.failed == key || g.pending || g.preparing {
 		return tea.Batch(commands...)
 	}
-	if g.prepared != key {
+	if g.active && g.sent == key && g.frameSupport == 0 && !g.probing && m.recordCoverVisible() && m.artwork.image.Valid() && m.rhythmPlaying() {
+		g.probing = true
+		generation := g.generation
+		out := graphicsWrite{generation: generation, data: g.wrap(termimage.ProbeFrames(g.id))}
+		return tea.Batch(func() tea.Msg { return out }, tea.Tick(time.Second, func(time.Time) tea.Msg { return graphicsFrameTimeout{generation} }))
+	}
+	if g.probing {
+		return nil
+	}
+	angle := m.record.angle
+	newScene := g.prepared != key
+	// Upload a completed frame before accepting a newer clock angle. Otherwise
+	// rendering that takes longer than one tick can starve output indefinitely.
+	newFrame := g.renderer != nil && g.preparedAngle != angle && (!g.ready() || g.sent == key && g.sentAngle == g.preparedAngle)
+	fullImageNeeded := g.preparedPatch && (!g.active || g.frameSupport != 1)
+	pngNeeded := g.ready() && len(g.png) == 0
+	if newScene || newFrame || fullImageNeeded || pngNeeded {
 		g.preparing = true
-		generation, im := g.generation, m.artwork.image
-		if m.State.Playback.Track == nil {
+		generation, im, renderer := g.generation, m.artwork.image, g.renderer
+		if !m.recordCoverVisible() {
 			im = artwork.Image{}
 		}
+		if g.coverKey != coverKey {
+			renderer = nil
+		}
+		patch := g.active && g.sent == key && g.frameSupport == 1
+		encode := g.ready()
+		appearance := m.turntableAppearance()
 		commands = append(commands, func() tea.Msg {
-			scene, err := turntable.Compose(im)
-			return graphicsPrepared{generation: generation, key: key, png: scene.PNG, scene: scene.Pixels, err: err}
+			var err error
+			if renderer == nil {
+				renderer, err = turntable.NewRendererState(im, appearance)
+			} else {
+				renderer = renderer.WithState(appearance)
+			}
+			var scene turntable.Scene
+			if err == nil {
+				if encode {
+					scene, err = renderer.Render(angle, patch)
+				} else {
+					scene.Pixels = renderer.Image(angle)
+				}
+			}
+			return graphicsPrepared{generation: generation, key: key, png: scene.PNG, scene: scene.Pixels, err: err, renderer: renderer, angle: angle, patch: patch, coverKey: coverKey}
 		})
 	}
 	if len(commands) > 0 {
@@ -144,16 +200,21 @@ func (m *Model) syncGraphics() tea.Cmd {
 	}
 	w, h := m.turntableSize()
 	_, _, columns, rows := turntableImageRect(w, m.turntableGraphicHeight(h, w))
-	if g.active && g.sent == key && g.columns == columns && g.rows == rows {
+	if g.active && g.sent == key && g.columns == columns && g.rows == rows && g.sentAngle == g.preparedAngle {
 		return nil
 	}
 	sequence := termimage.Placement(g.id, columns, rows)
-	if g.sent != key {
-		sequence = termimage.Transmit(g.png, g.id, columns, rows)
+	if g.sent != key || g.sentAngle != g.preparedAngle {
+		if g.preparedPatch && g.sent == key {
+			box := turntable.CoverBounds()
+			sequence = termimage.UpdateFrame(g.png, g.id, box.Min.X, box.Min.Y) + sequence
+		} else {
+			sequence = termimage.Transmit(g.png, g.id, columns, rows)
+		}
 	}
 	g.pending = true
 	generation := g.generation
-	out := graphicsWrite{generation, g.wrap(sequence), graphicsUploaded{generation, key, columns, rows}}
+	out := graphicsWrite{generation, g.wrap(sequence), graphicsUploaded{generation, key, columns, rows, g.preparedAngle}}
 	return func() tea.Msg { return out }
 }
 
@@ -161,9 +222,29 @@ func (m *Model) graphicsMessage(msg tea.Msg) {
 	g := &m.graphics
 	switch msg := msg.(type) {
 	case uv.KittyGraphicsEvent:
-		if msg.Options.ID == g.id && g.queried {
+		if msg.Options.ID != g.id || !g.queried {
+			return
+		}
+		if g.probing || msg.Options.Rows == 1 {
+			if g.probing {
+				g.probing = false
+				g.frameSupport = -1
+				if string(msg.Payload) == "OK" {
+					g.frameSupport = 1
+				}
+			} else if g.frameSupport == 1 && string(msg.Payload) != "OK" {
+				// A terminal can evict or reject a frame. Fall back to complete images.
+				g.frameSupport = -1
+				g.prepared, g.sent = "", ""
+			}
+		} else {
 			g.replied = string(msg.Payload) == "OK"
 			g.checked = true
+		}
+	case graphicsFrameTimeout:
+		if msg.generation == g.generation && g.probing {
+			g.probing = false
+			g.frameSupport = -1
 		}
 	case tea.TerminalVersionMsg:
 		name := strings.ToLower(msg.Name)
@@ -191,11 +272,12 @@ func (m *Model) graphicsMessage(msg tea.Msg) {
 		}
 		g.prepared, g.png = msg.key, msg.png
 		g.scene = msg.scene
+		g.renderer, g.preparedAngle, g.preparedPatch, g.coverKey = msg.renderer, msg.angle, msg.patch, msg.coverKey
 	case graphicsUploaded:
 		if msg.generation != g.generation || msg.key != g.target || !g.pending {
 			return
 		}
 		g.pending, g.active = false, true
-		g.sent, g.columns, g.rows = msg.key, msg.columns, msg.rows
+		g.sent, g.columns, g.rows, g.sentAngle = msg.key, msg.columns, msg.rows, msg.angle
 	}
 }

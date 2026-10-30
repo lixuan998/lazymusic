@@ -56,7 +56,7 @@ func (m *Model) CancelArtwork() {
 }
 
 func (m *Model) syncArtwork() tea.Cmd {
-	if !m.turntableVisible() || m.State.Playback.Track == nil {
+	if !m.turntableVisible() || !m.recordCoverVisible() {
 		if m.artwork.loading {
 			m.CancelArtwork()
 		}

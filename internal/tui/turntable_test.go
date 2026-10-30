@@ -72,7 +72,7 @@ func TestHeaderAndComfortablePlayerFrame(t *testing.T) {
 	}
 }
 
-func TestTurntableCoverMetadataAndResponsiveLayouts(t *testing.T) {
+func TestTurntableLyricsAndResponsiveLayouts(t *testing.T) {
 	for _, size := range [][2]int{{60, 16}, {80, 24}, {100, 30}, {160, 50}} {
 		for _, logs := range []bool{false, true} {
 			m, _ := testModel()
@@ -94,10 +94,8 @@ func TestTurntableCoverMetadataAndResponsiveLayouts(t *testing.T) {
 	m, _ := testModel()
 	m.State.Playback.Track = &music.Track{Title: "Song", Album: "Album", Artist: "Artist"}
 	rows := strings.Join(m.turntableRows(26, 20), "\n")
-	for _, label := range []string{"ALBUM", "Album", "ARTIST", "Artist", "TRACK", "Song"} {
-		if !strings.Contains(ansi.Strip(rows), label) {
-			t.Fatal("missing turntable metadata", label)
-		}
+	if !strings.Contains(ansi.Strip(rows), "No Lyrics Available") || strings.Contains(ansi.Strip(rows), "Artist") {
+		t.Fatal("turntable repeated metadata instead of lyrics")
 	}
 	m.UI.Focus = 5
 	m.normal(",")
@@ -170,5 +168,51 @@ func TestZenTurntableDimensionsStayInsideViewport(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestRecordPlaybackPauseResumeStopAndHiddenClock(t *testing.T) {
+	m, _ := testModel()
+	m.UI.Visualizer = turntableView
+	m.State.Playback.Track = &music.Track{ID: "song"}
+	m.State.Playback.Playing = true
+	m.artwork.image = artwork.Image{Width: 1, Height: 1, RGB: []byte{200, 80, 40}}
+	now := time.Now()
+	if m.syncRecord(now) == nil {
+		t.Fatal("playing cover did not start rotating")
+	}
+	m.advanceRecord(recordFrame{m.record.generation, now.Add(recordFrameInterval)})
+	angle := m.record.angle
+	if angle <= 0 {
+		t.Fatal("record did not advance")
+	}
+	m.syncRecord(now.Add(recordFrameInterval))
+	stale := m.record.generation
+	m.State.Playback.Playing = false
+	m.State.Playback.Status = "paused"
+	if m.syncRecord(now.Add(time.Second)) != nil || m.record.running {
+		t.Fatal("paused record still runs")
+	}
+	m.advanceRecord(recordFrame{stale, now.Add(2 * time.Second)})
+	if m.record.angle != angle || !m.recordCoverVisible() {
+		t.Fatal("pause changed angle or removed cover")
+	}
+	m.State.Playback.Playing = true
+	m.syncRecord(now.Add(time.Hour))
+	m.advanceRecord(recordFrame{m.record.generation, now.Add(time.Hour + recordFrameInterval)})
+	if m.record.angle-angle > .03 {
+		t.Fatal("resume jumped by time spent paused")
+	}
+	m.syncRecord(now.Add(time.Hour + recordFrameInterval))
+	m.UI.Layout = "queue"
+	if m.syncRecord(now.Add(2*time.Hour)) != nil || m.record.running {
+		t.Fatal("hidden record keeps drawing")
+	}
+	m.UI.Layout = "full"
+	m.State.Playback.Playing = false
+	m.State.Playback.Status = "stopped"
+	m.syncRecord(now.Add(3 * time.Hour))
+	if m.record.angle != 0 || m.recordCoverVisible() {
+		t.Fatal("stop did not reset and hide the cover")
 	}
 }

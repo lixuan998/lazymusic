@@ -47,6 +47,37 @@ func Transmit(png []byte, id, columns, rows int) string {
 	return out.String()
 }
 
+// ProbeFrames alpha-blends one transparent pixel onto the existing root frame.
+// A reply proves frame editing works without changing any visible pixels.
+func ProbeFrames(id int) string {
+	// Use raw transparent RGBA to keep this probe independent of PNG decoders.
+	return fmt.Sprintf("\x1b_Ga=f,i=%d,r=1,f=32,t=d,s=1,v=1,q=0,m=0;AAAAAA==\x1b\\", id)
+}
+
+// UpdateFrame edits the root frame in place. Every chunk identifies this frame;
+// no images or animation frames accumulate in the terminal's image store.
+func UpdateFrame(png []byte, id, x, y int) string {
+	data := base64.StdEncoding.EncodeToString(png)
+	var out strings.Builder
+	for first := true; len(data) > 0; first = false {
+		n := min(4096, len(data))
+		more := 0
+		if n < len(data) {
+			more = 1
+		}
+		if first {
+			fmt.Fprintf(&out, "\x1b_Ga=f,i=%d,r=1,x=%d,y=%d,X=1,f=100,t=d,q=1,m=%d;", id, x, y, more)
+		} else {
+			fmt.Fprintf(&out, "\x1b_Ga=f,i=%d,r=1,q=1,m=%d;", id, more)
+		}
+		out.WriteString(data[:n])
+		out.WriteString("\x1b\\")
+		data = data[n:]
+	}
+	fmt.Fprintf(&out, "\x1b_Ga=a,i=%d,c=1,s=1,q=2\x1b\\", id)
+	return out.String()
+}
+
 // Relay wraps the same bounded graphics commands for a buffer-local Neovim
 // TermRequest handler. OSC is also understood by older embedded terminals.
 func Relay(commands string) string {

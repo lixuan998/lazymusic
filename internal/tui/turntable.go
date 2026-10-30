@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"lazymusic/internal/termimage"
+	"lazymusic/internal/turntable"
 )
 
 func centered(s string, w int) string {
@@ -14,9 +15,19 @@ func centered(s string, w int) string {
 	return fit(strings.Repeat(" ", max(0, (w-ansi.StringWidth(s))/2))+s, w)
 }
 
-func (m *Model) turntableSceneKey() string {
+func (m *Model) turntableAppearance() turntable.Appearance {
+	if !m.recordCoverVisible() {
+		return turntable.Stopped
+	}
+	if m.rhythmPlaying() {
+		return turntable.Playing
+	}
+	return turntable.Paused
+}
+
+func (m *Model) turntableCoverKey() string {
 	key := m.State.Source.ID + "|empty"
-	if t := m.State.Playback.Track; t != nil {
+	if t := m.State.Playback.Track; m.recordCoverVisible() {
 		key = m.State.Source.ID + "|" + t.ID
 		if m.artwork.image.Valid() {
 			key += "|" + m.artwork.key
@@ -25,26 +36,15 @@ func (m *Model) turntableSceneKey() string {
 	return key
 }
 
+func (m *Model) turntableSceneKey() string {
+	return fmt.Sprintf("%s|state:%d", m.turntableCoverKey(), m.turntableAppearance())
+}
+
 func (m *Model) turntableRows(w, h int) []string {
 	if w <= 0 || h <= 0 {
 		return nil
 	}
-	album, artist, title := "No album", "No artist", "Choose a song"
-	if t := m.State.Playback.Track; t != nil {
-		album, artist, title = plain(t.Album), plain(t.Artist), plain(t.Title)
-		if album == "" {
-			album = "Unknown album"
-		}
-		if artist == "" {
-			artist = "Unknown artist"
-		}
-	}
-	var metadata []string
-	if h >= 14 {
-		metadata = []string{muted.Render(centered("ALBUM", w)), text.Render(centered(album, w)), muted.Render(centered("ARTIST", w)), text.Render(centered(artist, w)), muted.Render(centered("TRACK", w)), accent.Bold(true).Render(centered(title, w))}
-	} else {
-		metadata = []string{muted.Render("▤ ") + text.Render(album), muted.Render("♬ ") + text.Render(artist), accent.Render("♪ " + title)}
-	}
+	lyricRows := m.lyricRows(w, m.lyricsHeight(h))
 	var rows []string
 	if h >= 7 {
 		graphicH := m.turntableGraphicHeight(h, w)
@@ -54,24 +54,19 @@ func (m *Model) turntableRows(w, h int) []string {
 		}
 		left, top, columns, height := turntableImageRect(w, graphicH)
 		g, key := m.graphics, m.turntableSceneKey()
-		label := "Preparing turntable…"
+
 		var picture []string
-		if g.active && g.sent == key && g.columns == columns && g.rows == height {
+		if g.active && (g.sent == key || g.coverKey == m.turntableCoverKey()) && g.columns == columns && g.rows == height {
 			picture = termimage.PlaceholderRows(g.id, columns, height)
-			label = "VINYL · " + playbackIcon(m.State.Playback.Status, m.State.Playback.Playing, m.State.Playback.Loading)
 		} else if g.scene != nil && g.prepared == key && (g.disabled || g.checked && !g.ready() || g.failed == key) {
 			picture = bitmapRows(g.scene, columns, height)
-			label = "PIXEL · " + playbackIcon(m.State.Playback.Status, m.State.Playback.Playing, m.State.Playback.Loading)
 		}
 		for y, line := range picture {
 			rows[top+y] = fit(strings.Repeat(" ", left)+line, w)
 		}
-		if m.artwork.loading {
-			label = "Loading artwork…"
-		}
-		rows = append(rows, muted.Render(centered(label, w)))
+		rows = append(rows, "")
 	}
-	rows = append(rows, metadata...)
+	rows = append(rows, lyricRows...)
 	if len(rows) > h {
 		rows = rows[len(rows)-h:]
 	}
@@ -87,11 +82,7 @@ func (m *Model) turntableRows(w, h int) []string {
 }
 
 func (m *Model) turntableGraphicHeight(h, w int) int {
-	metadata := 3
-	if h >= 14 {
-		metadata = 6
-	}
-	return min(max(3, (w+2)/3), h-metadata-1)
+	return min(max(3, (w+2)/3), h-m.lyricsHeight(h)-1)
 }
 
 // The entire 3:2 photograph shares one placement. The cover's center is fixed

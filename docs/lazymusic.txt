@@ -53,7 +53,16 @@ Near the queue ends, the view clamps to the first/last page. Queue scrolling
 is saved with the session. Global: </> previous/next, Ctrl+< / Ctrl+> seek 10s, x stop,
 m playback mode. Queue/Player: r repeat, s shuffle. Player: b quality.
 Sound: ,/. cycles Pulse / Wave / Equalizer / Turntable. The turntable embeds
-the current album cover in a vinyl player, with album, artist and song below.
+a large circular album cover in the vinyl player, leaving a narrow black rim.
+It rotates clockwise while playing, freezes on pause and disappears on stop.
+The chassis stays still. The needle rests on the disc while playing/paused
+and parks off the disc on stop. The indicator is lit only while playing. Below it, timed lyrics scroll with the
+current line centered and highlighted; seeking relocates the active line.
+Missing synchronized lyrics show "No Lyrics Available". Apple Music uses
+LRCLIB exact metadata matching (title, artist, album and duration), with a
+short timeout and a public NetEase Music fallback. The fallback checks the
+exact title, all artists and duration, rejecting remixes and covers. Apple
+credentials are never sent to either lyric service. LOCAL reads a same-name adjacent .lrc file.
 Apple Music loads cover art automatically. LOCAL reads adjacent cover.jpg,
 cover.jpeg/png, folder.jpg/png or front.jpg/png (case-insensitive). Missing
 covers use a default record. Ghostty/Kitty display a high-resolution photograph
@@ -62,7 +71,10 @@ centered on the platter in the same PNG. Cell rounding and font sizes cannot
 offset it from the chassis.
 The photographic asset is embedded in the binary. Direct image transfer also
 works across SSH/WSL. Resize and normal/Zen changes update placement without
-re-uploading the same work. Unsupported terminals approximate the whole image.
+re-uploading the current frame. Rotation edits the disc region when supported;
+older terminals receive complete images. Only one frame is prepared/sent at a
+time, so slow connections do not queue historical frames. Pause and hidden
+views stop the animation clock. Unsupported terminals approximate the whole image.
 Unsupported terminals fall back to color half-block images. Set
 LAZYMUSIC_IMAGE_DISABLE=1 to force this fallback. tmux/zellij default to it.
 Native images in the Nvim float require Nvim 0.12+, termguicolors, and the
@@ -71,7 +83,7 @@ The relay handles only buffer-local direct image commands and cleans up its
 own images when the music terminal exits; it cannot access arbitrary files.
 Cover requests are cancellable and cached in memory, never in the session.
 The header is framed; Player expands vertically with separate metadata,
-progress and status rows. Small terminals use a compact layout.
+progress and status rows, using a solid half-height progress bar. Small terminals use a compact layout.
 Sound EQ: h/l band, j/k gain, e bypass, r flat, p preset.
 Content p/P picks a song or collection. Queue p/P picks a song when nothing is
 held; then p places after the cursor song, P places before it. Esc cancels.

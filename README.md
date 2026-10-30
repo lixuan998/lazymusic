@@ -249,15 +249,17 @@ Ubuntu 22.04 默认的 C++ 运行库可能无法启动官方授权组件（缺�
 
 同一个字母可以在不同面板复用，如 Content / Queue / Player 的 `a`、Content / Queue 的 `d`，以及 Content / Sound 的 `p`。全局 `m` 轮转播放模式；`r/s` 只在 Queue / Player 调整循环和随机。Content 刷新用 `r`，Search 范围用 `s`，EQ 归零用 `r`。尺寸调节统一用大写 `H/J/K/L`，Queue 调序用 `[/]`，Login 使用 Navigation 或 `:login`。
 
-窗口 6 的 **Turntable** 是黑胶播放台：在 Navigation / Sound 用 `,/.` 切换，封面嵌入唱片，下面展示专辑、艺人和歌名。机身和封面统一以高清图片呈现，播放状态在下方显示。Apple Music 自动获取当前曲目的封面；LOCAL 读取同目录的 `cover.jpg/jpeg/png`、`folder.jpg/png` 或 `front.jpg/png`（文件名不区分大小写）。没有封面时显示默认唱片。封面只在内存中缓存，切歌与隐藏视图会取消旧请求。
+窗口 6 的 **Turntable** 是黑胶播放台：在 Navigation / Sound 用 `,/.` 切换，圆形封面铺满唱片，仅留窄黑边；播放时顺时针旋转，暂停时定格，停止时隐藏封面并恢复默认唱片。播放 / 暂停时唱针落在唱片上，停止时移回右侧停靠位；指示灯只在播放时亮起。机身保持静止。下方显示同步歌词，当前句居中高亮，前后句随进度滚动，快进 / 回退自动重新定位。无同步歌词时显示 `No Lyrics Available`。Apple Music 自动获取当前曲目的封面；LOCAL 读取同目录的 `cover.jpg/jpeg/png`、`folder.jpg/png` 或 `front.jpg/png`（文件名不区分大小写）。没有封面时显示默认唱片。封面只在内存中缓存，切歌与隐藏视图会取消旧请求。
 
-在 Ghostty / Kitty 中，整台留声机使用高清图片显示；封面等比取中、裁成带平滑边缘的圆形，与唱盘中心重合，合成为同一张 PNG 后整体缩放，避免封面与机身因字符格取整而错位。机身素材随二进制内嵌，不需要额外安装图片文件；素材和生成提示词位于 [`internal/turntable/assets`](internal/turntable/assets)。通过 [Kitty 图像协议](https://sw.kovidgoyal.net/kitty/graphics-protocol/) 直接传输，支持终端在 SSH / WSL 的另一端。窗口缩放及普通 / Zen 布局切换只更新图片位置和显示尺寸，不重复上传同一作品的图片。终端不支持协议时，整张播放台图片统一回退为彩色像素图；`LAZYMUSIC_IMAGE_DISABLE=1` 可强制回退。tmux / zellij 当前默认使用像素图。
+在 Ghostty / Kitty 中，整台留声机使用高清图片显示；封面等比取中、裁成带平滑边缘的圆形，与唱盘中心重合，合成为同一张 PNG 后整体缩放，避免封面与机身因字符格取整而错位。机身素材随二进制内嵌，不需要额外安装图片文件；素材和生成提示词位于 [`internal/turntable/assets`](internal/turntable/assets)。通过 [Kitty 图像协议](https://sw.kovidgoyal.net/kitty/graphics-protocol/) 直接传输，支持终端在 SSH / WSL 的另一端。窗口缩放及普通 / Zen 布局切换复用当前图片。旋转优先使用终端的局部帧更新，只传输唱片区域；旧终端不支持帧更新时使用完整图片刷新。前端独立计时且同一时间只生成 / 发送一帧，慢连接不会堆积历史帧。暂停、隐藏视图后停止动画。终端不支持协议时，整张播放台图片统一回退为彩色像素图；`LAZYMUSIC_IMAGE_DISABLE=1` 可强制回退。tmux / zellij 当前默认使用像素图。
+
+歌词来源：Apple Music 优先使用公开的 [LRCLIB](https://lrclib.net/docs) 按曲名、艺人、专辑和时长匹配同步歌词；该服务超时或没有结果时，转用 [网易云音乐](https://music.163.com) 的公开歌词，严格校验曲名、全部艺人和时长，避免匹配到翻唱或 Remix。只发送歌曲元数据，不发送 Apple 授权信息；当前 MusicKit 授权不包含歌词正文接口。LOCAL 读取音乐文件同目录、同名的 UTF-8 `.lrc`（如 `song.flac` 对应 `song.lrc`，扩展名不区分大小写）。缺失、无时间轴、版本不匹配或服务不可用时显示缺省提示，不猜测歌词时间。歌词只缓存在内存中，切歌、切换来源和隐藏播放台会取消旧请求。
 
 Zen 模式中，聚焦窗口 6 后用 `,/.` 在 **Pulse → Wave → Turntable** 之间循环，右侧 Equalizer 和底部 Player 始终保留；`h/l`、`j/k` 继续调节 EQ，`H/J/K/L` 调整尺寸。不会把 EQ 当作重复的波形视图插入循环。
 
 Neovim 浮窗通过随附插件转发图片协议；原图显示需要 **Neovim 0.12+** 和 `termguicolors`（使用 [nvim_ui_send](https://neovim.io/doc/user/api/#nvim_ui_send())）。旧版 Neovim 仍能运行 TUI，并使用像素图。更新时运行 `make install`，将二进制与插件一起更新。
 
-顶部品牌、当前页面和来源统一放在边框内；Player 默认加高，分行显示曲目、艺人 / 专辑、进度、播放状态、系统音量和模式 / 音质。小终端自动收紧布局，仍可用 `H/J/K/L` 调整。
+顶部品牌、当前页面和来源统一放在边框内；Player 使用半行高度的实心进度条，默认加高，分行显示曲目、艺人 / 专辑、进度、播放状态、系统音量和模式 / 音质。小终端自动收紧布局，仍可用 `H/J/K/L` 调整。
 
 拾取的内容会以 `◆` 和底部状态提示显示。从 Queue 拾取再放置是移动；从 Content 拾取后放置是复制加入。单曲插入一首，album / playlist 插入其全部歌曲，artist 会展开其专辑中的全部歌曲，包含分页，按来源顺序整体插入；空 Queue 直接插入。集合准备期间可继续导航，`Esc` 取消准备；提交放置后等待结果，重复按键不会重复插入。拾取状态只在当前前端保留，Queue 的滚动位置随 session 保存。若队列已经变化，放置会要求重新选择位置，避免使用旧索引修改错误的歌曲。
 

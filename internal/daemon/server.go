@@ -44,6 +44,7 @@ type cachedPage struct {
 
 type Service struct {
 	artworks          []cachedArtwork
+	lyricsCache       []cachedLyrics
 	logs              *eventlog.Store
 	mixer             *volume.Controller
 	lastOp            string
@@ -717,6 +718,20 @@ func (s *Service) Handler() http.Handler {
 			return
 		}
 		write(w, details)
+	})
+	mux.HandleFunc("POST /v1/lyrics", func(w http.ResponseWriter, r *http.Request) {
+		var subject catalog.Subject
+		if !decode(w, r, &subject) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+		defer cancel()
+		doc, err := s.lyrics(ctx, subject)
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		write(w, doc)
 	})
 	mux.HandleFunc("POST /v1/artwork", func(w http.ResponseWriter, r *http.Request) {
 		var subject catalog.Subject

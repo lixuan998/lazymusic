@@ -65,7 +65,7 @@ func (m *Model) playerBox(w int) string {
 			filled = int(float64(s.Position) / float64(total) * float64(width))
 		}
 		filled = min(width, max(0, filled))
-		return accent.Render(strings.Repeat("━", filled)) + muted.Render(strings.Repeat("─", width-filled))
+		return accent.Render(strings.Repeat("▄", filled)) + muted.Render(strings.Repeat("▄", width-filled))
 	}
 	h, inner := m.playerHeight(), w-4
 	artistAlbum := artist

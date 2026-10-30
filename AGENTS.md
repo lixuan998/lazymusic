@@ -20,11 +20,12 @@
 - `internal/eventlog/`：有界历史、脱敏、持久化与轮转。
 - `internal/tui/`：`model.go` 接收异步状态，`actions.go` 分发按键，`browse.go` 管理查询/分类，`navigation.go` 管理层级与焦点，`panels.go` 管理布局/日志/动画，`sound.go` 管理尺寸、Zen 和均衡器，`edit.go` 管理添加/创建与歌单选择流程，`view.go` 渲染，`keys.go` 定义 Global/面板绑定，`help.go` 从同一注册表生成上下文帮助，`keyboard.go` 区分修饰键与文本。
 - `internal/tui/animation.go`：独立前端 30 FPS 时钟、播放/暂停与样式过渡、旧帧取消；`rhythm.go`：Pulse/Wave 的纯字符网格渲染。动画状态不持久化，不调用 IPC 或 dirty；隐藏、弹窗遮盖及暂停收束后停帧。不能以轮询进度驱动逐帧时间；没有 PCM 数据时不得称为实时频谱。
-- `internal/artwork/`：有界 JPEG/PNG 原图和 96×96 RGB 回退图；`catalog.ArtworkProvider` 为可选来源合约，通过 daemon 的 artwork IPC 返回已校验的原始编码与回退像素，不向 TUI 暴露 URL 或任意文件路径。Apple 图片请求仅允许 HTTPS mzstatic.com CDN，不发送 API 授权头 / cookie；LOCAL 封面必须在音乐根目录内且为普通文件。封面不写 session / 磁盘缓存。`tui/artwork.go` 管理异步加载、取消和 generation。`internal/turntable/` 内嵌高清机身 PNG，以图片像素坐标确定唱盘中心，保留封面比例并合成单张完整场景，禁止分别按字符格放置封面与机身。素材替换必须同步中心坐标、尺寸、生成提示词与居中回归测试。`termimage/` 实现 Kitty 直接图片传输及 Unicode placement；`tui/graphics.go` 探测协议、异步准备场景、按 generation 串行输出、缩放和清理。无协议时将同一场景转为半格回退图；原生场景静止，不启动逐帧时钟、不在动画帧重复上传图片，不删除其他程序的图片。application 必须校验 source epoch 后再发 RawMsg；graphicsWrite 的输出 / 完成事件有序处理，不能被包裹器吞掉。`player_view.go` 负责顶部边框和自适应播放条；改变高度时必须校验 Queue 的实际可见行数。
+- `internal/artwork/`：有界 JPEG/PNG 原图和 96×96 RGB 回退图；`catalog.ArtworkProvider` 为可选来源合约，通过 daemon 的 artwork IPC 返回已校验的原始编码与回退像素，不向 TUI 暴露 URL 或任意文件路径。Apple 图片请求仅允许 HTTPS mzstatic.com CDN，不发送 API 授权头 / cookie；LOCAL 封面必须在音乐根目录内且为普通文件。封面不写 session / 磁盘缓存。`tui/artwork.go` 管理异步加载、取消和 generation。`internal/turntable/` 内嵌高清机身 PNG，以图片像素坐标确定唱盘中心，保留封面比例并合成单张完整场景，禁止分别按字符格放置封面与机身。素材替换必须同步中心坐标、尺寸、生成提示词与居中回归测试。`termimage/` 实现 Kitty 直接图片传输及 Unicode placement；`tui/graphics.go` 探测协议、异步准备场景、按 generation 串行输出、缩放和清理。无协议时将同一场景转为半格回退图；播放台使用独立前端旋转时钟，不能轮询服务或写 session 驱动帧；暂停立即停帧并保留角度，停止隐藏封面并复位。唱针播放 / 暂停时在唱片上、停止时停靠到右侧；指示灯只有实际播放时亮，暂停 / 缓冲 / 错误 / 停止均熄灭。播放态素材与停止态素材同尺寸内嵌，暂停只更换指示灯区域，不重解码封面，不把状态改动持久化。优先探测并修改私有图像的 root frame，仅上传唱片区域，不累积终端动画帧；不支持时刷新完整图像，同一时间只准备 / 发送一帧，防止慢连接积压。像素回退延迟采样同一图像，不逐帧编码 PNG。不得删除其他程序的图片。application 必须校验 source epoch 后再发 RawMsg；graphicsWrite 的输出 / 完成事件有序处理，不能被包裹器吞掉。`player_view.go` 负责顶部边框和自适应播放条；改变高度时必须校验 Queue 的实际可见行数。
+- `internal/lyrics/`：平台无关的有界 LRC 时间轴、当前位置查找与 LRCLIB 精确元数据查询。`catalog.LyricsProvider` 为可选来源接口；LOCAL 只读音乐根目录内同名普通 `.lrc`，Apple 只把曲名、艺人、专辑和时长发到固定 HTTPS 公共服务（LRCLIB，超时 / 无结果时回退网易云音乐公开歌词并严格比对标题、全部艺人和时长），不转发账户头 / cookie / token。尊重 Retry-After，不做模糊匹配或猜测时间轴。`daemon/lyrics.go` 提供来源隔离的只读 IPC 与有界内存缓存；`tui/lyrics.go` 管理取消、generation、播放位置插值及当前句居中高亮。歌词不写 session / 磁盘 / 日志，缺失或失败只显示 No Lyrics Available；隐藏、切歌、切来源取消请求和时钟。
 - `internal/vibez/`：固定版本的第三方原生播放子集。保留来源与许可证；变更需同步 `third_party/vibez-session.patch`、摘要或 local_additions。
 - `scripts/`：仅保留依赖准备和第三方代码导入等维护工具。不要加入一次性实测脚本、账号探针、构建产物或测试报告。
 - `lua/lazymusic/`：Neovim 浮动终端插件，可通过 lazy.nvim 加载；`docs/lazymusic.txt` 为帮助，安装时部署到插件的 doc/；`tests/nvim_spec.lua` 为独立 headless 回归测试。插件只启动/复用 TUI，不另建播放或授权逻辑。
-- `lua/lazymusic/graphics.lua`：Neovim 0.12+ / termguicolors 下的 buffer-local OSC 图片中继。只允许本程序私有 ID 范围内的 Kitty query / 直接 PNG 虚拟 placement / 清理命令，禁止文件或共享内存传输和任意控制序列。TermResponse 按拥有的 ID 返回对应子进程；只清理自己持有的图片。安装时同步部署此模块。旧版 Neovim、GUI 无 stdout TTY、tmux/zellij 保留像素回退，不假装原图已经显示。
+- `lua/lazymusic/graphics.lua`：Neovim 0.12+ / termguicolors 下的 buffer-local OSC 图片中继。只允许本程序私有 ID 范围内的 Kitty query / 直接 PNG 虚拟 placement / root-frame 局部编辑和停止控制 / 清理命令，禁止文件或共享内存传输和任意控制序列。TermResponse 按拥有的 ID 返回对应子进程；只清理自己持有的图片。安装时同步部署此模块。旧版 Neovim、GUI 无 stdout TTY、tmux/zellij 保留像素回退，不假装原图已经显示。
 
 ## 增加音乐平台
 
@@ -45,7 +46,7 @@
 - 登录组件 stdout/stderr 共用有界过滤器，兼容 ANSI、CR 和无末尾换行；原始输出不能写日志。只向 UI 返回白名单错误类别、严格格式的库名/ABI/HTTP 状态。不得用统一的 try again 吞掉具体原因。手动 URL 必须在最小 60×16 窗口也完整可见，Login 的 y 按当前绑定复制完整 URL；不以剪贴板请求等同于已确认复制成功。
 - 普通字符按终端生成的文本处理，保留基本键位消歧和备用字符码；不要在缺少关联文本时强制所有字符用 CSI-u 上报，否则 Shift+/ 等符号会退化成原键。所有页面与弹窗共用同一键盘协议配置。
 - h/l 在面板内进退，Ctrl-h/j/k/l 切焦点。`,.` 必须按当前焦点分发：Navigation 动画、Content 分类、Player 播放模式；Sound 提供 Pulse/Wave/真实 EQ。Queue/Log 不得隐式操作旧 Content。
-- Sound 的第四种视图是 Turntable，和 Pulse/Wave/EQ 一样用 ,/. 切换并保存选择。只加载当前播放曲目的封面，切歌、切来源、隐藏视图、退出取消请求，旧响应不能污染新曲目；装饰资源失败不抢焦点或阻断播放。新增来源可实现 catalog.ArtworkProvider，缺图时返回空图片使用占位唱片。封面必须等比取中并用抗锯齿圆形遮罩裁剪，和机身合成后再显示；不能保留突出的方形边角。
+- Sound 的第四种视图是 Turntable，和 Pulse/Wave/EQ 一样用 ,/. 切换并保存选择。只加载当前播放曲目的封面，切歌、切来源、隐藏视图、退出取消请求，旧响应不能污染新曲目；装饰资源失败不抢焦点或阻断播放。新增来源可实现 catalog.LyricsProvider 提供有时间戳的歌词；禁止将音频 / 原始歌词发送到未声明服务。新增来源可实现 catalog.ArtworkProvider，缺图时返回空图片使用占位唱片。封面必须等比取中并用抗锯齿圆形遮罩裁剪，铺满唱盘仅留窄边，保留唱臂前景，和机身合成后再显示；不能保留突出的方形边角。播放台下方只显示同步歌词，不重复 Player 元数据。
 - Zen 左侧在 Pulse / Wave / Turntable 之间循环，右侧始终为真实 EQ；跳过普通 Sound 的独立 EQ 槽，不能重复显示波形。图片加载尺寸 / 原生 placement / 回退渲染共用 turntableSize 与图像矩形，不能沿用普通侧边栏尺寸。Zen 的 h/l、j/k 仍调 EQ，,/. 仅切左侧视图。新布局必须覆盖普通与 Zen 的缩放、取消及 EQ 控制测试。
 - 布局切换后焦点必须落在可见面板，Player 始终可见；日志可在所有布局用 @ 打开。页脚显示实际页面或当前焦点，不写死 NORMAL。
 - q 首次提示，第二次 q 后台，Q 退出当前来源服务；退出/切换前保存 UI，冷恢复暂停。不可让迟到请求覆盖新 revision/epoch。

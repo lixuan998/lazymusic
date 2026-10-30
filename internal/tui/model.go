@@ -48,7 +48,9 @@ type exitMsg struct {
 
 type Model struct {
 	graphics          graphicsState
+	record            recordAnimation
 	artwork           artworkState
+	lyrics            lyricsState
 	placementBusy     bool
 	picked            *pickedSelection
 	pickGeneration    uint64
@@ -144,7 +146,7 @@ func New(ctx context.Context, api API, state daemon.State, keys Keys) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.poll(), m.fetch(true, false), m.syncRhythm(time.Now()), m.syncArtwork(), m.syncGraphics())
+	return tea.Batch(m.poll(), m.fetch(true, false), m.syncRhythm(time.Now()), m.syncArtwork(), m.syncLyrics(), m.syncRecord(time.Now()), m.syncLyricsClock(), m.syncGraphics())
 }
 func (m *Model) query() catalog.Query {
 	l := m.UI.Location
@@ -227,7 +229,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	before := m.toastVersion
 	m.graphicsMessage(msg)
 	_, cmd := m.update(msg)
-	cmd = tea.Batch(cmd, m.syncRhythm(time.Now()), m.syncArtwork(), m.syncGraphics())
+	cmd = tea.Batch(cmd, m.syncRhythm(time.Now()), m.syncArtwork(), m.syncLyrics(), m.syncRecord(time.Now()), m.syncLyricsClock(), m.syncGraphics())
 	if before != m.toastVersion {
 		cmd = tea.Batch(cmd, m.NotificationTimer())
 	}
@@ -250,6 +252,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.acceptPlaced(msg)
 	case placementUndoneMsg:
 		return m, m.acceptUndonePlacement(msg)
+	case lyricsMsg:
+		m.acceptLyrics(msg)
+		return m, nil
+	case lyricsTick:
+		if msg.generation == m.lyrics.generation {
+			m.lyrics.ticking = false
+		}
+		return m, nil
+	case recordFrame:
+		m.advanceRecord(msg)
+		return m, nil
 	case rhythmFrame:
 		if msg.generation == m.rhythm.generation && m.rhythm.running {
 			m.rhythm.running = false

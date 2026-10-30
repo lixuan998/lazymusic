@@ -38,3 +38,23 @@ func TestOriginalImageIsTransmittedUnchangedInBoundedDirectChunks(t *testing.T) 
 		t.Fatal("invalid Neovim relay")
 	}
 }
+
+func TestFrameUpdatesOnlyEditTheOwnedRootInBoundedChunks(t *testing.T) {
+	data := bytes.Repeat([]byte("frame pixels"), 1000)
+	command := UpdateFrame(data, MinID, 163, 63)
+	parts := regexp.MustCompile("\x1b_G([^;]*);([^\x1b]*)\x1b\\\\").FindAllStringSubmatch(command, -1)
+	var decoded strings.Builder
+	for _, part := range parts {
+		if !strings.Contains(part[1], "a=f,i=") || !strings.Contains(part[1], "r=1") || len(part[2]) > 4096 {
+			t.Fatal("frame created extra images or oversized packets")
+		}
+		decoded.WriteString(part[2])
+	}
+	payload, err := base64.StdEncoding.DecodeString(decoded.String())
+	if err != nil || !bytes.Equal(payload, data) || !strings.Contains(command, "x=163,y=63,X=1") || !strings.Contains(command, "a=a,i=") {
+		t.Fatal("corrupt or misplaced disc patch")
+	}
+	if !strings.Contains(ProbeFrames(MinID), "r=1,f=32") || !strings.Contains(ProbeFrames(MinID), ";AAAAAA==") {
+		t.Fatal("probe changes the photograph")
+	}
+}

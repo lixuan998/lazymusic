@@ -19,7 +19,7 @@ function M.attach(buf, job, hooks)
   local group = vim.api.nvim_create_augroup("lazymusic.graphics." .. buf, { clear = true })
   s.group = group
   local allowed = { a=true, q=true, i=true, f=true, t=true, s=true, v=true, m=true,
-    U=true, c=true, r=true, C=true, d=true, p=true }
+    U=true, c=true, r=true, C=true, d=true, p=true, x=true, y=true, X=true }
   vim.api.nvim_create_autocmd("TermRequest", {
     group = group, buffer = buf,
     callback = function(ev)
@@ -36,11 +36,20 @@ function M.attach(buf, job, hooks)
         params[key] = value
       end
       if params.t and params.t ~= "d" then return end
-      if params.f and params.f ~= "24" and params.f ~= "100" then return end
+      if params.f and params.f ~= "24" and params.f ~= "32" and params.f ~= "100" then return end
       if params.d and params.d ~= "I" then return end
-      if params.a and not ({q=true,T=true,p=true,d=true})[params.a] then return end
+      if params.a and not ({q=true,T=true,p=true,d=true,f=true,a=true})[params.a] then return end
       if params.a == "d" and (params.d ~= "I" or not params.i) then return end
       if (params.a == "T" or params.a == "p") and (params.U ~= "1" or params.p ~= "1") then return end
+      if params.a == "f" then
+        -- Only edit the existing root image, never append animation frames.
+        if params.r ~= "1" or not params.i or not s.ids[tonumber(params.i)] then return end
+        if params.f == "32" and (params.s ~= "1" or params.v ~= "1" or payload ~= "AAAAAA==") then return end
+        if params.f and params.f ~= "100" and params.f ~= "32" then return end
+      end
+      if params.a == "a" then
+        if params.c ~= "1" or params.s ~= "1" or not params.i or not s.ids[tonumber(params.i)] or payload ~= "" then return end
+      end
       if not params.a then
         if not s.current or (params.m ~= "0" and params.m ~= "1") then return end
         for key in pairs(params) do if key ~= "m" and key ~= "q" then return end end
