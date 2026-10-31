@@ -6,13 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"lazymusic/internal/backend"
@@ -618,7 +616,7 @@ func (s *Service) Handler() http.Handler {
 			fail(w, 409, fmt.Errorf("background service is shutting down"))
 			return
 		}
-		alive := s.lease.token != "" && time.Since(s.lease.seen) < 10*time.Second && syscall.Kill(s.lease.pid, 0) == nil
+		alive := s.lease.token != "" && time.Since(s.lease.seen) < 10*time.Second && processAlive(s.lease.pid)
 		if alive {
 			s.mu.Unlock()
 			fail(w, 409, fmt.Errorf("a TUI is already attached; detach it with q q first"))
@@ -889,16 +887,12 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	_ = os.Remove(path)
-	ln, err := net.Listen("unix", path)
+	ln, err := listenIPC(path)
 	if err != nil {
 		return err
 	}
 	defer ln.Close()
 	defer os.Remove(path)
-	if err = os.Chmod(path, 0600); err != nil {
-		return err
-	}
 	server := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(ln) }()

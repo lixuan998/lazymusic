@@ -1,3 +1,710 @@
+--- a/internal/vibez/provider/provider.go
++++ b/internal/vibez/provider/provider.go
+@@ -21,15 +21,16 @@
+ }
+ 
+ type Track struct {
+-	ID         string
+-	CatalogID  string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
+-	Title      string
+-	Artist     string
+-	Album      string
+-	Duration   time.Duration
+-	ArtworkURL string
+-	PreviewURL string
+-	Genres     []string
++	Kind, MediaType string
++	ID              string
++	CatalogID       string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
++	Title           string
++	Artist          string
++	Album           string
++	Duration        time.Duration
++	ArtworkURL      string
++	PreviewURL      string
++	Genres          []string
+ 	// DiscNumber and TrackNumber give the track's position on its album.
+ 	// Zero means unknown.
+ 	DiscNumber  int
+--- a/internal/vibez/player/browserless/player.go
++++ b/internal/vibez/player/browserless/player.go
+@@ -73,6 +73,8 @@
+ 	seekOffset         time.Duration            // start offset of the current segment after Seek
+ 	streamErr          string                   // specific cause from onFail for curStream
+ 	ended              bool                     // queue played through to the end
++	resumePosition     time.Duration            // lazymusic: deferred seek after a cold restore
++	resumeTrackID      string
+ 	sessionExpiredOnce sync.Once
+ 	doneCh             chan struct{}
+ 	closeOnce          sync.Once
+@@ -339,7 +341,7 @@
+ 				nextTrack = meta
+ 			}
+ 		}
+-		streamURL, duration, err := p.streamer.PrepareTrack(ctx, catalogID, prefer256k)
++		streamURL, duration, err := p.streamer.PrepareMedia(ctx, catalogID, nextTrack.MediaType, prefer256k)
+ 		if err != nil || ctx.Err() != nil {
+ 			return
+ 		}
+@@ -368,6 +370,11 @@
+ 
+ func (p *Player) playTrack(t provider.Track) {
+ 	p.mu.Lock()
++	startPosition := time.Duration(0)
++	if p.resumeTrackID == t.ID {
++		startPosition = p.resumePosition
++	}
++	p.resumePosition, p.resumeTrackID = 0, ""
+ 	if p.playCtx != nil {
+ 		p.playCtx()
+ 	}
+@@ -437,7 +444,7 @@
+ 		if p.streamer == nil {
+ 			return
+ 		}
+-		streamURL, duration, err := p.streamer.PrepareTrack(ctx, catalogID, prefer256k)
++		streamURL, duration, err := p.streamer.PrepareMedia(ctx, catalogID, t.MediaType, prefer256k)
+ 		if err != nil {
+ 			select {
+ 			case <-ctx.Done():
+@@ -490,11 +497,24 @@
+ 		default:
+ 		}
+ 
++		playURI := streamURL
++		startOffset := time.Duration(0)
++		if startPosition > 0 {
++			if uri, offset, ok := p.streamer.SeekStream(streamIDFromURL(streamURL), streamURL, startPosition); ok {
++				playURI = uri
++				startOffset = offset
++			}
++		}
+ 		p.mu.Lock()
++		if ctx.Err() != nil {
++			p.mu.Unlock()
++			return
++		}
+ 		p.curStream = streamIDFromURL(streamURL)
+ 		p.curStreamURL = streamURL
+ 		p.streamErr = ""
+-		p.seekOffset = 0
++		p.seekOffset = startOffset
++		p.state.Position = startOffset
+ 		p.ended = false
+ 		p.state.Loading = false
+ 		p.state.Playing = true
+@@ -505,7 +525,7 @@
+ 		}
+ 		s = p.state
+ 		p.mu.Unlock()
+-		p.sink.PlayURI(streamURL)
++		p.sink.PlayURI(playURI)
+ 		p.bcast.Send(s)
+ 		p.scheduleNextPrefetch()
+ 	}()
+@@ -688,7 +708,7 @@
+ 		return nil
+ 	}
+ 
+-	startSeg, segOffset, ok := p.streamer.SeekTarget(streamID, position)
++	seekURI, segOffset, ok := p.streamer.SeekStream(streamID, streamURL, position)
+ 	if !ok {
+ 		return nil
+ 	}
+@@ -701,7 +721,6 @@
+ 	p.mu.Unlock()
+ 
+ 	if p.sink != nil {
+-		seekURI := fmt.Sprintf("%s?start_seg=%d", streamURL, startSeg)
+ 		p.sink.PlayURI(seekURI)
+ 		if !wasPlaying {
+ 			p.sink.Pause()
+@@ -920,10 +939,9 @@
+ 	if from >= 0 && from < len(p.queue) && to >= 0 && to < len(p.queue) {
+ 		t := p.queue[from]
+ 		p.queue = append(p.queue[:from], p.queue[from+1:]...)
+-		if from < to {
+-			to--
+-		}
+-		p.queue = append(p.queue[:to], append([]provider.Track{t}, p.queue[to:]...)...)
++		p.queue = append(p.queue, provider.Track{})
++		copy(p.queue[to+1:], p.queue[to:])
++		p.queue[to] = t
+ 
+ 		switch {
+ 		case p.idx == from:
+--- a/internal/vibez/player/browserless/player_test.go
++++ b/internal/vibez/player/browserless/player_test.go
+@@ -159,10 +159,10 @@
+ 	defer srv.Close()
+ 
+ 	cfg := &config.Config{AppleDeveloperToken: "dev", AppleUserToken: "expired"}
+-	lic := license.NewClient(cfg)
+ 	origTransport := http.DefaultTransport
+ 	http.DefaultTransport = rewriteTransport{target: srv.URL, rt: origTransport}
+ 	t.Cleanup(func() { http.DefaultTransport = origTransport })
++	lic := license.NewClient(cfg)
+ 
+ 	streamer, err := NewStreamServer(nil, lic)
+ 	if err != nil {
+@@ -205,10 +205,10 @@
+ 	defer srv.Close()
+ 
+ 	cfg := &config.Config{AppleDeveloperToken: "dev", AppleUserToken: "user"}
+-	lic := license.NewClient(cfg)
+ 	origTransport := http.DefaultTransport
+ 	http.DefaultTransport = rewriteTransport{target: srv.URL, rt: origTransport}
+ 	t.Cleanup(func() { http.DefaultTransport = origTransport })
++	lic := license.NewClient(cfg)
+ 
+ 	streamer, err := NewStreamServer(nil, lic)
+ 	if err != nil {
+--- a/internal/vibez/player/browserless/sink_windows.cpp
++++ b/internal/vibez/player/browserless/sink_windows.cpp
+@@ -43,7 +43,7 @@
+ 
+ // Only the .aac streams carry AAC priming; library uploads are .mp3 or .m4a.
+ bool isWholeTrackURI(const std::string& u) {
+-    return u.find(".aac") != std::string::npos && u.find("start_seg=") == std::string::npos;
++    return u.rfind("http://127.0.0.1:", 0) == 0 && u.find(".aac") != std::string::npos && u.find("start_seg=") == std::string::npos;
+ }
+ // Media Foundation is resolved at run time instead of linked in. On Windows N
+ // editions without the Media Feature Pack mfplat.dll and mfreadwrite.dll do not
+@@ -123,6 +123,9 @@
+ 
+ struct Session {
+     std::atomic<bool> cancel{false};
++ bool local=false;
++ std::atomic<int> ready{0};
++ std::atomic<double> duration{0}, seekTo{-1}, offset{0};
+     std::atomic<bool> paused{false};
+     std::mutex mu;  // guards hwo
+     HWAVEOUT hwo = nullptr;
+@@ -249,6 +252,12 @@
+     Com<IMFSourceReader> reader;
+     if (!openSourceReader(mf, sink, ses, widen(curURI.c_str()), reader)) return;
+ 
++    if (ses->local) {
++        PROPVARIANT length; PropVariantInit(&length);
++        if (SUCCEEDED(reader->GetPresentationAttribute(MF_SOURCE_READER_MEDIASOURCE, MF_PD_DURATION, &length)) && length.vt == VT_UI8)
++            ses->duration = static_cast<double>(length.uhVal.QuadPart) / 10000000.0;
++        PropVariantClear(&length);
++    }
+     HRESULT hr = S_OK;
+     Com<IMFMediaType> got;
+     hr = reader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, &got);
+@@ -296,8 +305,33 @@
+     size_t trimRemaining = isWholeTrackURI(curURI) ? kAACPrimingFrames : 0;
+     uint32_t enqueuedSamples = 0;
+     uint32_t enqueuedBytes = 0;
++    ses->ready = 1;
+     for (;;) {
+         if (ses->cancel) break;
++        if (ses->local) {
++            const double target = ses->seekTo.exchange(-1);
++            if (target >= 0) {
++                PROPVARIANT pos; PropVariantInit(&pos);
++                pos.vt = VT_I8; pos.hVal.QuadPart = static_cast<LONGLONG>(target * 10000000.0);
++                hr = reader->SetCurrentPosition(GUID_NULL, pos);
++                if (FAILED(hr)) { reportError(sink, ses, "cannot seek local audio", hr); break; }
++                if (!nullOut) {
++                    std::lock_guard<std::mutex> lk(ses->mu);
++                    waveOutReset(hwo);
++                    for (auto& b : bufs) {
++                        if (b.queued) waveOutUnprepareHeader(hwo, &b.hdr, sizeof(WAVEHDR));
++                        b.queued = false;
++                    }
++                    if (ses->paused) waveOutPause(hwo);
++                }
++                ses->offset = target;
++                ses->nullFrames = 0; ses->baseSamples = 0; ses->baseBytes = 0;
++                ses->endPosition = -1;
++                enqueuedSamples = 0; enqueuedBytes = 0; next = 0;
++                for (auto& b : bank) { b.z1[0] = b.z1[1] = b.z2[0] = b.z2[1] = 0; }
++            }
++            if (ses->paused) { Sleep(10); continue; }
++        }
+ 
+         DWORD flags = 0;
+         Com<IMFSample> sample;
+@@ -461,6 +495,7 @@
+ }
+ 
+ void runSession(std::shared_ptr<Sink> sink, std::shared_ptr<Session> ses, std::string url) {
++    struct Finished { Session& s; ~Finished() { if (s.ready == 0) s.ready = -1; } } finished{*ses};
+     const MfApi* mf = mfApi();
+     if (!mf) {
+         reportError(sink, ses,
+@@ -515,6 +550,32 @@
+     std::thread(runSession, sink, ses, std::string(uri_utf8)).detach();
+ }
+ 
++
++void vibez_winsink_open_file(vibez_winsink_t handle, const char* path) {
++    if (!handle || !path) return;
++    auto sink = static_cast<Handle*>(handle)->sink;
++    auto ses = std::make_shared<Session>();
++    ses->local = true; ses->paused = true;
++    std::shared_ptr<Session> old;
++    { std::lock_guard<std::mutex> lk(sink->mu); old = sink->cur; sink->cur = ses; sink->nextURI.clear(); }
++    cancelSession(old);
++    std::thread(runSession, sink, ses, std::string(path)).detach();
++}
++int vibez_winsink_file_ready(vibez_winsink_t handle) {
++    Sink* sink = sinkOf(handle); if (!sink) return -1;
++    std::lock_guard<std::mutex> lk(sink->mu);
++    return sink->cur ? sink->cur->ready.load() : -1;
++}
++double vibez_winsink_duration(vibez_winsink_t handle) {
++    Sink* sink = sinkOf(handle); if (!sink) return 0;
++    std::lock_guard<std::mutex> lk(sink->mu);
++    return sink->cur ? sink->cur->duration.load() : 0;
++}
++void vibez_winsink_seek_file(vibez_winsink_t handle, double seconds) {
++    Sink* sink = sinkOf(handle); if (!sink) return;
++    std::lock_guard<std::mutex> lk(sink->mu);
++    if (sink->cur && sink->cur->local) sink->cur->seekTo = seconds;
++}
+ void vibez_winsink_set_next_uri(vibez_winsink_t handle, const char* uri_utf8) {
+     Sink* sink = sinkOf(handle);
+     if (!sink) return;
+@@ -597,14 +658,14 @@
+     std::lock_guard<std::mutex> lk(ses->mu);
+     if (!ses->hwo) {
+         const double end = ses->endPosition.load();
+-        if (end >= 0.0) return end;
++        if (end >= 0.0) return ses->offset + end;
+         const uint64_t nf = ses->nullFrames.load();
+         if (nf > 0 && ses->sampleRate > 0) {
+-            return static_cast<double>(nf) / static_cast<double>(ses->sampleRate);
+-        }
+-        return 0.0;
+-    }
+-    return devicePosition(*ses);
++            return ses->offset + static_cast<double>(nf) / static_cast<double>(ses->sampleRate);
++        }
++        return ses->offset;
++    }
++    return ses->offset + devicePosition(*ses);
+ }
+ 
+ void vibez_winsink_destroy(vibez_winsink_t handle) {
+--- a/internal/vibez/player/browserless/sink_windows.go
++++ b/internal/vibez/player/browserless/sink_windows.go
+@@ -3,7 +3,7 @@
+ package browserless
+ 
+ /*
+-#cgo windows LDFLAGS: -lmfuuid -lole32 -lwinmm -static -static-libgcc -static-libstdc++
++#cgo windows LDFLAGS: -lmfuuid -luuid -lole32 -lwinmm -static -static-libgcc -static-libstdc++
+ #include "sink_windows.h"
+ #include <stdlib.h>
+ 
+@@ -19,6 +19,7 @@
+ 
+ import (
+ 	"errors"
++	"fmt"
+ 	"runtime/cgo"
+ 	"sync"
+ 	"time"
+@@ -168,7 +169,7 @@
+ 
+ func (s *windowsAudioSink) SetEqualizer(gains []float64) {
+ 	if len(gains) == 0 {
+-		return
++		gains = make([]float64, 10)
+ 	}
+ 	cg := make([]C.double, len(gains))
+ 	for i, g := range gains {
+@@ -213,3 +214,72 @@
+ 		s.cgoH.Delete()
+ 	}
+ }
++
++// FileSink shares the native Windows decoder and DSP with LOCAL playback.
++// OpenFile prepares paused; SeekFile uses the file timeline.
++type FileSink interface {
++	OpenFile(string) error
++	Play()
++	Pause()
++	Stop()
++	Destroy()
++	SeekFile(time.Duration)
++	SetVolume(float64)
++	SetEqualizer([]float64)
++	Position() time.Duration
++	Duration() time.Duration
++	OnEOS(func())
++	OnError(func(error))
++}
++
++func NewFileSink() (FileSink, error) {
++	sink, err := newAudioSink()
++	if err != nil {
++		return nil, err
++	}
++	return sink.(*windowsAudioSink), nil
++}
++func (s *windowsAudioSink) OpenFile(path string) error {
++	cp := C.CString(path)
++	defer C.free(unsafe.Pointer(cp))
++	s.mu.Lock()
++	if s.handle == nil {
++		s.mu.Unlock()
++		return fmt.Errorf("audio output is closed")
++	}
++	C.vibez_winsink_open_file(s.handle, cp)
++	s.mu.Unlock()
++	deadline := time.Now().Add(4 * time.Second)
++	for time.Now().Before(deadline) {
++		s.mu.Lock()
++		ready := -1
++		if s.handle != nil {
++			ready = int(C.vibez_winsink_file_ready(s.handle))
++		}
++		s.mu.Unlock()
++		if ready == 1 {
++			return nil
++		}
++		if ready < 0 {
++			return fmt.Errorf("Windows could not prepare local audio; check the format and Media Feature Pack")
++		}
++		time.Sleep(10 * time.Millisecond)
++	}
++	s.Stop()
++	return fmt.Errorf("Windows local audio preparation timed out")
++}
++func (s *windowsAudioSink) Duration() time.Duration {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	if s.handle == nil {
++		return 0
++	}
++	return time.Duration(float64(C.vibez_winsink_duration(s.handle)) * float64(time.Second))
++}
++func (s *windowsAudioSink) SeekFile(pos time.Duration) {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	if s.handle != nil {
++		C.vibez_winsink_seek_file(s.handle, C.double(max(0, pos.Seconds())))
++	}
++}
+--- a/internal/vibez/player/browserless/sink_windows.h
++++ b/internal/vibez/player/browserless/sink_windows.h
+@@ -30,6 +30,10 @@
+ void vibez_winsink_set_eq(vibez_winsink_t handle, const double* gains_db, int count);
+ // vibez_winsink_position returns seconds of audio played since the last play_uri.
+ double vibez_winsink_position(vibez_winsink_t handle);
++void vibez_winsink_open_file(vibez_winsink_t handle, const char* path);
++int vibez_winsink_file_ready(vibez_winsink_t handle);
++double vibez_winsink_duration(vibez_winsink_t handle);
++void vibez_winsink_seek_file(vibez_winsink_t handle, double seconds);
+ void vibez_winsink_destroy(vibez_winsink_t handle);
+ 
+ #ifdef __cplusplus
+--- a/internal/vibez/player/browserless/sink_windows_test.go
++++ b/internal/vibez/player/browserless/sink_windows_test.go
+@@ -3,9 +3,6 @@
+ package browserless
+ 
+ import (
+-	"net/http"
+-	"net/http/httptest"
+-	"strings"
+ 	"testing"
+ 	"time"
+ )
+@@ -56,61 +53,3 @@
+ 	s.Destroy()
+ 	s.Destroy() // must be idempotent
+ }
+-
+-// TestWindowsSinkKeepsPositionAtEOS plays through a real waveOut device, not
+-// the VIBEZ_NULL_AUDIO frame counter, because only the device path closed the
+-// output before announcing the end of the stream. Position() then read 0 inside
+-// the OnEOS callback, the player took every natural track end for a premature
+-// one, and the queue never advanced. It skips when there is no output device,
+-// as on CI runners.
+-func TestWindowsSinkKeepsPositionAtEOS(t *testing.T) {
+-	t.Setenv("VIBEZ_NULL_AUDIO", "")
+-
+-	adts := buildTestADTSStream()
+-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+-		w.Header().Set("Content-Type", "audio/aac")
+-		_, _ = w.Write(adts)
+-	}))
+-	defer srv.Close()
+-
+-	s, err := newAudioSink()
+-	if err != nil {
+-		t.Fatalf("newAudioSink: %v", err)
+-	}
+-	defer s.Destroy()
+-
+-	posAtEOS := make(chan time.Duration, 1)
+-	errCh := make(chan error, 1)
+-	// The player reads the position inside its OnEOS callback, so read it here too.
+-	s.OnEOS(func() {
+-		select {
+-		case posAtEOS <- s.Position():
+-		default:
+-		}
+-	})
+-	s.OnError(func(e error) {
+-		select {
+-		case errCh <- e:
+-		default:
+-		}
+-	})
+-
+-	s.SetVolume(0)
+-	s.PlayURI(srv.URL + "/stream.aac")
+-
+-	select {
+-	case pos := <-posAtEOS:
+-		// 35 AAC frames of 1024 samples at 44.1 kHz play for about 0.81 s.
+-		if pos < 500*time.Millisecond {
+-			t.Fatalf("Position at EOS = %v, want about 0.8s of played audio", pos)
+-		}
+-		t.Logf("Position at EOS: %v", pos)
+-	case e := <-errCh:
+-		if strings.Contains(e.Error(), "cannot open audio output device") {
+-			t.Skipf("no audio output device: %v", e)
+-		}
+-		t.Fatalf("native sink reported error: %v", e)
+-	case <-time.After(15 * time.Second):
+-		t.Fatal("timed out waiting for EOS")
+-	}
+-}
+--- a/internal/vibez/player/browserless/streamer.go
++++ b/internal/vibez/player/browserless/streamer.go
+@@ -23,20 +23,33 @@
+ )
+ 
+ type segmentRef struct {
+-	uri      string
+-	offset   int64
+-	length   int64
+-	duration float64
++	keyURI, initURI        string
++	initOffset, initLength int64
++	uri                    string
++	offset                 int64
++	length                 int64
++	duration               float64
+ }
+ 
+ type trackStream struct {
+-	trackID   string
+-	kid       []byte
+-	audioCfg  mp4.AudioConfig
+-	baseURI   string
+-	segments  []segmentRef
+-	totalDur  time.Duration
+-	createdAt time.Time
++	fragmentConfig     *mp4.TrackConfig
++	video              bool
++	videoStream        string
++	stationProtections *stationProtectionStore
++	stationInfo        *license.PlaybackInfo
++	encryption         *mp4.Encryption
++	stationURI         string
++	live               bool
++	mediaSequence      int64
++	keyURI             string
++	initURI            string
++	trackID            string
++	kid                []byte
++	audioCfg           mp4.AudioConfig
++	baseURI            string
++	segments           []segmentRef
++	totalDur           time.Duration
++	createdAt          time.Time
+ 
+ 	// raw marks an unencrypted library upload: segments are byte ranges of
+ 	// the file itself and pass through without decryption.
+@@ -49,12 +62,19 @@
+ 
+ // StreamServer manages local HTTP streaming for decrypted Apple Music tracks.
+ type StreamServer struct {
+-	cdmEngine *cdm.CDM
+-	licClient *license.Client
+-	listener  net.Listener
+-	server    *http.Server
+-	port      int
+-	authToken string
++	mediaOnce    sync.Once
++	mediaHTTP    *http.Client
++	videoMu      sync.Mutex
++	videoState   nativeVideoState
++	videoClosed  bool
++	videoContext context.Context
++	videoCancel  context.CancelFunc
++	cdmEngine    *cdm.CDM
++	licClient    *license.Client
++	listener     net.Listener
++	server       *http.Server
++	port         int
++	authToken    string
+ 
+ 	mu         sync.RWMutex
+ 	streams    map[string]*trackStream
+@@ -101,6 +121,7 @@
+ 		streams:   make(map[string]*trackStream),
+ 	}
+ 
++	s.videoContext, s.videoCancel = context.WithCancel(context.Background())
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/stream/", s.handleStream)
+ 
+@@ -121,6 +142,9 @@
+ // PrepareTrack resolves Apple Music playback metadata, acquires the Widevine license,
+ // parses the HLS manifest, and returns a local HTTP streaming URL and total duration.
+ func (s *StreamServer) PrepareTrack(ctx context.Context, trackID string, prefer256k bool) (string, time.Duration, error) {
++	if strings.HasPrefix(trackID, "ra.") {
++		return s.prepareStation(ctx, trackID, prefer256k)
++	}
+ 	// A library ID reaches here only when it has no catalog song.
+ 	if strings.HasPrefix(trackID, "i.") {
+ 		return s.prepareRawTrack(ctx, trackID)
+@@ -410,7 +434,7 @@
+ 	// Warm segment 0 asynchronously so both initial playback and
+ 	// seek-to-start (0:00) can write the first ~10s immediately
+ 	// without waiting for an upstream CDN round-trip.
+-	if len(st.segments) > 0 && (st.raw || s.cdmEngine != nil) {
++	if !st.video && st.videoStream == "" && len(st.segments) > 0 && (st.raw || s.cdmEngine != nil) {
+ 		go func() {
+ 			warmCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+ 			defer cancel()
+@@ -498,6 +522,15 @@
+ 
+ 	if !ok {
+ 		http.NotFound(w, r)
++		return
++	}
++
++	if st.video {
++		http.NotFound(w, r)
++		return
++	}
++	if st.live {
++		s.serveLive(w, r, streamID, st)
+ 		return
+ 	}
+ 
+@@ -520,6 +553,12 @@
+ 		}
+ 	}
+ 
++	skipFrames := 0
++	if !st.raw {
++		if n, err := strconv.Atoi(r.URL.Query().Get("skip_frames")); err == nil && n > 0 && n <= 1000000 {
++			skipFrames = n
++		}
++	}
+ 	contentType := "audio/aac"
+ 	if st.raw {
+ 		contentType = st.rawFormat.contentType
+@@ -571,6 +610,14 @@
+ 			}
+ 		}
+ 
++		if skipFrames > 0 {
++			var trimErr error
++			aacData, skipFrames, trimErr = trimADTSFrames(aacData, skipFrames)
++			if trimErr != nil {
++				fail(i, "seek", trimErr)
++				return
++			}
++		}
+ 		// Write to HTTP client (GStreamer). A failed write means the client
+ 		// has gone, so there is nobody left to abort for; log it only.
+ 		if _, err := w.Write(aacData); err != nil {
+@@ -600,19 +647,34 @@
+ }
+ 
+ func (s *StreamServer) fetchAndDecryptSegment(ctx context.Context, client *http.Client, st *trackStream, seg segmentRef) ([]byte, string, error) {
++	if st.stationInfo != nil && seg.keyURI != "" {
++		var err error
++		st, err = s.stationSegmentProtection(ctx, st, seg)
++		if err != nil {
++			return nil, "protection", err
++		}
++	}
+ 	segURL := seg.uri
+ 	if !strings.HasPrefix(segURL, "http://") && !strings.HasPrefix(segURL, "https://") {
+ 		segURL = st.baseURI + seg.uri
+ 	}
+ 
+-	segData, stage, err := fetchSegmentWithRetry(ctx, client, segURL, seg.offset, seg.length)
++	var segData []byte
++	var stage string
++	var err error
++	if st.fragmentConfig != nil {
++		segData, err = s.mediaBytes(ctx, segURL, seg.offset, seg.length, 32<<20)
++		stage = "fetch video audio"
++	} else {
++		segData, stage, err = fetchSegmentWithRetry(ctx, client, segURL, seg.offset, seg.length)
++	}
+ 	if err != nil {
+ 		return nil, stage, err
+ 	}
+ 	if st.raw {
+ 		return segData, "", nil
+ 	}
+-	aacData, err := mp4.DecryptSegment(segData, st.kid, st.audioCfg, func(kid, iv, input []byte, subs []mp4.Subsample) ([]byte, error) {
++	decrypt := func(kid, iv, input []byte, subs []mp4.Subsample) ([]byte, error) {
+ 		cdmSubs := make([]cdm.Subsample, len(subs))
+ 		for si, sb := range subs {
+ 			cdmSubs[si] = cdm.Subsample{
+@@ -620,8 +682,17 @@
+ 				CipherBytes: sb.CipherBytes,
+ 			}
+ 		}
++		if st.encryption != nil && st.encryption.CBCS {
++			return s.cdmEngine.DecryptCBCS(kid, iv, input, cdmSubs, st.encryption.Crypt, st.encryption.Skip)
++		}
+ 		return s.cdmEngine.DecryptSubsamples(kid, iv, input, cdmSubs)
+-	})
++	}
++	var aacData []byte
++	if st.fragmentConfig != nil && st.encryption != nil {
++		aacData, err = mp4.DecryptAudioFragment(segData, st.kid, *st.fragmentConfig, st.audioCfg, *st.encryption, decrypt)
++	} else {
++		aacData, err = mp4.DecryptSegment(segData, st.kid, st.audioCfg, decrypt, encryptionOptions(st)...)
++	}
+ 	if err != nil {
+ 		return nil, "decrypt", err
+ 	}
+@@ -701,6 +772,14 @@
+ 
+ // Close terminates the local HTTP stream server.
+ func (s *StreamServer) Close() error {
++	s.closeMedia()
++	if s.videoCancel != nil {
++		s.videoCancel()
++	}
++	s.videoMu.Lock()
++	s.videoClosed = true
++	s.resetVideoLocked()
++	s.videoMu.Unlock()
+ 	if s.server != nil {
+ 		return s.server.Close()
+ 	}
+--- a/internal/vibez/player/browserless/streamer_test.go
++++ b/internal/vibez/player/browserless/streamer_test.go
+@@ -218,8 +218,8 @@
+ 		t.Fatalf("Seek(14s) returned error: %v", err)
+ 	}
+ 	st, _ := p.GetState()
+-	if st.Position != 12*time.Second {
+-		t.Errorf("Position after Seek(14s) = %v, want 12s (start of segment 2)", st.Position)
++	if st.Position > 14*time.Second || 14*time.Second-st.Position > 24*time.Millisecond {
++		t.Errorf("Position after Seek(14s) = %v, want within one AAC frame before 14s", st.Position)
+ 	}
+ }
+ 
 --- a/internal/vibez/player/browserless/cdm/cdm.go
 +++ b/internal/vibez/player/browserless/cdm/cdm.go
 @@ -12,6 +12,7 @@
@@ -496,392 +1203,3 @@
  		offset += ivSize
  
  		var subsamples []Subsample
---- a/internal/vibez/player/browserless/player.go
-+++ b/internal/vibez/player/browserless/player.go
-@@ -73,6 +73,8 @@
- 	seekOffset         time.Duration            // start offset of the current segment after Seek
- 	streamErr          string                   // specific cause from onFail for curStream
- 	ended              bool                     // queue played through to the end
-+	resumePosition     time.Duration            // lazymusic: deferred seek after a cold restore
-+	resumeTrackID      string
- 	sessionExpiredOnce sync.Once
- 	doneCh             chan struct{}
- 	closeOnce          sync.Once
-@@ -339,7 +341,7 @@
- 				nextTrack = meta
- 			}
- 		}
--		streamURL, duration, err := p.streamer.PrepareTrack(ctx, catalogID, prefer256k)
-+		streamURL, duration, err := p.streamer.PrepareMedia(ctx, catalogID, nextTrack.MediaType, prefer256k)
- 		if err != nil || ctx.Err() != nil {
- 			return
- 		}
-@@ -368,6 +370,11 @@
- 
- func (p *Player) playTrack(t provider.Track) {
- 	p.mu.Lock()
-+	startPosition := time.Duration(0)
-+	if p.resumeTrackID == t.ID {
-+		startPosition = p.resumePosition
-+	}
-+	p.resumePosition, p.resumeTrackID = 0, ""
- 	if p.playCtx != nil {
- 		p.playCtx()
- 	}
-@@ -437,7 +444,7 @@
- 		if p.streamer == nil {
- 			return
- 		}
--		streamURL, duration, err := p.streamer.PrepareTrack(ctx, catalogID, prefer256k)
-+		streamURL, duration, err := p.streamer.PrepareMedia(ctx, catalogID, t.MediaType, prefer256k)
- 		if err != nil {
- 			select {
- 			case <-ctx.Done():
-@@ -490,11 +497,24 @@
- 		default:
- 		}
- 
-+		playURI := streamURL
-+		startOffset := time.Duration(0)
-+		if startPosition > 0 {
-+			if uri, offset, ok := p.streamer.SeekStream(streamIDFromURL(streamURL), streamURL, startPosition); ok {
-+				playURI = uri
-+				startOffset = offset
-+			}
-+		}
- 		p.mu.Lock()
-+		if ctx.Err() != nil {
-+			p.mu.Unlock()
-+			return
-+		}
- 		p.curStream = streamIDFromURL(streamURL)
- 		p.curStreamURL = streamURL
- 		p.streamErr = ""
--		p.seekOffset = 0
-+		p.seekOffset = startOffset
-+		p.state.Position = startOffset
- 		p.ended = false
- 		p.state.Loading = false
- 		p.state.Playing = true
-@@ -505,7 +525,7 @@
- 		}
- 		s = p.state
- 		p.mu.Unlock()
--		p.sink.PlayURI(streamURL)
-+		p.sink.PlayURI(playURI)
- 		p.bcast.Send(s)
- 		p.scheduleNextPrefetch()
- 	}()
-@@ -688,7 +708,7 @@
- 		return nil
- 	}
- 
--	startSeg, segOffset, ok := p.streamer.SeekTarget(streamID, position)
-+	seekURI, segOffset, ok := p.streamer.SeekStream(streamID, streamURL, position)
- 	if !ok {
- 		return nil
- 	}
-@@ -701,7 +721,6 @@
- 	p.mu.Unlock()
- 
- 	if p.sink != nil {
--		seekURI := fmt.Sprintf("%s?start_seg=%d", streamURL, startSeg)
- 		p.sink.PlayURI(seekURI)
- 		if !wasPlaying {
- 			p.sink.Pause()
-@@ -920,10 +939,9 @@
- 	if from >= 0 && from < len(p.queue) && to >= 0 && to < len(p.queue) {
- 		t := p.queue[from]
- 		p.queue = append(p.queue[:from], p.queue[from+1:]...)
--		if from < to {
--			to--
--		}
--		p.queue = append(p.queue[:to], append([]provider.Track{t}, p.queue[to:]...)...)
-+		p.queue = append(p.queue, provider.Track{})
-+		copy(p.queue[to+1:], p.queue[to:])
-+		p.queue[to] = t
- 
- 		switch {
- 		case p.idx == from:
---- a/internal/vibez/player/browserless/player_test.go
-+++ b/internal/vibez/player/browserless/player_test.go
-@@ -159,10 +159,10 @@
- 	defer srv.Close()
- 
- 	cfg := &config.Config{AppleDeveloperToken: "dev", AppleUserToken: "expired"}
--	lic := license.NewClient(cfg)
- 	origTransport := http.DefaultTransport
- 	http.DefaultTransport = rewriteTransport{target: srv.URL, rt: origTransport}
- 	t.Cleanup(func() { http.DefaultTransport = origTransport })
-+	lic := license.NewClient(cfg)
- 
- 	streamer, err := NewStreamServer(nil, lic)
- 	if err != nil {
-@@ -205,10 +205,10 @@
- 	defer srv.Close()
- 
- 	cfg := &config.Config{AppleDeveloperToken: "dev", AppleUserToken: "user"}
--	lic := license.NewClient(cfg)
- 	origTransport := http.DefaultTransport
- 	http.DefaultTransport = rewriteTransport{target: srv.URL, rt: origTransport}
- 	t.Cleanup(func() { http.DefaultTransport = origTransport })
-+	lic := license.NewClient(cfg)
- 
- 	streamer, err := NewStreamServer(nil, lic)
- 	if err != nil {
---- a/internal/vibez/player/browserless/streamer.go
-+++ b/internal/vibez/player/browserless/streamer.go
-@@ -23,20 +23,33 @@
- )
- 
- type segmentRef struct {
--	uri      string
--	offset   int64
--	length   int64
--	duration float64
-+	keyURI, initURI        string
-+	initOffset, initLength int64
-+	uri                    string
-+	offset                 int64
-+	length                 int64
-+	duration               float64
- }
- 
- type trackStream struct {
--	trackID   string
--	kid       []byte
--	audioCfg  mp4.AudioConfig
--	baseURI   string
--	segments  []segmentRef
--	totalDur  time.Duration
--	createdAt time.Time
-+	fragmentConfig     *mp4.TrackConfig
-+	video              bool
-+	videoStream        string
-+	stationProtections *stationProtectionStore
-+	stationInfo        *license.PlaybackInfo
-+	encryption         *mp4.Encryption
-+	stationURI         string
-+	live               bool
-+	mediaSequence      int64
-+	keyURI             string
-+	initURI            string
-+	trackID            string
-+	kid                []byte
-+	audioCfg           mp4.AudioConfig
-+	baseURI            string
-+	segments           []segmentRef
-+	totalDur           time.Duration
-+	createdAt          time.Time
- 
- 	// raw marks an unencrypted library upload: segments are byte ranges of
- 	// the file itself and pass through without decryption.
-@@ -49,12 +62,19 @@
- 
- // StreamServer manages local HTTP streaming for decrypted Apple Music tracks.
- type StreamServer struct {
--	cdmEngine *cdm.CDM
--	licClient *license.Client
--	listener  net.Listener
--	server    *http.Server
--	port      int
--	authToken string
-+	mediaOnce    sync.Once
-+	mediaHTTP    *http.Client
-+	videoMu      sync.Mutex
-+	videoState   nativeVideoState
-+	videoClosed  bool
-+	videoContext context.Context
-+	videoCancel  context.CancelFunc
-+	cdmEngine    *cdm.CDM
-+	licClient    *license.Client
-+	listener     net.Listener
-+	server       *http.Server
-+	port         int
-+	authToken    string
- 
- 	mu         sync.RWMutex
- 	streams    map[string]*trackStream
-@@ -101,6 +121,7 @@
- 		streams:   make(map[string]*trackStream),
- 	}
- 
-+	s.videoContext, s.videoCancel = context.WithCancel(context.Background())
- 	mux := http.NewServeMux()
- 	mux.HandleFunc("/stream/", s.handleStream)
- 
-@@ -121,6 +142,9 @@
- // PrepareTrack resolves Apple Music playback metadata, acquires the Widevine license,
- // parses the HLS manifest, and returns a local HTTP streaming URL and total duration.
- func (s *StreamServer) PrepareTrack(ctx context.Context, trackID string, prefer256k bool) (string, time.Duration, error) {
-+	if strings.HasPrefix(trackID, "ra.") {
-+		return s.prepareStation(ctx, trackID, prefer256k)
-+	}
- 	// A library ID reaches here only when it has no catalog song.
- 	if strings.HasPrefix(trackID, "i.") {
- 		return s.prepareRawTrack(ctx, trackID)
-@@ -410,7 +434,7 @@
- 	// Warm segment 0 asynchronously so both initial playback and
- 	// seek-to-start (0:00) can write the first ~10s immediately
- 	// without waiting for an upstream CDN round-trip.
--	if len(st.segments) > 0 && (st.raw || s.cdmEngine != nil) {
-+	if !st.video && st.videoStream == "" && len(st.segments) > 0 && (st.raw || s.cdmEngine != nil) {
- 		go func() {
- 			warmCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
- 			defer cancel()
-@@ -498,6 +522,15 @@
- 
- 	if !ok {
- 		http.NotFound(w, r)
-+		return
-+	}
-+
-+	if st.video {
-+		http.NotFound(w, r)
-+		return
-+	}
-+	if st.live {
-+		s.serveLive(w, r, streamID, st)
- 		return
- 	}
- 
-@@ -520,6 +553,12 @@
- 		}
- 	}
- 
-+	skipFrames := 0
-+	if !st.raw {
-+		if n, err := strconv.Atoi(r.URL.Query().Get("skip_frames")); err == nil && n > 0 && n <= 1000000 {
-+			skipFrames = n
-+		}
-+	}
- 	contentType := "audio/aac"
- 	if st.raw {
- 		contentType = st.rawFormat.contentType
-@@ -571,6 +610,14 @@
- 			}
- 		}
- 
-+		if skipFrames > 0 {
-+			var trimErr error
-+			aacData, skipFrames, trimErr = trimADTSFrames(aacData, skipFrames)
-+			if trimErr != nil {
-+				fail(i, "seek", trimErr)
-+				return
-+			}
-+		}
- 		// Write to HTTP client (GStreamer). A failed write means the client
- 		// has gone, so there is nobody left to abort for; log it only.
- 		if _, err := w.Write(aacData); err != nil {
-@@ -600,19 +647,34 @@
- }
- 
- func (s *StreamServer) fetchAndDecryptSegment(ctx context.Context, client *http.Client, st *trackStream, seg segmentRef) ([]byte, string, error) {
-+	if st.stationInfo != nil && seg.keyURI != "" {
-+		var err error
-+		st, err = s.stationSegmentProtection(ctx, st, seg)
-+		if err != nil {
-+			return nil, "protection", err
-+		}
-+	}
- 	segURL := seg.uri
- 	if !strings.HasPrefix(segURL, "http://") && !strings.HasPrefix(segURL, "https://") {
- 		segURL = st.baseURI + seg.uri
- 	}
- 
--	segData, stage, err := fetchSegmentWithRetry(ctx, client, segURL, seg.offset, seg.length)
-+	var segData []byte
-+	var stage string
-+	var err error
-+	if st.fragmentConfig != nil {
-+		segData, err = s.mediaBytes(ctx, segURL, seg.offset, seg.length, 32<<20)
-+		stage = "fetch video audio"
-+	} else {
-+		segData, stage, err = fetchSegmentWithRetry(ctx, client, segURL, seg.offset, seg.length)
-+	}
- 	if err != nil {
- 		return nil, stage, err
- 	}
- 	if st.raw {
- 		return segData, "", nil
- 	}
--	aacData, err := mp4.DecryptSegment(segData, st.kid, st.audioCfg, func(kid, iv, input []byte, subs []mp4.Subsample) ([]byte, error) {
-+	decrypt := func(kid, iv, input []byte, subs []mp4.Subsample) ([]byte, error) {
- 		cdmSubs := make([]cdm.Subsample, len(subs))
- 		for si, sb := range subs {
- 			cdmSubs[si] = cdm.Subsample{
-@@ -620,8 +682,17 @@
- 				CipherBytes: sb.CipherBytes,
- 			}
- 		}
-+		if st.encryption != nil && st.encryption.CBCS {
-+			return s.cdmEngine.DecryptCBCS(kid, iv, input, cdmSubs, st.encryption.Crypt, st.encryption.Skip)
-+		}
- 		return s.cdmEngine.DecryptSubsamples(kid, iv, input, cdmSubs)
--	})
-+	}
-+	var aacData []byte
-+	if st.fragmentConfig != nil && st.encryption != nil {
-+		aacData, err = mp4.DecryptAudioFragment(segData, st.kid, *st.fragmentConfig, st.audioCfg, *st.encryption, decrypt)
-+	} else {
-+		aacData, err = mp4.DecryptSegment(segData, st.kid, st.audioCfg, decrypt, encryptionOptions(st)...)
-+	}
- 	if err != nil {
- 		return nil, "decrypt", err
- 	}
-@@ -701,6 +772,14 @@
- 
- // Close terminates the local HTTP stream server.
- func (s *StreamServer) Close() error {
-+	s.closeMedia()
-+	if s.videoCancel != nil {
-+		s.videoCancel()
-+	}
-+	s.videoMu.Lock()
-+	s.videoClosed = true
-+	s.resetVideoLocked()
-+	s.videoMu.Unlock()
- 	if s.server != nil {
- 		return s.server.Close()
- 	}
---- a/internal/vibez/player/browserless/streamer_test.go
-+++ b/internal/vibez/player/browserless/streamer_test.go
-@@ -218,8 +218,8 @@
- 		t.Fatalf("Seek(14s) returned error: %v", err)
- 	}
- 	st, _ := p.GetState()
--	if st.Position != 12*time.Second {
--		t.Errorf("Position after Seek(14s) = %v, want 12s (start of segment 2)", st.Position)
-+	if st.Position > 14*time.Second || 14*time.Second-st.Position > 24*time.Millisecond {
-+		t.Errorf("Position after Seek(14s) = %v, want within one AAC frame before 14s", st.Position)
- 	}
- }
- 
---- a/internal/vibez/provider/provider.go
-+++ b/internal/vibez/provider/provider.go
-@@ -21,15 +21,16 @@
- }
- 
- type Track struct {
--	ID         string
--	CatalogID  string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
--	Title      string
--	Artist     string
--	Album      string
--	Duration   time.Duration
--	ArtworkURL string
--	PreviewURL string
--	Genres     []string
-+	Kind, MediaType string
-+	ID              string
-+	CatalogID       string // catalog ID for playback; set for library tracks where ID is "i.XXXXX"
-+	Title           string
-+	Artist          string
-+	Album           string
-+	Duration        time.Duration
-+	ArtworkURL      string
-+	PreviewURL      string
-+	Genres          []string
- 	// DiscNumber and TrackNumber give the track's position on its album.
- 	// Zero means unknown.
- 	DiscNumber  int

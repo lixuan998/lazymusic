@@ -14,6 +14,9 @@ import (
 )
 
 type videoState struct {
+	sixelData, sixelSize                                       string
+	sixelPosition                                              time.Duration
+	encoding                                                   bool
 	observed, key, failed                                      string
 	generation                                                 uint64
 	loading, pending, active, used, ticking, clearing, waiting bool
@@ -70,6 +73,7 @@ func (m *Model) CancelVideo() {
 	v.pending = false
 	v.ticking = false
 	v.probing = false
+	v.encoding = false
 }
 func (m *Model) clearVideo() tea.Cmd {
 	v := &m.video
@@ -80,12 +84,17 @@ func (m *Model) clearVideo() tea.Cmd {
 	v.failed = ""
 	v.waiting = false
 	v.placeholders = nil
+	v.sixelData, v.sixelSize = "", ""
 	if !v.used {
 		return nil
 	}
 	generation := v.generation
 	v.clearing = true
-	out := videoWrite{generation: generation, data: m.graphics.wrap(termimage.Delete(m.videoImageID())), done: videoCleared{generation}}
+	cleanup := m.graphics.wrap(termimage.Delete(m.videoImageID()))
+	if m.graphics.protocol == "sixel" {
+		cleanup = termimage.SixelRefresh
+	}
+	out := videoWrite{generation: generation, data: cleanup, done: videoCleared{generation}}
 	return func() tea.Msg { return out }
 }
 func (m *Model) syncVideo() tea.Cmd {
@@ -104,7 +113,7 @@ func (m *Model) syncVideo() tea.Cmd {
 		commands = append(commands, m.dirty())
 	}
 	if !m.videoVisible() || m.State.Playback.Status == "stopped" {
-		if v.active || v.loading || v.pending || v.ticking || v.key != "" {
+		if v.active || v.loading || v.pending || v.encoding || v.ticking || v.key != "" {
 			commands = append(commands, m.clearVideo())
 		}
 		return tea.Batch(commands...)
@@ -122,7 +131,7 @@ func (m *Model) syncVideo() tea.Cmd {
 	if !m.State.Playback.Playing && v.waiting {
 		return tea.Batch(commands...)
 	}
-	if !m.graphics.ready() || m.State.Playback.Loading || v.loading || v.pending || v.ticking || v.failed == key {
+	if !m.graphics.ready() || m.State.Playback.Loading || v.loading || v.pending || v.encoding || v.ticking || v.failed == key {
 		return tea.Batch(commands...)
 	}
 	provider, ok := m.api.(video.Provider)
@@ -132,30 +141,39 @@ func (m *Model) syncVideo() tea.Cmd {
 		return tea.Batch(commands...)
 	}
 	if v.frame.Valid() {
-		_, _, columns, rows := m.videoRect(v.frame.Width, v.frame.Height)
-		if !v.active || v.columns != columns || v.rows != rows || v.sentPosition != v.frame.Position {
-			sequence := termimage.Transmit(v.frame.PNG, m.videoImageID(), columns, rows)
-			if v.active && v.sentPosition == v.frame.Position {
-				sequence = termimage.Placement(m.videoImageID(), columns, rows)
-			} else if v.active && v.columns == columns && v.rows == rows && v.frameSupport == 1 {
-				sequence = termimage.UpdateFrame(v.frame.PNG, m.videoImageID(), 0, 0)
+		if m.graphics.protocol == "sixel" {
+			if command := m.syncSixelVideoFrame(); command != nil {
+				return tea.Batch(append(commands, command)...)
 			}
-			if v.frameSupport == 0 && !v.probing {
-				v.probing = true
-				sequence += termimage.ProbeFrames(m.videoImageID())
+			if v.encoding || v.pending || !m.State.Playback.Playing && absDuration(v.frame.Position-m.State.Playback.Position) < time.Second {
+				return tea.Batch(commands...)
 			}
-			v.pending, v.used = true, true
-			generation := v.generation
-			out := videoWrite{generation, m.graphics.wrap(sequence), videoUploaded{generation, v.frame.Position, columns, rows}}
-			commands = append(commands, func() tea.Msg { return out })
-			return tea.Batch(commands...)
-		}
-		if !m.State.Playback.Playing && absDuration(v.frame.Position-m.State.Playback.Position) < time.Second {
-			return tea.Batch(commands...)
+		} else {
+			_, _, columns, rows := m.videoRect(v.frame.Width, v.frame.Height)
+			if !v.active || v.columns != columns || v.rows != rows || v.sentPosition != v.frame.Position {
+				sequence := termimage.Transmit(v.frame.PNG, m.videoImageID(), columns, rows)
+				if v.active && v.sentPosition == v.frame.Position {
+					sequence = termimage.Placement(m.videoImageID(), columns, rows)
+				} else if v.active && v.columns == columns && v.rows == rows && v.frameSupport == 1 {
+					sequence = termimage.UpdateFrame(v.frame.PNG, m.videoImageID(), 0, 0)
+				}
+				if v.frameSupport == 0 && !v.probing {
+					v.probing = true
+					sequence += termimage.ProbeFrames(m.videoImageID())
+				}
+				v.pending, v.used = true, true
+				generation := v.generation
+				out := videoWrite{generation, m.graphics.wrap(sequence), videoUploaded{generation, v.frame.Position, columns, rows}}
+				commands = append(commands, func() tea.Msg { return out })
+				return tea.Batch(commands...)
+			}
+			if !m.State.Playback.Playing && absDuration(v.frame.Position-m.State.Playback.Position) < time.Second {
+				return tea.Batch(commands...)
+			}
 		}
 	}
 	v.loading = true
-	v.nextFrame = time.Now().Add(video.Interval)
+	v.nextFrame = time.Now().Add(m.videoInterval())
 	ctx, cancel := context.WithTimeout(m.ctx, 14*time.Second)
 	v.cancel = cancel
 	generation, id := v.generation, m.State.Playback.Track.ID
@@ -175,6 +193,20 @@ func absDuration(d time.Duration) time.Duration {
 func (m *Model) videoMessage(msg tea.Msg) {
 	v := &m.video
 	switch msg := msg.(type) {
+	case sixelVideoPrepared:
+		if msg.generation != v.generation || !v.encoding || m.graphics.protocol != "sixel" {
+			return
+		}
+		v.encoding = false
+		if msg.err != nil {
+			v.failed = v.key
+			m.Report("info", "video", "Sixel video frame unavailable")
+			return
+		}
+		if msg.position != v.frame.Position {
+			return
+		}
+		v.sixelData, v.sixelSize, v.sixelPosition = msg.data, msg.size, msg.position
 	case uv.KittyGraphicsEvent:
 		if msg.Options.ID == m.videoImageID() && v.used {
 			if string(msg.Payload) == "OK" && v.probing {
@@ -218,7 +250,7 @@ func (m *Model) videoMessage(msg tea.Msg) {
 		v.pending = false
 		v.active = true
 		v.sentPosition = msg.position
-		if v.columns != msg.columns || v.rows != msg.rows || v.placeholders == nil {
+		if m.graphics.protocol != "sixel" && (v.columns != msg.columns || v.rows != msg.rows || v.placeholders == nil) {
 			v.placeholders = termimage.PlaceholderRows(m.videoImageID(), msg.columns, msg.rows)
 		}
 		v.columns, v.rows = msg.columns, msg.rows
@@ -240,6 +272,18 @@ func (m *Model) videoDelay(now time.Time) time.Duration {
 }
 func (m *Model) videoRect(width, height int) (left, top, columns, rows int) {
 	w, h := m.ContentWidth(), min(255, max(1, m.bodyHeight()-4))
+	if m.graphics.protocol == "sixel" && m.graphics.cellWidth > 0 && m.graphics.cellHeight > 0 {
+		g := m.graphics
+		columns = min(w, termimage.MaxSixelWidth/g.cellWidth)
+		rows = max(1, (columns*g.cellWidth*max(1, height)+g.cellHeight*max(1, width)-1)/(g.cellHeight*max(1, width)))
+		limit := min(h, termimage.MaxSixelHeight/g.cellHeight)
+		if rows > limit {
+			rows = limit
+			columns = min(columns, rows*g.cellHeight*max(1, width)/(g.cellWidth*max(1, height)))
+		}
+		left, top = max(0, (w-columns)/2), max(0, (h-rows)/2)+1
+		return
+	}
 	width, height = max(1, width), max(1, height)
 	columns = min(w, 255)
 	rows = max(1, columns*height/(2*width))
@@ -279,6 +323,9 @@ func (m *Model) videoRows(h int) []string {
 	case m.video.active:
 		left, top, columns, n := m.videoRect(m.video.frame.Width, m.video.frame.Height)
 		if columns == m.video.columns && n == m.video.rows {
+			if m.graphics.protocol == "sixel" {
+				return rows
+			}
 			for y, line := range m.video.placeholders {
 				if top+y < len(rows) {
 					rows[top+y] = fit(strings.Repeat(" ", left)+line, w)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"lazymusic/internal/catalog"
@@ -23,7 +24,12 @@ func TestLocalLyricsUseSameNameAndStayInsideMusicRoot(t *testing.T) {
 	os.Remove(filepath.Join(root, "Example.LRC"))
 	outside := filepath.Join(t.TempDir(), "outside.lrc")
 	os.WriteFile(outside, []byte("[00:01.00]Private outside file"), 0600)
-	os.Symlink(outside, filepath.Join(root, "Example.lrc"))
+	if err := os.Symlink(outside, filepath.Join(root, "Example.lrc")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("Windows symlink privilege unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
 	if _, err = b.Lyrics(context.Background(), subject); err == nil {
 		t.Fatal("lyrics symlink escaped root")
 	}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 )
 
@@ -30,6 +31,9 @@ func TestLoginURLWriterOnlyReportsExactLocalAuthorizationLink(t *testing.T) {
 }
 
 func TestQuietLoginReportsFallbackURLAndStillImportsCredentials(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture requires a POSIX shell")
+	}
 	t.Setenv("LAZYMUSIC_DEVELOPER_TOKEN", "")
 	dir := t.TempDir()
 	helper := filepath.Join(dir, "helper")
@@ -52,6 +56,9 @@ printf '%s' '{"apple_developer_token":"fixture.dev.token","apple_user_token":"fi
 }
 
 func TestFallbackURLSurvivesColoredStderrAndMissingFinalNewline(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture requires a POSIX shell")
+	}
 	t.Setenv("LAZYMUSIC_DEVELOPER_TOKEN", "")
 	dir := t.TempDir()
 	helper := filepath.Join(dir, "helper")

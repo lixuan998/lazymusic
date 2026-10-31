@@ -10,6 +10,7 @@ import (
 	"lazymusic/internal/daemon"
 	"lazymusic/internal/music"
 	"lazymusic/internal/session"
+	"lazymusic/internal/termimage"
 	"lazymusic/internal/tui"
 	"os"
 	"sync"
@@ -27,6 +28,7 @@ type connectionMessage struct {
 	err         error
 }
 type application struct {
+	imageOutput   *termimage.Output
 	ctx           context.Context
 	options       LaunchOptions
 	music         *tui.Model
@@ -101,8 +103,10 @@ func RunApplication(ctx context.Context, opts LaunchOptions) error {
 		a.music.OpenLogin()
 	}
 	a.resetLogin()
-	program := tea.NewProgram(a, tea.WithContext(ctx))
+	a.imageOutput = termimage.NewOutput(os.Stdout)
+	program := tea.NewProgram(a, tea.WithContext(ctx), tea.WithOutput(a.imageOutput))
 	_, err = program.Run()
+	_ = a.imageOutput.Close()
 	_, _ = fmt.Fprint(os.Stdout, a.music.GraphicsCleanup())
 	cancel()
 	a.poolMu.Lock()
@@ -325,6 +329,9 @@ func (a *application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, cmd
 }
 func (a *application) View() tea.View {
+	if a.imageOutput != nil {
+		a.imageOutput.SetLayers(a.music.SixelLayers())
+	}
 	if a.music.LoginSelected() {
 		return a.music.ViewWithContent(&tui.ContentPanel{Title: "Login", Rows: a.login.RowsForWidth(a.music.ContentWidth())})
 	}

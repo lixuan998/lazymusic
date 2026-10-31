@@ -16,6 +16,10 @@ import (
 )
 
 type graphicsState struct {
+	protocol, requested                               string
+	sixelSupported                                    bool
+	cellWidth, cellHeight                             int
+	sixelData, sixelSize                              string
 	id                                                int
 	disabled, relay, known, queried, replied, checked bool
 	active, pending, preparing, clearing              bool
@@ -43,15 +47,16 @@ type graphicsWrite struct {
 	done       tea.Msg
 }
 type graphicsPrepared struct {
-	generation uint64
-	key        string
-	png        []byte
-	scene      image.Image
-	err        error
-	renderer   *turntable.Renderer
-	angle      float64
-	patch      bool
-	coverKey   string
+	sixelData, sixelSize string
+	generation           uint64
+	key                  string
+	png                  []byte
+	scene                image.Image
+	err                  error
+	renderer             *turntable.Renderer
+	angle                float64
+	patch                bool
+	coverKey             string
 }
 type graphicsUploaded struct {
 	generation    uint64
@@ -66,11 +71,20 @@ func newGraphicsState() graphicsState {
 	host := strings.ToLower(os.Getenv("LAZYMUSIC_IMAGE_HOST") + " " + os.Getenv("TERM_PROGRAM") + " " + os.Getenv("TERM"))
 	relay := os.Getenv("LAZYMUSIC_IMAGE_BRIDGE") == "osc"
 	confirmed := relay && os.Getenv("LAZYMUSIC_IMAGE_SUPPORTED") == "1"
-	return graphicsState{replied: confirmed, id: termimage.MinID + int(binary.BigEndian.Uint16(nonce[:]))%65535, relay: relay,
+	requested := strings.ToLower(os.Getenv("LAZYMUSIC_IMAGE_PROTOCOL"))
+	if requested != "kitty" && requested != "sixel" && requested != "pixel" {
+		requested = "auto"
+	}
+	if relay && requested == "sixel" {
+		requested = "pixel"
+	}
+	return graphicsState{requested: requested, replied: confirmed, id: termimage.MinID + int(binary.BigEndian.Uint16(nonce[:]))%65535, relay: relay,
 		known:    confirmed || strings.Contains(host, "ghostty") || strings.Contains(host, "kitty"),
-		disabled: os.Getenv("LAZYMUSIC_IMAGE_DISABLE") == "1" || os.Getenv("NVIM") != "" && !relay || os.Getenv("TMUX") != "" || os.Getenv("ZELLIJ") != ""}
+		disabled: requested == "pixel" || os.Getenv("LAZYMUSIC_IMAGE_DISABLE") == "1" || os.Getenv("NVIM") != "" && !relay || os.Getenv("TMUX") != "" || os.Getenv("ZELLIJ") != ""}
 }
-func (g *graphicsState) ready() bool { return !g.disabled && g.replied && g.known }
+func (g *graphicsState) ready() bool {
+	return !g.disabled && g.replied && g.known && (g.protocol != "sixel" || g.cellWidth > 0 && g.cellHeight > 0)
+}
 func (g *graphicsState) wrap(s string) string {
 	if g.relay {
 		return termimage.Relay(s)
@@ -83,13 +97,16 @@ func (g *graphicsState) wrap(s string) string {
 func (m *Model) GraphicsCleanup() string {
 	g := &m.graphics
 	var cleanup string
-	if g.used {
+	if g.protocol == "sixel" && (g.used || m.video.used) {
+		cleanup = termimage.SixelRefresh
+	}
+	if g.used && g.protocol != "sixel" {
 		cleanup += termimage.Delete(g.id)
 	}
 	if g.queried {
 		cleanup += termimage.Delete(g.probeID())
 	}
-	if m.video.used {
+	if m.video.used && g.protocol != "sixel" {
 		cleanup += termimage.Delete(m.videoImageID())
 	}
 	return g.wrap(cleanup)
@@ -99,8 +116,12 @@ func (m *Model) ClearGraphics() tea.Cmd {
 	g.generation++
 	g.active, g.pending, g.preparing, g.probing = false, false, false, false
 	g.sent = ""
+	g.sixelData, g.sixelSize = "", ""
 	if g.used {
 		cleanup := g.wrap(termimage.Delete(g.id))
+		if g.protocol == "sixel" {
+			cleanup = termimage.SixelRefresh
+		}
 		g.clearing = true
 		out := graphicsWrite{g.generation, cleanup, graphicsCleared{g.generation}}
 		return func() tea.Msg { return out }
@@ -120,10 +141,17 @@ func (m *Model) TerminalOutput(msg tea.Msg) (string, tea.Msg, bool) {
 
 	if query, ok := msg.(graphicsQueryWrite); ok {
 		g := &m.graphics
-		if query.attempt != g.queryGeneration || !g.queryPending || g.disabled || g.replied {
+		if query.attempt != g.queryGeneration || !g.queryPending || g.disabled || g.ready() {
 			return "", nil, false
 		}
-		return g.wrap(termimage.Query(g.probeID())), graphicsQuerySent{query.attempt}, true
+		sequence := ""
+		if g.requested != "sixel" {
+			sequence = g.wrap(termimage.Query(g.probeID()))
+		}
+		if !g.relay && g.requested != "kitty" {
+			sequence += termimage.SixelQuery
+		}
+		return sequence, graphicsQuerySent{query.attempt}, true
 	}
 	out, ok := msg.(graphicsWrite)
 	if !ok || out.generation != m.graphics.generation {
@@ -133,6 +161,9 @@ func (m *Model) TerminalOutput(msg tea.Msg) (string, tea.Msg, bool) {
 }
 
 func (m *Model) syncGraphics() tea.Cmd {
+	if m.graphics.protocol == "sixel" && m.graphics.ready() {
+		return m.syncSixelGraphics()
+	}
 	g := &m.graphics
 	if g.clearing {
 		return nil
@@ -243,13 +274,39 @@ func (m *Model) syncGraphics() tea.Cmd {
 func (m *Model) graphicsMessage(msg tea.Msg) {
 	g := &m.graphics
 	switch msg := msg.(type) {
+	case uv.PrimaryDeviceAttributesEvent:
+		if g.disabled || g.relay || g.requested == "kitty" || len(msg) < 2 {
+			return
+		}
+		for _, attribute := range msg[1:] {
+			if attribute == 4 {
+				g.sixelSupported = true
+				if !g.ready() || g.protocol == "sixel" {
+					m.selectGraphicsProtocol("sixel")
+					g.replied, g.known = true, true
+				}
+				break
+			}
+		}
+	case uv.CellSizeEvent:
+		if msg.Width > 0 && msg.Width <= 256 && msg.Height > 0 && msg.Height <= 512 {
+			g.cellWidth, g.cellHeight = msg.Width, msg.Height
+		}
+	case uv.PixelSizeEvent:
+		if m.width > 0 && m.height > 0 {
+			w, h := msg.Width/m.width, msg.Height/m.height
+			if g.cellWidth == 0 && w > 0 && w <= 256 && h > 0 && h <= 512 {
+				g.cellWidth, g.cellHeight = w, h
+			}
+		}
 	case uv.KittyGraphicsEvent:
-		if msg.Options.ID == g.probeID() && g.queried {
+		if msg.Options.ID == g.probeID() && g.queried && g.requested != "sixel" {
 			g.queryPending = false
 			g.checked = true
 			// Positive evidence is sticky for this terminal. A late error can describe
 			// a deleted image or an older probe; it cannot revoke a successful query.
 			if string(msg.Payload) == "OK" {
+				m.selectGraphicsProtocol("kitty")
 				g.replied, g.known = true, true
 			}
 			return
@@ -274,7 +331,7 @@ func (m *Model) graphicsMessage(msg tea.Msg) {
 			g.querySent = true
 		}
 	case graphicsTimeout:
-		if msg.attempt != g.queryGeneration || !g.queryPending || !g.queryTimed || g.replied {
+		if msg.attempt != g.queryGeneration || !g.queryPending || !g.queryTimed || g.ready() {
 			return
 		}
 		g.queryPending, g.querySent, g.queryTimed = false, false, false
@@ -307,6 +364,7 @@ func (m *Model) graphicsMessage(msg tea.Msg) {
 			return
 		}
 		g.prepared, g.png = msg.key, msg.png
+		g.sixelData, g.sixelSize = msg.sixelData, msg.sixelSize
 		g.scene = msg.scene
 		g.renderer, g.preparedAngle, g.preparedPatch, g.coverKey = msg.renderer, msg.angle, msg.patch, msg.coverKey
 	case graphicsUploaded:

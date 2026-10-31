@@ -8,6 +8,7 @@ import (
 	"lazymusic/internal/music"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -128,6 +129,9 @@ func TestLoginPreservesAndWrapsActionableFailureReason(t *testing.T) {
 }
 
 func TestAppleLoginKeepsTheHelpersSanitizedFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture requires a POSIX shell")
+	}
 	helper := filepath.Join(t.TempDir(), "helper")
 	script := "#!/bin/sh\n[ \"$1\" = version ] && exit 0\nprintf 'x509: certificate signed by unknown authority; token=SECRET\\n' >&2\nexit 1\n"
 	if err := os.WriteFile(helper, []byte(script), 0700); err != nil {

@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"lazymusic/internal/catalog"
@@ -29,7 +30,12 @@ func TestLocalAlbumArtworkAndSymlinkBoundary(t *testing.T) {
 	}
 	outside := filepath.Join(t.TempDir(), "cover.png")
 	os.Rename(path, outside)
-	os.Symlink(outside, path)
+	if err := os.Symlink(outside, path); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("Windows symlink privilege unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
 	if _, err = b.Artwork(context.Background(), subject); err == nil {
 		t.Fatal("artwork escaped the music root")
 	}

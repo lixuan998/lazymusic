@@ -14,5 +14,8 @@ func CDMPath(stateDir string) string {
 	if runtime.GOOS == "darwin" {
 		name = "libwidevinecdm.dylib"
 	}
+	if runtime.GOOS == "windows" {
+		name = "widevinecdm.dll"
+	}
 	return filepath.Join(stateDir, "cdm", name)
 }

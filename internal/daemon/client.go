@@ -32,7 +32,7 @@ func NewClient(dir string) (*Client, error) {
 		return nil, err
 	}
 	tr := &http.Transport{Proxy: nil, MaxIdleConnsPerHost: 8, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{Timeout: 2 * time.Second}).DialContext(ctx, "unix", path)
+		return dialIPC(ctx, path)
 	}}
 	return &Client{http: &http.Client{Transport: tr, Timeout: 90 * time.Second}}, nil
 }

@@ -1,15 +1,15 @@
 # lazymusic
 
-**把音乐留在终端。** 支持 macOS 和 Linux 的音乐 TUI，连接 Apple Music 或本地音乐库，默认使用 Vim 键位。
+**把音乐留在终端。** 支持 macOS、Linux 和 Windows x64 的音乐 TUI，连接 Apple Music 或本地音乐库，默认使用 Vim 键位。
 
 浏览推荐、搜索音乐、整理队列，再切到黑胶播放台看同步歌词。关闭界面后音乐继续播放，重新打开恢复原来的页面和播放状态。
 
-[界面演示](#界面演示) · [安装](#安装) · [快速上手](#快速上手) · [键位](#键位) · [使用指南](#使用指南) · [Neovim](#neovim) · [配置与命令行](#配置与命令行) · [常见问题](#常见问题)
+[界面演示](#界面演示) · [安装](#安装) · [Windows](#windows-原生构建与运行) · [快速上手](#快速上手) · [键位](#键位) · [使用指南](#使用指南) · [Neovim](#neovim) · [配置与命令行](#配置与命令行) · [常见问题](#常见问题)
 
 ## 功能
 
 - **Apple Music / LOCAL**：按音源能力显示页面；Apple Music 提供 Home 个性化推荐、New、Radio、Library、Playlists，以及 catalog / library 双范围搜索。
-- **原生播放**：macOS 和 Linux 播放时均不依赖浏览器；支持歌曲、动态电台、电台节目，以及 Content 内的 Apple Music 视频。
+- **原生播放**：macOS、Linux 和 Windows 播放时均不依赖浏览器；支持歌曲、动态电台、电台节目，以及 Content 内的 Apple Music 视频。
 - **队列整理**：加入队列、下一首播放、拾取与放置、整组插入、撤销与重做，以及定位当前播放歌曲。
 - **后台与 session**：界面退出后继续播放；保存页面、分类、光标、队列、播放位置、布局与音效设置。
 - **黑胶播放台与歌词**：高清机身、圆形旋转封面、随播放状态变化的唱针与指示灯，歌词自动滚动并高亮当前句。
@@ -47,7 +47,91 @@
 
 ## 安装
 
-目前从源码安装，需要 **Go 1.25+、CGO 和 C/C++ 工具链**。Apple Music 授权组件和 CDM 支持 macOS Apple Silicon / Intel、Linux x86_64；首次使用按需下载。
+目前从源码安装，需要 **Go 1.25+、CGO 和 C/C++ 工具链**。Apple Music 授权组件和 CDM 支持 macOS Apple Silicon / Intel、Linux / Windows x86_64；首次使用按需下载。
+
+### Windows 原生构建与运行
+
+支持 **Windows 10/11 x64**，可以直接编译、运行 `lazymusic.exe`，不依赖 WSL。
+音频使用 Windows Media Foundation 解码和 waveOut 输出，十段 EQ 在播放过程中生效，
+音量键控制系统默认输出设备；后台通过当前用户私有的命名管道通信。
+Windows 无需 GStreamer；N/KN 版本需要安装系统的 Media Feature Pack。
+
+**编译依赖**：安装 [Go 1.25+](https://go.dev/dl/) 和 64 位 MinGW-w64 GCC。
+可选用 [MSYS2 UCRT64](https://www.msys2.org/) 或
+[w64devkit](https://github.com/skeeto/w64devkit/releases)，将 Go 和 GCC 的 `bin` 目录加入 PATH。
+使用 MSYS2 时，在 **UCRT64 shell** 中安装工具链：
+
+```sh
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc
+```
+
+随后在 **PowerShell** 中进入仓库，编译并启动：
+
+```powershell
+git clone https://github.com/lixuan998/lazymusic.git
+cd lazymusic
+# 使用 w64devkit 时改成它的 bin 目录；Go 的 bin 目录也需要在 PATH 中
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+.\build.ps1
+.\bin\lazymusic.exe
+
+# 直接配置并打开本地音乐库
+.\bin\lazymusic.exe --source local --music-dir 'D:\Music'
+```
+
+`build.ps1` 会为本次构建开启 CGO，使用 GCC/G++，输出 `bin\lazymusic.exe`。
+已有编译好的程序时，运行它无需安装 Go 或 GCC。
+测试和静态检查同样可以在 PowerShell 中执行：
+
+```powershell
+.\build.ps1 -Task test
+.\build.ps1 -Task vet
+```
+
+**从 WSL 仓库构建**：也可用 PowerShell 进入
+`\\wsl.localhost\<发行版>\home\<用户名>\Workspace\lazymusic` 执行脚本。
+脚本会将源码暂存到 Windows 临时目录构建，再把程序放回仓库 `bin`，避免 Go 在 UNC 上的文件锁错误。
+这里生成的仍是 Windows 程序；在 WSL shell 中运行 `make build` 生成的是 Linux 程序。
+如果 PowerShell 因 UNC 路径或未签名脚本阻止执行，可仅为本次构建运行
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1`；不会修改系统执行策略。
+
+**安装与卸载**：
+
+```powershell
+.\build.ps1 -Task install
+# 需要 Neovim 插件时，改用以下安装命令
+.\build.ps1 -Task install -InstallNvim
+.\build.ps1 -Task uninstall
+```
+
+默认程序位置是 `%LOCALAPPDATA%\Programs\lazymusic\bin\lazymusic.exe`，自行将其 `bin` 目录加入 PATH。
+`-InstallNvim` 同时部署 Lua 插件和帮助，并生成 `%LOCALAPPDATA%\nvim\lua\plugins\lazymusic.lua`；
+已有不同内容会先备份。`-Prefix`、`-NvimConfigDir` 可覆盖路径。
+卸载只移除程序，保留插件、配置、授权和会话。更新前先退出 TUI 并停止对应后台服务，再拉取代码重新安装。
+
+**图片与终端**：推荐使用支持 Sixel 的 Windows Terminal 1.22+。
+默认自动探测 Kitty/Sixel，封面和黑胶播放台支持 Sixel；Sixel 使用最多 256 色整帧输出，
+旋转与视频上限 10 FPS，实际速度取决于终端和连接。
+需要指定 Sixel 时，在启动程序前设置：
+
+```powershell
+$env:LAZYMUSIC_IMAGE_PROTOCOL = "sixel"
+.\bin\lazymusic.exe
+```
+
+没有确认图片协议或无法取得字符格像素尺寸时，Turntable 使用字符图像回退，视频保留音轨。
+Sixel 目前仅支持直接终端；Neovim 浮窗仍要求外层终端支持 Kitty 图像协议。
+更多选项见[图片与终端兼容](#图片与终端兼容)。
+
+**配置与后台**：默认配置位于 `%APPDATA%\lazymusic`，LOCAL 默认使用其下的 `profiles\local`，
+支持原有 `LAZYMUSIC_STATE_DIR` 和 `--state-dir`。`q` 打开提示后，再按 `q` 保留后台播放、`Q` 停止当前来源服务。
+`lazymusic status`、`lazymusic ctl` 和 `lazymusic quit` 在 Windows 上同样可用。
+
+**Apple Music 支持边界**：登录使用固定版本、SHA-256 校验的官方 `vibez_windows_amd64.zip`；
+`LAZYMUSIC_VIBEZ_HELPER` 可指向自备 `vibez.exe`。Widevine 文件为 `widevinecdm.dll`，
+支持自动准备及 `LAZYMUSIC_CDM_PATH`。当前 Apple 后端只声明 AAC 音质，本地格式取决于系统解码器。
+Windows 已验证构建、测试、TUI 启动、本地静音播放与控制、后台通信及真实 CDM 加载/挑战生成；
+真实账号登录、订阅歌曲、电台和受保护视频播放尚未实测。
 
 ### macOS
 
@@ -86,7 +170,7 @@ sudo apt install -y \
 
 运行时需要当前用户可访问的音频设备和音频服务。WSL 需要可用的音频转发；只有 SSH、没有音频输出的服务器需先配置输出环境。使用普通用户运行 lazymusic。
 
-### 编译与安装
+### macOS / Linux 编译与安装
 
 ```sh
 git clone https://github.com/lixuan998/lazymusic.git
@@ -124,7 +208,7 @@ make install NVIM_CONFIG_DIR="$HOME/.config/nvim-work"
 
 `make install` 自动先编译，支持 `GO`、`INSTALL`、`PREFIX`、`BINDIR`、`NVIM_CONFIG_DIR`、`NVIM_PLUGIN_DIR` 和 `DESTDIR`。`DESTDIR` 用于打包暂存，生成的 Neovim 配置引用最终安装路径。
 
-### 更新与卸载
+### macOS / Linux 更新与卸载
 
 退出 TUI、停止后台服务后更新：
 
@@ -238,7 +322,7 @@ lazymusic --source local --music-dir "$HOME/Music"
 
 Apple Music **仅登录授权时临时使用浏览器，播放不依赖浏览器**。当前使用固定版本、校验摘要的 Vibez 官方授权组件，Apple 授权页中的应用身份仍为 **Vibez**，依赖其授权服务。首次使用下载授权组件和 CDM，凭据保存在本机私有目录。
 
-Player 中按 `b` 选择后端支持的音质。Apple 的 AAC 64 / 256 kbps 是请求偏好，实际流以服务返回为准；当前 macOS 和 Linux 都没有已验证的 ALAC 无损 / Hi-Res 播放路径，因此不提供这些选项。曲目的音质标签不等于正在播放的格式。
+Player 中按 `b` 选择后端支持的音质。Apple 的 AAC 64 / 256 kbps 是请求偏好，实际流以服务返回为准；当前 macOS、Linux 和 Windows 都没有已验证的 ALAC 无损 / Hi-Res 播放路径，因此不提供这些选项。曲目的音质标签不等于正在播放的格式。
 
 LOCAL 识别 MP3、M4A、AAC、WAV、AIFF、FLAC、OGG、Opus 扩展名，能否解码取决于系统与已安装插件。不转码，暂不读取嵌入式音乐标签，也不播放 Apple 下载的 DRM 文件。
 
@@ -287,9 +371,9 @@ Apple Music 的 Search → **Videos** 分类可搜索音乐视频；Home、New �
 
 选中视频按 `Enter` / `P` 播放，Content 自动显示画面。`v` 在视频与原来的浏览页面间切换，视频页 `h` / `Esc` 返回浏览。`Space`、`x`、`<` / `>`、`Ctrl+<` / `Ctrl+>` 仍分别控制暂停、停止、切歌和跳转。暂停保留画面，停止清除画面；后台运行继续播放音轨，重新进入后按当前进度恢复视频。
 
-视频通过现有授权 CDM 的原生 H.264 解码器播放，macOS 和 Linux 均不依赖浏览器或 FFmpeg。仅使用服务明确允许软件播放的流；优先保留可用软件流的原始分辨率，输出上限为 **1280 × 720、30 FPS**。实际清晰度与帧率受 Apple 提供的授权版本、终端和网络吞吐限制；不会将低分辨率作品上采样成假 HD。慢连接只处理当前画面，不堆积旧帧。视频画面不写磁盘或 session，音轨沿用原生音频输出。后台预取一个加密视频片段；图片通过本地 socket 直接传输 PNG，并在支持的终端中更新同一张图片。Neovim 中继会合并一张图片的分块输出，减少逐帧开销。
+视频通过现有授权 CDM 的原生 H.264 解码器播放，不依赖浏览器或 FFmpeg；Windows 的实际账号验证边界见[Windows 支持说明](#windows-原生构建与运行)。仅使用服务明确允许软件播放的流；优先保留可用软件流的原始分辨率，输出上限为 **1280 × 720、30 FPS**。实际清晰度与帧率受 Apple 提供的授权版本、终端和网络吞吐限制；不会将低分辨率作品上采样成假 HD。慢连接只处理当前画面，不堆积旧帧。视频画面不写磁盘或 session，音轨沿用原生音频输出。后台预取一个加密视频片段；图片通过本地 IPC（Unix socket / Windows 命名管道）直接传输 PNG，并在支持的终端中更新同一张图片。Neovim 中继会合并一张图片的分块输出，减少逐帧开销。
 
-画面需要 Kitty 图片协议，例如 Ghostty、Kitty，或 Neovim 0.12+ 配合更新后的内置图片中继。其他终端显示说明并继续音轨，不把视频转成字符画。原有 Turntable 在不支持图片协议时仍使用半格回退图。
+画面需要 Kitty 或 Sixel 图片协议：例如直接运行于 Ghostty、Kitty、Windows Terminal 1.22+；Neovim 0.12+ 仍需外层终端支持 Kitty 并配合更新后的内置图片中继。Sixel 使用最多 256 色整帧输出，视频上限 10 FPS，实际速度取决于终端和连接。其他终端显示说明并继续音轨，不把视频转成字符画。原有 Turntable 在不支持图片协议时仍使用半格回退图。
 
 实际可播放作品取决于订阅、地区和 Apple 返回的授权。视频 CDN `mvod.itunes.apple.com` 返回 **403** 时，程序会自动通过 [Google Public DNS](https://developers.google.com/speed/public-dns/docs/doh/json) 查询备用节点；解析不可用或返回的节点仍失败时，再尝试 [Cloudflare](https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/)，最多尝试四个不同节点。清单、画面片段和配套音轨共用这一回退。
 
@@ -330,7 +414,7 @@ Apple Music 的 Search → **Videos** 分类可搜索音乐视频；Home、New �
 
 ## Neovim
 
-随附插件支持 **Neovim 0.10+**，用 `<leader>mm` 打开浮动终端。`make install` 自动部署插件并生成 lazy.nvim 配置，从任何工作目录均可使用，无需在工程根目录启动 Neovim。
+随附插件支持 **Neovim 0.10+**，用 `<leader>mm` 打开浮动终端。macOS/Linux 使用 `make install`，Windows 使用 `.\build.ps1 -Task install -InstallNvim`，自动部署插件并生成 lazy.nvim 配置，从任何工作目录均可使用，无需在工程根目录启动 Neovim。
 
 | 操作 | 行为 |
 | --- | --- |
@@ -373,10 +457,28 @@ return {
 | 运行环境 | Turntable 显示 |
 | --- | --- |
 | 直接运行于 Ghostty / Kitty | 探测成功后通过 Kitty 图片协议显示原图 |
-| Neovim 0.12+ TUI，开启 `termguicolors`，外层终端支持图片 | 随附插件中继原图，需要同时更新 binary 与插件 |
+| 直接运行于 Windows Terminal 1.22+ 或其他 Sixel 终端 | 确认 Sixel 能力与像素尺寸后显示最多 256 色图片；整帧重绘 |
+| Neovim 0.12+ TUI，开启 `termguicolors`，外层终端支持 Kitty | 随附插件中继原图，需要同时更新 binary 与插件 |
 | Neovim 0.10 / 0.11、无 TTY 的 GUI、tmux / zellij 或不支持协议的终端 | 彩色像素图回退 |
 
 图片可通过 SSH / WSL 传输，不要求图片文件位于外层终端所在机器。同一 Neovim 宿主终端已确认的支持能力会在后台退出、重新打开时复用；缓存命中的封面、动画错误或视图切换不会撤销已确认的支持。探测丢包会有限重试，迟到的成功响应也能恢复原图。
+
+默认 `LAZYMUSIC_IMAGE_PROTOCOL=auto` 同时探测 Kitty 与 Sixel，收到 Kitty 成功响应后优先使用 Kitty。
+Sixel 通过 DA1 的 `4` 能力标记确认，并查询字符格像素尺寸（或通过窗口像素尺寸计算），
+不根据 `TERM` 名称猜测支持。缺少可靠尺寸或探测失败时回退字符图像。
+设置 `LAZYMUSIC_IMAGE_PROTOCOL=kitty` / `sixel` 可限制探测的协议，`pixel` 强制字符回退；
+原有 `LAZYMUSIC_IMAGE_DISABLE=1` 仍优先禁用图片。
+
+Windows PowerShell 中可显式选择 Sixel：
+
+```powershell
+$env:LAZYMUSIC_IMAGE_PROTOCOL = "sixel"
+.\bin\lazymusic.exe
+```
+
+Sixel 封面旋转和视频最多 10 FPS，按实际字符格像素大小缩放并保留图像比例。
+同一时间只准备、输出一帧；文本刷新后重绘缓存图片，弹窗、隐藏、换来源和退出只清理本程序占用的区域。
+Sixel 目前仅支持直接终端运行；Neovim 浮窗继续使用现有 Kitty 中继，未扩展其允许的控制序列。
 
 更新后运行 `make install` 并**重启 Neovim**，避免旧 Lua 模块继续运行；确认 `:set termguicolors?` 已开启。需强制像素图时使用 `LAZYMUSIC_IMAGE_DISABLE=1`。
 
@@ -386,6 +488,7 @@ return {
 | --- | --- |
 | macOS：`~/Library/Application Support/lazymusic` | 默认私有状态目录 |
 | Linux：`$XDG_CONFIG_HOME/lazymusic`，未设置时为 `~/.config/lazymusic` | 默认私有状态目录 |
+| Windows：`%APPDATA%\lazymusic` | 默认状态目录；LOCAL 默认使用 `profiles\local` 子目录 |
 | `--state-dir PATH` / `LAZYMUSIC_STATE_DIR` | 指定精确状态目录 |
 | `--source apple` / `--source local` | 选择来源；未指定时沿用已选来源 |
 | `--music-dir PATH` | 配置 LOCAL 根目录，与 `--source local` 一起使用 |
@@ -444,6 +547,17 @@ pactl info
 
 缺少 `playbin3` 检查 base 插件，缺少 `avdec_aac` 检查 libav。确认当前用户的 PipeWire / PulseAudio 服务及默认输出设备可用；系统音量使用 `wpctl`，找不到时使用 `pactl`。音量操作作用于运行后台服务的机器。
 
+### Windows 编译成功，但没有图片或声音？
+
+图片需要终端支持对应协议。Windows Terminal 1.22+ 可使用 Sixel；可先设置
+`$env:LAZYMUSIC_IMAGE_PROTOCOL = "sixel"` 再启动程序。
+确保未设置 `LAZYMUSIC_IMAGE_DISABLE=1`，先在直接终端运行，避免经过 tmux/zellij 或 Neovim 浮窗。
+缺少能力或像素尺寸回复时会回退字符图像；这不会阻止音频播放。
+
+无声音时检查默认输出设备与系统音量；Windows N/KN 需要 Media Feature Pack。
+LOCAL 解码格式取决于 Media Foundation；失败时用 `@` 查看运行日志。
+如更换了状态目录，控制后台时需要使用相同的 `--source` 和 `--state-dir`。
+
 ### 有歌词的歌曲为什么仍显示 No Lyrics Available？
 
 Apple Music 歌词来自独立公共服务，覆盖范围和版本可能与官方客户端不同；官方有歌词不代表公共服务有匹配的同步版本。确认歌曲版本一致且歌词服务可访问。LOCAL 则检查 `.lrc` 与音频同目录、同名、UTF-8 编码并包含时间戳。当前不显示没有时间轴的纯文本歌词。
@@ -456,13 +570,16 @@ Apple 多设备播放冲突只有在服务返回明确原因时显示，普通�
 
 ### 为什么没有无损 / Hi-Res 选项？
 
-当前 Apple 播放路径提供 AAC，macOS 原生 MusicKit 探索尚未得到实际 ALAC 解码证据。两个系统都只展示已支持的音质偏好，不能用目录标签代替播放格式验证。LOCAL 直接播放原文件，解码支持取决于系统。
+当前 Apple 播放路径提供 AAC，macOS 原生 MusicKit 探索尚未得到实际 ALAC 解码证据。各平台都只展示已支持的音质偏好，不能用目录标签代替播放格式验证。LOCAL 直接播放原文件，解码支持取决于系统。
 
 ### 更新后连接失败，或提示已有界面连接？
 
 旧后台进程可能使用旧协议：退出 TUI 后执行 `lazymusic quit`，再重新进入。来源和 `--state-dir` 应与原服务一致。同一来源的状态目录同时只允许一个前端连接；`:LazyMusicHide` 仅隐藏界面，不释放该连接，需用 `q q` 退出前端。
 
 ## 参与开发
+
+Windows 在 PowerShell 中使用 `.\build.ps1`、`.\build.ps1 -Task test`、`.\build.ps1 -Task vet`；
+仓库的 Windows CI 会执行相同检查。macOS/Linux 使用：
 
 ```sh
 make build

@@ -12,6 +12,7 @@ import (
 	"lazymusic/internal/eventlog"
 	"lazymusic/internal/music"
 	"lazymusic/internal/session"
+	"lazymusic/internal/termimage"
 )
 
 type API interface {
@@ -317,6 +318,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.align()
+		if m.graphics.protocol == "sixel" && !m.graphics.disabled {
+			return m, tea.Batch(m.dirty(), tea.Raw(termimage.SixelSizeQuery))
+		}
 		return m, m.dirty()
 	case stateMsg:
 		if msg.err != nil {

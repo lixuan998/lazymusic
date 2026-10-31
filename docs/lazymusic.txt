@@ -58,7 +58,8 @@ or resumes the visible video. Global playback, seeking and queue controls are
 unchanged. Pausing retains the frame; stopping clears it. Background playback
 keeps the audio and resumes pictures at the current position on reattach.
 Video uses the licensed native CDM, with no browser or FFmpeg dependency, and
-requires native images (Ghostty/Kitty, or Nvim 0.12+ with the bundled relay).
+requires Kitty or Sixel images (direct terminal), or Nvim 0.12+ with the
+bundled Kitty relay. Sixel video uses full paletted frames at up to 10 FPS.
 Unsupported terminals keep audio and display an explanation. The terminal
 picture keeps source detail up to 1280x720 at up to 30 FPS, subject to the
 software-authorized rendition. Low-resolution sources are never upscaled.
@@ -89,7 +90,7 @@ exact title, all artists and duration, rejecting remixes and covers. Apple
 credentials are never sent to either lyric service. LOCAL reads a same-name adjacent .lrc file.
 Apple Music loads cover art automatically. LOCAL reads adjacent cover.jpg,
 cover.jpeg/png, folder.jpg/png or front.jpg/png (case-insensitive). Missing
-covers use a default record. Ghostty/Kitty display a high-resolution photograph
+covers use a default record. Kitty-capable terminals display a high-resolution photograph
 of the entire player. Album artwork uses an antialiased circular center crop,
 centered on the platter in the same PNG. Cell rounding and font sizes cannot
 offset it from the chassis.
@@ -99,6 +100,16 @@ re-uploading the current frame. Rotation edits the disc region when supported;
 older terminals receive complete images. Only one frame is prepared/sent at a
 time, so slow connections do not queue historical frames. Pause and hidden
 views stop the animation clock. Unsupported terminals approximate the whole image.
+Direct Sixel terminals (including Windows Terminal 1.22+) display the same
+composed scene using up to 256 colors and at most 10 FPS. Capability and cell
+pixel dimensions are queried; missing replies keep the half-block fallback.
+Frames fit the pixel viewport without changing the photograph's aspect ratio.
+Text redraws repaint cached Sixel data; hiding or moving a picture erases only
+its owned screen rectangle. No image files, decoder processes or global clears
+are used. Only the Kitty path can resize without re-encoding a frame.
+LAZYMUSIC_IMAGE_PROTOCOL=auto selects verified Kitty or Sixel; kitty/sixel
+restrict the probe, pixel forces the fallback. Sixel is direct-terminal only;
+the Nvim relay remains Kitty-only and does not forward Sixel control strings.
 Unsupported terminals fall back to color half-block images. Set
 LAZYMUSIC_IMAGE_DISABLE=1 to force this fallback. tmux/zellij default to it.
 Native images in the Nvim float require Nvim 0.12+, termguicolors, and the

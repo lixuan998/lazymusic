@@ -3,6 +3,7 @@ package nvimconfig
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -15,7 +16,7 @@ func TestCreateUpdateAndBackupAreIdempotent(t *testing.T) {
 		t.Fatalf("initial install: %+v %v", first, err)
 	}
 	content, _ := os.ReadFile(first.Path)
-	if !strings.Contains(string(content), `dir = "`+plugin+`"`) || !strings.Contains(string(content), `"<leader>mm"`) {
+	if !strings.Contains(string(content), `dir = `+luaString(plugin)) || !strings.Contains(string(content), `"<leader>mm"`) {
 		t.Fatal("generated spec does not use the installed plugin or requested key")
 	}
 	second, err := Write(dir, plugin, binary)
@@ -48,6 +49,9 @@ func TestExistingConfigSymlinkKeepsItsTargetAndLink(t *testing.T) {
 	}
 	path := filepath.Join(plugins, "lazymusic.lua")
 	if err := os.Symlink(target, path); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("Windows symlink privilege unavailable: %v", err)
+		}
 		t.Fatal(err)
 	}
 	if _, err := Write(dir, "/installed/plugin", "/installed/bin/lazymusic"); err != nil {
@@ -77,7 +81,7 @@ func TestHelpIndexIsReadableAndIncludesMainTag(t *testing.T) {
 	}
 	content, _ := os.ReadFile(filepath.Join(dir, "tags"))
 	info, _ := os.Stat(filepath.Join(dir, "tags"))
-	if !strings.Contains(string(content), "lazymusic\tlazymusic.txt\t/*lazymusic*\n") || info.Mode().Perm() != 0644 {
+	if !strings.Contains(string(content), "lazymusic\tlazymusic.txt\t/*lazymusic*\n") || (runtime.GOOS != "windows" && info.Mode().Perm() != 0644) {
 		t.Fatal("installed help cannot be found or read")
 	}
 }

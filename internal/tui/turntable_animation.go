@@ -58,6 +58,9 @@ func (m *Model) syncRecord(now time.Time) tea.Cmd {
 	}
 	generation := a.generation
 	interval := recordFrameInterval
+	if m.graphics.protocol == "sixel" {
+		interval = time.Second / 10
+	}
 	if m.videoVisible() {
 		interval = time.Second / 8
 	}

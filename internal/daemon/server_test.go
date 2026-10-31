@@ -3,7 +3,6 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,8 +23,7 @@ func serveTest(t *testing.T, s *Service, dir string) *Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = os.Remove(path)
-	ln, err := net.Listen("unix", path)
+	ln, err := listenIPC(path)
 	if err != nil {
 		t.Fatal(err)
 	}

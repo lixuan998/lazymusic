@@ -3,6 +3,7 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func TestSnapshotRoundTripAndNoStreamURLs(t *testing.T) {
 		t.Fatal("persisted media URLs")
 	}
 	fi, _ := os.Stat(filepath.Join(dir, "session.json"))
-	if fi.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && fi.Mode().Perm() != 0600 {
 		t.Fatalf("mode=%o", fi.Mode().Perm())
 	}
 }

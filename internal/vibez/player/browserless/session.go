@@ -1,5 +1,5 @@
 // lazymusic additions: restore and enqueue metadata without starting audio.
-//go:build linux || darwin
+//go:build linux || darwin || windows
 
 package browserless
 

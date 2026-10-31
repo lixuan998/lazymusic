@@ -52,12 +52,14 @@ func (m *Model) turntableRows(w, h int) []string {
 		for i := range rows {
 			rows[i] = fit("", w)
 		}
-		left, top, columns, height := turntableImageRect(w, graphicH)
+		left, top, columns, height := m.turntableImageRect(w, graphicH)
 		g, key := m.graphics, m.turntableSceneKey()
 
 		var picture []string
 		if g.active && (g.sent == key || g.coverKey == m.turntableCoverKey()) && g.columns == columns && g.rows == height {
-			picture = termimage.PlaceholderRows(g.id, columns, height)
+			if g.protocol != "sixel" {
+				picture = termimage.PlaceholderRows(g.id, columns, height)
+			}
 		} else if g.scene != nil && g.prepared == key && (g.disabled || g.checked && !g.ready() || g.failed == key) {
 			picture = bitmapRows(g.scene, columns, height)
 		}

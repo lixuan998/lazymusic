@@ -12,7 +12,7 @@ func TestAuthorizationHelperOnlyUsesExplicitOrPrivateRuntimePath(t *testing.T) {
 	if _, err := FindVibezHelper(root); err == nil {
 		t.Fatal("missing helper accepted")
 	}
-	helper := filepath.Join(root, "helpers", "vibez", "v2.0.6", "vibez")
+	helper := filepath.Join(root, "helpers", "vibez", "v2.0.6", helperName())
 	if err := os.MkdirAll(filepath.Dir(helper), 0700); err != nil {
 		t.Fatal(err)
 	}

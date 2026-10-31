@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -90,6 +91,9 @@ func TestAuthRuntimeCacheRejectsIncompleteTamperedAndLinkedLibraries(t *testing.
 	path := filepath.Join(dir, authRuntimePackages[0].library)
 	os.Remove(path)
 	if err := os.Symlink("/outside", path); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("Windows symlink privilege unavailable: %v", err)
+		}
 		t.Fatal(err)
 	}
 	if validAuthRuntime(dir) {

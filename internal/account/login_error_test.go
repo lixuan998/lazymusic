@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -40,6 +41,9 @@ func TestHelperFailuresAreUsefulWithoutForwardingPrivateOutput(t *testing.T) {
 }
 
 func TestQuietLoginReportsStderrAndSafeErrors(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture requires a POSIX shell")
+	}
 	t.Setenv("LAZYMUSIC_DEVELOPER_TOKEN", "")
 	dir := t.TempDir()
 	helper := filepath.Join(dir, "helper")

@@ -23,8 +23,8 @@ for package in PACKAGES:
     for src in sorted((SOURCE / "internal" / package).iterdir()):
         if not src.is_file() or src.suffix not in {".go", ".cpp", ".h"}:
             continue
-        # The selected native backend supports macOS/Linux only.
-        if "windows" in src.name or src.name == "sink_e2e_test.go":
+        # The selected native backend supports macOS, Linux and Windows.
+        if src.name == "sink_e2e_test.go":
             continue
         rel = src.relative_to(SOURCE)
         original = src.read_bytes()

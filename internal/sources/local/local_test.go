@@ -5,6 +5,7 @@ import (
 	"lazymusic/internal/catalog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -65,6 +66,9 @@ func TestConfigureCanonicalizesSelectedFolderAndStoresPrivateConfig(t *testing.T
 	root := t.TempDir()
 	link := filepath.Join(t.TempDir(), "music-link")
 	if err := os.Symlink(root, link); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("Windows symlink privilege unavailable: %v", err)
+		}
 		t.Fatal(err)
 	}
 	profile := t.TempDir()
@@ -77,7 +81,7 @@ func TestConfigureCanonicalizesSelectedFolderAndStoresPrivateConfig(t *testing.T
 		t.Fatal("selected folder symlink was not normalized")
 	}
 	fi, err := os.Stat(filepath.Join(profile, "local.json"))
-	if err != nil || fi.Mode().Perm() != 0600 {
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0600) {
 		t.Fatal("local config was not stored privately")
 	}
 }

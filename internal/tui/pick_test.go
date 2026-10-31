@@ -17,6 +17,7 @@ import (
 )
 
 type pickAPI struct {
+	observed time.Time
 	*fakeAPI
 	e     *engine.Queue
 	calls int
@@ -25,8 +26,9 @@ type pickAPI struct {
 }
 
 func (a *pickAPI) snapshot() daemon.State {
+	a.observed = a.observed.Add(time.Millisecond)
 	s, q, i := a.e.State()
-	return daemon.State{Source: music.Source{ID: "demo", Capabilities: music.Capabilities{Home: true, Library: true, Playlists: true, CatalogSearch: true}}, Playback: s, Queue: q, Index: i, ObservedAt: time.Now()}
+	return daemon.State{Source: music.Source{ID: "demo", Capabilities: music.Capabilities{Home: true, Library: true, Playlists: true, CatalogSearch: true}}, Playback: s, Queue: q, Index: i, ObservedAt: a.observed}
 }
 
 func (a *pickAPI) Command(_ context.Context, c daemon.Command) (daemon.State, error) {

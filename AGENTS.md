@@ -1,6 +1,6 @@
 # 工程维护约定
 
-本文件适用于整个 lazymusic 工程。binary 必须叫 `lazymusic`；支持 macOS 和 Linux。用户的当前任务指令优先。
+本文件适用于整个 lazymusic 工程。binary 必须叫 `lazymusic`；支持 macOS、Linux 和 Windows x64。用户的当前任务指令优先。
 
 ## 结构和边界
 
@@ -15,12 +15,12 @@
 - `internal/engine/`：播放合约、Native Apple 适配器、LOCAL 播放器和供 LOCAL 使用的 Queue 元数据状态机。Queue 本身不输出音频，不对用户暴露模拟后端。
 - `internal/engine/continuous.go`：动态电台控制层，后台有界取歌、低水位续播、保留约 200 首历史；网络请求不持有控制锁，generation 拦截旧电台回复，Pause/Stop 禁止迟到请求自动发声。session.Playback.Continuous 保存稳定的 opaque Query，冷恢复暂停。通过可选 StartContinuous / Select 保留来源中立的 IPC 和 Queue 选择行为。
 - `internal/audio/`：LOCAL 系统原生音频输出；`internal/volume/`：系统默认输出设备音量，两者职责独立。
-- `internal/daemon/`：Unix socket HTTP、进程锁、单前端 lease、UI revision、串行播放命令、日志和快照。协议破坏性变更递增 ProtocolVersion。
+- `internal/daemon/`：Unix socket / Windows 私有命名管道 HTTP、进程锁、单前端 lease、UI revision、串行播放命令、日志和快照。协议破坏性变更递增 ProtocolVersion。
 - `internal/session/`：版本化 JSON 快照、迁移、原子保存和可持久化字段清理。
 - `internal/eventlog/`：有界历史、脱敏、持久化与轮转。
 - `internal/tui/`：`model.go` 接收异步状态，`actions.go` 分发按键，`browse.go` 管理查询/分类，`navigation.go` 管理层级与焦点，`panels.go` 管理布局/日志/动画，`sound.go` 管理尺寸、Zen 和均衡器，`edit.go` 管理添加/创建与歌单选择流程，`view.go` 渲染，`keys.go` 定义 Global/面板绑定，`help.go` 从同一注册表生成上下文帮助，`keyboard.go` 区分修饰键与文本。
 - `internal/tui/animation.go`：独立前端 30 FPS 时钟、播放/暂停与样式过渡、旧帧取消；`rhythm.go`：Pulse/Wave 的纯字符网格渲染。动画状态不持久化，不调用 IPC 或 dirty；隐藏、弹窗遮盖及暂停收束后停帧。不能以轮询进度驱动逐帧时间；没有 PCM 数据时不得称为实时频谱。
-- `internal/artwork/`：有界 JPEG/PNG 原图和 96×96 RGB 回退图；`catalog.ArtworkProvider` 为可选来源合约，通过 daemon 的 artwork IPC 返回已校验的原始编码与回退像素，不向 TUI 暴露 URL 或任意文件路径。Apple 图片请求仅允许 HTTPS mzstatic.com CDN，不发送 API 授权头 / cookie；LOCAL 封面必须在音乐根目录内且为普通文件。封面不写 session / 磁盘缓存。`tui/artwork.go` 管理异步加载、取消和 generation。`internal/turntable/` 内嵌高清机身 PNG，以图片像素坐标确定唱盘中心，保留封面比例并合成单张完整场景，禁止分别按字符格放置封面与机身。素材替换必须同步中心坐标、尺寸、生成提示词与居中回归测试。`termimage/` 实现 Kitty 直接图片传输及 Unicode placement；`tui/graphics.go` 与 `graphics_probe.go` 分开管理图片和终端能力：探测与图片使用两个私有 ID、独立 generation；刷新 / 隐藏只清图片，最终退出 / 切来源清理两者。探测超时从 Raw 输出完成后开始，丢包有限重试，迟到成功可恢复原图；确认过的能力不被绘图错误 / 旧超时撤销。异步准备场景按图片 generation 串行输出、缩放和清理。无协议时将同一场景转为半格回退图；播放台使用独立前端旋转时钟，不能轮询服务或写 session 驱动帧；暂停立即停帧并保留角度，停止隐藏封面并复位。唱针播放 / 暂停时在唱片上、停止时停靠到右侧；指示灯只有实际播放时亮，暂停 / 缓冲 / 错误 / 停止均熄灭。播放态素材与停止态素材同尺寸内嵌，暂停只更换指示灯区域，不重解码封面，不把状态改动持久化。优先探测并修改私有图像的 root frame，仅上传唱片区域，不累积终端动画帧；不支持时刷新完整图像，同一时间只准备 / 发送一帧，防止慢连接积压。像素回退延迟采样同一图像，不逐帧编码 PNG。不得删除其他程序的图片。application 必须校验 source epoch 后再发 RawMsg；graphicsWrite 的输出 / 完成事件有序处理，不能被包裹器吞掉。`player_view.go` 负责顶部边框和自适应播放条；改变高度时必须校验 Queue 的实际可见行数。
+- `internal/artwork/`：有界 JPEG/PNG 原图和 96×96 RGB 回退图；`catalog.ArtworkProvider` 为可选来源合约，通过 daemon 的 artwork IPC 返回已校验的原始编码与回退像素，不向 TUI 暴露 URL 或任意文件路径。Apple 图片请求仅允许 HTTPS mzstatic.com CDN，不发送 API 授权头 / cookie；LOCAL 封面必须在音乐根目录内且为普通文件。封面不写 session / 磁盘缓存。`tui/artwork.go` 管理异步加载、取消和 generation。`internal/turntable/` 内嵌高清机身 PNG，以图片像素坐标确定唱盘中心，保留封面比例并合成单张完整场景，禁止分别按字符格放置封面与机身。素材替换必须同步中心坐标、尺寸、生成提示词与居中回归测试。`termimage/` 实现 Kitty 直接图片传输及 Unicode placement，以及有界 Sixel 编码和保留 TTY fd 的输出合成层；`tui/graphics.go` 与 `graphics_probe.go` 分开管理图片和终端能力：探测与图片使用两个私有 ID、独立 generation；刷新 / 隐藏只清图片，最终退出 / 切来源清理两者。探测超时从 Raw 输出完成后开始，丢包有限重试，迟到成功可恢复原图；确认过的能力不被绘图错误 / 旧超时撤销。异步准备场景按图片 generation 串行输出、缩放和清理。无协议时将同一场景转为半格回退图；播放台使用独立前端旋转时钟，不能轮询服务或写 session 驱动帧；暂停立即停帧并保留角度，停止隐藏封面并复位。唱针播放 / 暂停时在唱片上、停止时停靠到右侧；指示灯只有实际播放时亮，暂停 / 缓冲 / 错误 / 停止均熄灭。播放态素材与停止态素材同尺寸内嵌，暂停只更换指示灯区域，不重解码封面，不把状态改动持久化。优先探测并修改私有图像的 root frame，仅上传唱片区域，不累积终端动画帧；不支持时刷新完整图像，同一时间只准备 / 发送一帧，防止慢连接积压。像素回退延迟采样同一图像，不逐帧编码 PNG。不得删除其他程序的图片。application 必须校验 source epoch 后再发 RawMsg；graphicsWrite 的输出 / 完成事件有序处理，不能被包裹器吞掉。`player_view.go` 负责顶部边框和自适应播放条；改变高度时必须校验 Queue 的实际可见行数。
 - `internal/lyrics/`：平台无关的有界 LRC 时间轴、当前位置查找与 LRCLIB 精确元数据查询。`catalog.LyricsProvider` 为可选来源接口；LOCAL 只读音乐根目录内同名普通 `.lrc`，Apple 只把曲名、艺人、专辑和时长发到固定 HTTPS 公共服务（LRCLIB，超时 / 无结果时回退网易云音乐公开歌词并严格比对标题、全部艺人和时长），不转发账户头 / cookie / token。尊重 Retry-After，不做模糊匹配或猜测时间轴。`daemon/lyrics.go` 提供来源隔离的只读 IPC 与有界内存缓存；`tui/lyrics.go` 管理取消、generation、播放位置插值及当前句居中高亮。歌词不写 session / 磁盘 / 日志，缺失或失败只显示 No Lyrics Available；隐藏、切歌、切来源取消请求和时钟。
 - `internal/video/`：来源中立的有界 PNG 播放帧与可选 Provider；`daemon/video.go` 校验 frontend lease、当前作品和来源，图片不进入 State/session。`tui/video.go` 管理 Content 视频、取消、generation 和有序单帧传输，复用能力探测，使用第三个私有图片 ID。隐藏/切来源/退出后不得输出迟到帧；暂停保留画面，停止清理，不支持图片协议时停止解码并保留音轨。Neovim 中继只增加本程序拥有的第三个 ID，不扩大允许的协议。
 - `browserless/videos.go` 解析已授权视频及配套 AAC 音轨，`video_frames.go` 用 CDM 内部 H.264 解码，不通过 raw Decrypt 导出视频、不引入外部解码进程。只选 manifest 明确声明 WIDEVINE_SOFTWARE、HDCP NONE 的流，不修改保护策略、不假报输出保护。`mp4/fragments.go` 按 track ID、全部 moof/trun、CBCS subsamples 和 HLS 时间轴解析，`mp4/video.go` 只变换公开且明确处于 clear range 的 AVC 长度前缀/参数。保留当前及最多一个预取的加密片段（各最多 32 MiB）、当前图片与一帧前瞻，空闲释放解码器；预取使用独立可取消上下文，重置 / 隐藏 / 关闭后不得污染新流。视频保留软件授权的原始细节，最多输出 1280×720 / 30 FPS，禁止上采样冒充高清；过时帧仍走 CDM 解码依赖但跳过 RGB 转换，PNG 工作区可复用。IPC 直接传输有界 PNG，身份元数据单独编码，不再对整张图片进行 JSON base64；变更需更新协议版本。刷新期限包含解码及上传时间，重复画面不能触发长等待。原生终端按验证结果编辑同一 root frame，失败时完整重传而不撤销图片能力。Neovim 对完整的已验证图片分块合并输出，有界缓存且取消时丢弃未完成图片，不能放宽命令或 ID 校验。Source.SearchSections 提供 opaque 搜索类型与标题，UI 不拼 Apple 资源类型。新平台支持视频时声明 Capabilities.Video、返回 MediaType=video 的 Track 并实现 video.Provider。
@@ -76,3 +76,7 @@
 - 修改 Neovim 插件时运行 `make test-nvim`；使用真实的无声测试进程验证浮窗与终端生命周期，不使用真实音乐账号。按键映射限当前音乐 buffer，不覆盖编辑器全局终端行为；命令及参数以 argv 传递，不拼 shell。
 - 更改第三方代码前核对固定版本与许可证，保持导入可复现。`scripts/vendor_vibez.py /path/to/pinned/source` 重新导入后应用本地 patch。
 - 在提交前 review 暂存区，检查秘密/产物、macOS/Linux 构建、session 兼容、异步取消与资源释放。不要为了完成提交删除用户已有修改或重置账号。
+
+- Windows 使用 `./build.ps1`、`./build.ps1 -Task test`、`./build.ps1 -Task vet`；Go + MinGW-w64 GCC，CGO 必须开启。后台通过当前用户私有命名管道，LOCAL 和 Apple 共享 Windows Media Foundation 解码与真实 EQ。Windows 测试默认静音，不修改系统音量。
+
+- Sixel 使用 DA1 的 4 标记及经验证的字符格/窗口像素尺寸，不按终端名称假定支持。只在直接 TTY 使用；不得扩展 Neovim Kitty 中继允许的序列。缓存最多各一张 Turntable/Video 帧，在 Bubble Tea 文本写入后有序重绘；全图最多 1280×720 / 256 色 / 10 FPS，单帧在途。隐藏、弹窗、来源切换、缩放和退出仅清理本程序拥有的矩形，禁止全局清图或在主屏幕绘制迟到帧。

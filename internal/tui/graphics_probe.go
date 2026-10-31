@@ -25,11 +25,11 @@ func (g *graphicsState) probeID() int {
 
 func (m *Model) syncGraphicsProbe() tea.Cmd {
 	g := &m.graphics
-	if g.disabled || g.replied || g.checked {
+	if g.disabled || g.ready() || g.checked && (g.protocol != "sixel" || g.queryAttempts >= graphicsProbeAttempts) {
 		return nil
 	}
 	if !g.queryPending {
-		g.queried, g.queryPending, g.querySent, g.queryTimed = true, true, false, false
+		g.queried, g.queryPending, g.querySent, g.queryTimed = g.requested != "sixel", true, false, false
 		g.queryAttempts++
 		g.queryGeneration++
 		attempt := g.queryGeneration
@@ -50,5 +50,8 @@ func (m *Model) syncGraphicsProbe() tea.Cmd {
 func (m *Model) InheritGraphicsSupport(previous *Model) {
 	if previous != nil && previous.graphics.ready() && !m.graphics.disabled {
 		m.graphics.replied, m.graphics.known = true, true
+		m.graphics.protocol = previous.graphics.protocol
+		m.graphics.sixelSupported = previous.graphics.sixelSupported
+		m.graphics.cellWidth, m.graphics.cellHeight = previous.graphics.cellWidth, previous.graphics.cellHeight
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -23,7 +24,7 @@ func TestHistoryIsBoundedPrivatePersistentAndDeduplicated(t *testing.T) {
 		t.Fatal("unbounded ring")
 	}
 	fi, err := os.Stat(filepath.Join(dir, "runtime.log"))
-	if err != nil || fi.Mode().Perm() != 0600 {
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0600) {
 		t.Fatal("log permissions", err)
 	}
 	restored := New(dir, nil)

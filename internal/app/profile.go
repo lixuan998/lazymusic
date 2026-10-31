@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 func DefaultDir() (string, error) {
@@ -19,14 +20,21 @@ func DefaultDir() (string, error) {
 
 func FindVibezHelper(dir string) (string, error) {
 	if p := os.Getenv("LAZYMUSIC_VIBEZ_HELPER"); p != "" {
-		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() && fi.Mode().Perm()&0111 != 0 {
+		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() && (runtime.GOOS == "windows" || fi.Mode().Perm()&0111 != 0) {
 			return p, nil
 		}
 		return "", fmt.Errorf("configured authorization component is unavailable")
 	}
-	path := filepath.Join(dir, "helpers", "vibez", "v2.0.6", "vibez")
-	if fi, err := os.Stat(path); err == nil && fi.Mode().IsRegular() && fi.Mode().Perm()&0111 != 0 {
+	path := filepath.Join(dir, "helpers", "vibez", "v2.0.6", helperName())
+	if fi, err := os.Stat(path); err == nil && fi.Mode().IsRegular() && (runtime.GOOS == "windows" || fi.Mode().Perm()&0111 != 0) {
 		return path, nil
 	}
 	return "", fmt.Errorf("authorization component is not installed")
+}
+
+func helperName() string {
+	if runtime.GOOS == "windows" {
+		return "vibez.exe"
+	}
+	return "vibez"
 }

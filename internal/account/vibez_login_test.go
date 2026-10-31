@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,9 @@ func TestMissingVibezHelperDoesNotCreateProfile(t *testing.T) {
 }
 
 func TestVibezLoginUsesIsolatedProfileAndRecordsApplicationIdentity(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture requires a POSIX shell")
+	}
 	t.Setenv("LAZYMUSIC_DEVELOPER_TOKEN", "")
 	dir := t.TempDir()
 	helper := filepath.Join(dir, "helper")
