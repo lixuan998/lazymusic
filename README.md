@@ -47,7 +47,19 @@
 
 ## 安装
 
-目前从源码安装，需要 **Go 1.25+、CGO 和 C/C++ 工具链**。Apple Music 授权组件和 CDM 支持 macOS Apple Silicon / Intel、Linux / Windows x86_64；首次使用按需下载。
+可从 [GitHub Releases](https://github.com/lixuan998/lazymusic/releases/latest) 下载预编译包，运行时无需安装 Go 或编译器。
+
+| 平台 | Release 包 | 安装方式 |
+| --- | --- | --- |
+| macOS Apple Silicon（M 系列，macOS 13+） | `lazymusic_<版本>_darwin_arm64.tar.gz` | 解压后按包内 README 安装 |
+| Windows 10/11 x64 | `lazymusic_<版本>_windows_amd64.zip` | 解压后运行 `lazymusic.exe` |
+| Ubuntu 22.04+ amd64 | `lazymusic_<版本>_amd64.deb` | `sudo apt install ./lazymusic_<版本>_amd64.deb` |
+
+每个包包含安装说明、Neovim 插件、许可证及构建信息；Release 的 `SHA256SUMS` 可校验下载完整性。
+macOS 包使用 ad-hoc 签名，未经 Developer ID 签名/公证；Windows 程序未做 Authenticode 签名。
+授权 helper、Widevine CDM、用户凭据和会话均不包含在包内。
+
+从源码安装需要 **Go 1.25+、CGO 和 C/C++ 工具链**。Apple Music 授权组件和 CDM 支持 macOS Apple Silicon / Intel、Linux / Windows x86_64；首次使用按需下载。
 
 ### Windows 原生构建与运行
 
@@ -577,6 +589,8 @@ Apple 多设备播放冲突只有在服务返回明确原因时显示，普通�
 旧后台进程可能使用旧协议：退出 TUI 后执行 `lazymusic quit`，再重新进入。来源和 `--state-dir` 应与原服务一致。同一来源的状态目录同时只允许一个前端连接；`:LazyMusicHide` 仅隐藏界面，不释放该连接，需用 `q q` 退出前端。
 
 ## 参与开发
+
+发布包使用 GitHub Actions 在三个原生平台分别测试、构建和打包，流程见[发布说明](docs/RELEASING.md)。
 
 Windows 在 PowerShell 中使用 `.\build.ps1`、`.\build.ps1 -Task test`、`.\build.ps1 -Task vet`；
 仓库的 Windows CI 会执行相同检查。macOS/Linux 使用：

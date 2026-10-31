@@ -1,0 +1,161 @@
+name: Release packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without the v prefix
+        required: true
+        default: '0.5.0'
+        type: string
+      publish:
+        description: Publish a GitHub Release after every native build succeeds
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-15
+          - target: windows-amd64
+            runner: windows-latest
+          - target: ubuntu-amd64
+            runner: ubuntu-22.04
+    env:
+      CGO_ENABLED: '1'
+      RAW_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.27.3'
+          cache: true
+      - name: Validate version
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, runpy
+          version = runpy.run_path('scripts/package_release.py')['normalize_version'](os.environ['RAW_VERSION'])
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('RELEASE_VERSION=' + version + '\n')
+          PY
+      - name: Download modules and test packaging
+        shell: bash
+        run: |
+          go mod download all
+          python -m unittest discover -s tests -p 'test_package_release.py' -v
+      - name: Ubuntu build and runtime dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config dpkg-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav gstreamer1.0-pulseaudio pulseaudio-utils
+      - uses: msys2/setup-msys2@v2.33.0
+        if: runner.os == 'Windows'
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-gcc
+      - name: Test, vet and build on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            export MACOSX_DEPLOYMENT_TARGET=13.0
+          fi
+          go test -count=1 -timeout=120s ./...
+          go vet ./...
+          mkdir -p bin
+          go build -buildvcs=false -trimpath -ldflags "-s -w -X main.version=$RELEASE_VERSION" -o bin/lazymusic ./cmd/lazymusic
+      - name: Test, vet and build on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+          $env:CC = 'gcc'
+          $env:CXX = 'g++'
+          ./build.ps1 -Task test
+          ./build.ps1 -Task vet
+          New-Item -ItemType Directory -Force bin | Out-Null
+          go build -buildvcs=false -trimpath -ldflags "-s -w -X main.version=$env:RELEASE_VERSION" -o bin/lazymusic.exe ./cmd/lazymusic
+          if ($LASTEXITCODE -ne 0) { throw 'Native Windows build failed' }
+          $imports = & objdump -p bin/lazymusic.exe | Select-String 'DLL Name:'
+          $imports
+          if ($imports -match 'libstdc\+\+|libgcc|libwinpthread|msys-2\.0') { throw 'Unexpected non-system runtime DLL' }
+      - name: Verify macOS linkage and ad-hoc signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          file bin/lazymusic
+          otool -L bin/lazymusic
+          if otool -L bin/lazymusic | grep -E '/opt/homebrew|/usr/local|/Users/runner'; then
+            echo 'Unexpected non-system dynamic library' >&2
+            exit 1
+          fi
+          codesign --verify --verbose=2 bin/lazymusic
+      - name: Package Unix build
+        if: runner.os != 'Windows'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: python3 scripts/package_release.py build --target "$TARGET" --version "$RELEASE_VERSION" --binary bin/lazymusic
+      - name: Package Windows build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python scripts/package_release.py build --target windows-amd64 --version "$env:RELEASE_VERSION" --binary bin/lazymusic.exe
+      - name: Install deb in clean Ubuntu 22.04
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dpkg-deb --info dist/*.deb
+          docker run --rm -v "$PWD/dist:/packages:ro" ubuntu:22.04 sh -ec '
+            apt-get update
+            apt-get install -y /packages/*.deb
+            lazymusic version
+            ldd /usr/bin/lazymusic
+            test -f /usr/share/lazymusic/nvim/doc/tags
+            test ! -e /root/.config/lazymusic
+          '
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  publish:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RAW_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish validated packages
+        shell: bash
+        run: |
+          version=$(python3 scripts/package_release.py version "$RAW_VERSION")
+          python3 scripts/package_release.py checksums dist
+          gh release create "v$version" dist/* --target "$GITHUB_SHA" --title "lazymusic v$version" --generate-notes --latest

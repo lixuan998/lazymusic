@@ -20,6 +20,9 @@ import (
 	"time"
 )
 
+// version may be set by release builds with -ldflags "-X main.version=...".
+var version = "0.5.0"
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "lazymusic:", err)
@@ -63,7 +66,7 @@ Options: --source apple|local, --music-dir PATH, --state-dir PATH
 		return nil
 	}
 	if command == "version" {
-		fmt.Println("lazymusic 0.5.0")
+		fmt.Printf("lazymusic %s\n", version)
 		return nil
 	}
 	if command == "setup-nvim" {
