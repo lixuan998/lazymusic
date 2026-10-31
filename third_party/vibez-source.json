@@ -210,12 +210,12 @@
     },
     "internal/player/gst/player_test.go": {
       "upstream_sha256": "6ca75edcd29dcb466505559128284c9b18c8e6ef236b51ebcafebf03401b40d2",
-      "imported_sha256": "6ca75edcd29dcb466505559128284c9b18c8e6ef236b51ebcafebf03401b40d2"
+      "imported_sha256": "457570c393454e273e21590e30ea5b7377882c766043bc1100b0b93056e28f48"
     }
   },
   "patch": {
     "path": "third_party/vibez-session.patch",
-    "sha256": "b1fdcc122ceed496e99b2bdcc919a81f4498f3cf3605bef2a1e4746724aa77fe"
+    "sha256": "8bd0f943d5559402cce6a6d1f5679de47edcd94627bed05006b44fe916d27950"
   },
   "local_additions": {
     "internal/vibez/player/browserless/session.go": "7e12ad79a00bc1711857cd30aa73295af73fa301aecd344a0c5a0e25a5f08cde",

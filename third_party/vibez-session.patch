@@ -1203,3 +1203,37 @@
  		offset += ivSize
  
  		var subsamples []Subsample
+--- a/internal/vibez/player/gst/player_test.go
++++ b/internal/vibez/player/gst/player_test.go
+@@ -51,8 +51,22 @@
+ 	defer p.Destroy()
+ 
+ 	adts := buildTestADTSStream()
+-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
++	// A sub-second fixture can reach about-to-finish during PlayURI on a fast
++	// host. Send headers so the embedded source can prepare, but hold the first
++	// body's EOF until the caller has staged its next URI. This tests gapless
++	// playback rather than relying on a scheduler race with the test server.
++	firstBodyReady := make(chan struct{})
++	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+ 		w.Header().Set("Content-Type", "audio/aac")
++		w.WriteHeader(http.StatusOK)
++		w.(http.Flusher).Flush()
++		if request.URL.Path == "/track1.aac" {
++			select {
++			case <-firstBodyReady:
++			case <-request.Context().Done():
++				return
++			}
++		}
+ 		_, _ = w.Write(adts)
+ 	}))
+ 	defer srv.Close()
+@@ -87,6 +101,7 @@
+ 	u2 := srv.URL + "/track2.aac"
+ 	p.PlayURI(u1)
+ 	p.SetNextURI(u2)
++	close(firstBodyReady)
+ 
+ 	select {
+ 	case got := <-startedCh:
