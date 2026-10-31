@@ -169,6 +169,12 @@ def plugin_files(destination):
     (destination / "doc/tags").write_text("".join(f"{tag}\tlazymusic.txt\t/*{tag}*\n" for tag in tags), encoding="utf-8")
 
 
+def archive_mode(path):
+    # Windows does not represent Unix executable bits. Store portable modes
+    # explicitly instead of inheriting host-dependent stat() results.
+    return 0o755 if path.is_dir() or path.name in ("lazymusic", "lazymusic.exe") else 0o644
+
+
 def archive_tree(source, output, epoch):
     if output.suffix == ".zip":
         date = time.gmtime(max(315532800, epoch))[:6]
@@ -177,7 +183,7 @@ def archive_tree(source, output, epoch):
                 if path.is_file():
                     info = zipfile.ZipInfo(str(path.relative_to(source.parent)).replace("\\", "/"), date)
                     info.create_system = 3
-                    info.external_attr = (path.stat().st_mode & 0xffff) << 16
+                    info.external_attr = (0o100000 | archive_mode(path)) << 16
                     info.compress_type = zipfile.ZIP_DEFLATED
                     archive.writestr(info, path.read_bytes())
     else:
@@ -185,6 +191,7 @@ def archive_tree(source, output, epoch):
             with tarfile.open(fileobj=compressed, mode="w") as archive:
                 for path in sorted(source.rglob("*")):
                     info = archive.gettarinfo(str(path), str(path.relative_to(source.parent)))
+                    info.mode = archive_mode(path)
                     info.uid = info.gid = 0
                     info.uname = info.gname = ""
                     info.mtime = epoch

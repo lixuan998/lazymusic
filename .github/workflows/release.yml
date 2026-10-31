@@ -61,6 +61,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
+          # Hosted images may include LLVM's conflicting libunwind headers.
+          mapfile -t llvm_unwind_dev < <(dpkg-query -W -f='${Package} ${db:Status-Status}\n' 'libunwind-*-dev' 2>/dev/null | awk '$2 == "installed" {print $1}')
+          if (( ${#llvm_unwind_dev[@]} )); then
+            sudo apt-get remove -y "${llvm_unwind_dev[@]}"
+          fi
           sudo apt-get install -y build-essential pkg-config dpkg-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav gstreamer1.0-pulseaudio pulseaudio-utils
       - uses: msys2/setup-msys2@v2.33.0
         if: runner.os == 'Windows'
